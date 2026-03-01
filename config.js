@@ -9,6 +9,5 @@ window.API_BASE = ""; // ex: "" (mesmo domínio)
 window.UPDATES_DEFAULT = [
   { date: "2026-02-28", text: "✅ Novo: Relógio no canto superior direito." },
   { date: "2026-02-28", text: "✅ Pinterest agora baixa direto." },
-  { date: "2026-02-28", text: "🖼️ aba de hentai adcionado." },
   { date: "2026-03-01", text: "🛒 local de compra adicionado" }
 ];
