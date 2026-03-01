@@ -96,7 +96,7 @@ module.exports = async (req, res) => {
   if (action === 'assado') {
     if (req.method !== 'GET') return sendJson(res, 405, { erro: 'Método inválido' });
     try{
-      const url = `https://ninx.fun/api/hepo/assado?apikey=${encodeURIComponent(ninxKey)}`;
+      const url = `https://ninx.fun/api/hentai/ass?apikey=${encodeURIComponent(ninxKey)}`;
       const r = await fetch(url);
       const data = await r.json().catch(()=>null);
       const imgUrl = data?.url || data?.resultado?.url || data?.image || data?.img || null;
