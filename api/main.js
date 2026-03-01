@@ -61,7 +61,7 @@ async function streamAsAttachment(res, fileResp, filename){
 
 module.exports = async (req, res) => {
   const ninxKey = process.env.NINX_API_KEY || 'fuJe';
-  const rapidKey = process.env.RAPIDAPI_KEY || '';
+  const rapidKey = process.env.RAPIDAPI_KEY || '6e6739bedbmsh671d99355539a01p1d9748jsn68265b82360a';
 
   const action = (qp(req, 'action') || '').toLowerCase();
 
