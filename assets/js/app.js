@@ -9,6 +9,18 @@ const LINKS = {
 
 const IMAGE_CATEGORIES = ["shinobu", "megumin", "bully", "cuddle", "cry", "hug", "awoo", "kiss", "lick", "pat", "smug", "bonk", "yeet", "blush", "smile", "wave", "highfive", "handhold", "nom", "bite", "glomp", "slap", "kill", "kick", "happy", "wink", "poke", "dance", "cringe"];
 
+// Estado do modal de imagem (para reiniciar/baixar sem trocar a imagem)
+let CURRENT_IMG_TYPE = null;
+let CURRENT_IMG_URL = null; // URL original (sem cache-buster)
+
+function guessExtFromUrl(u){
+  try{
+    const p = new URL(u).pathname;
+    const m = p.match(/\.(png|jpe?g|gif|webp)$/i);
+    return m ? m[0].toLowerCase() : ".jpg";
+  }catch{ return ".jpg"; }
+}
+
 function $(id){ return document.getElementById(id); }
 
 function openPanel(panel, open){
@@ -538,9 +550,11 @@ document.addEventListener("DOMContentLoaded", () => {
         $("imgTitle").innerText = title;
         $("imgDesc").innerText = "SFW • waifu.pics";
 
+        CURRENT_IMG_TYPE = s;
+        CURRENT_IMG_URL = null;
+
         const load = async () => {
           const img = $("imgPreview");
-          const dl = $("imgDownload");
           if (!img) return;
           img.style.display = "block";
           try{
@@ -549,24 +563,40 @@ document.addEventListener("DOMContentLoaded", () => {
             const r = await fetch(url, { cache: "no-store" });
             const d = await r.json();
             if (!d || !d.url) throw new Error("Sem imagem");
+            CURRENT_IMG_TYPE = type;
+            CURRENT_IMG_URL = d.url;
             img.src = d.url + `?t=${Date.now()}`;
-            if (dl) dl.href = d.url;
           }catch(e){
             // Fallback para 'neko' caso a categoria não exista
             try{
               const r2 = await fetch(`https://api.waifu.pics/sfw/neko`, { cache: "no-store" });
               const d2 = await r2.json();
               if (d2?.url){
+                CURRENT_IMG_TYPE = "neko";
+                CURRENT_IMG_URL = d2.url;
                 img.src = d2.url + `?t=${Date.now()}`;
                 if ($("imgDesc")) $("imgDesc").innerText = `Categoria '${s}' indisponível • mostrando 'neko'`;
-                if (dl) dl.href = d2.url;
               }
             }catch(_){}
           }
         };
 
         load();
-        $("imgReload").onclick = load;
+        // Reiniciar: busca outra imagem da MESMA categoria atual
+        $("imgReload").onclick = (ev) => {
+          ev?.preventDefault?.();
+          load();
+        };
+
+        // Baixar: salva a imagem atual (sem abrir outra guia e sem puxar outra imagem)
+        $("imgDownload").onclick = async (ev) => {
+          ev?.preventDefault?.();
+          ev?.stopPropagation?.();
+          if (!CURRENT_IMG_URL) return;
+          const ext = guessExtFromUrl(CURRENT_IMG_URL);
+          const name = `${CURRENT_IMG_TYPE || "anime"}-${Date.now()}${ext}`;
+          await startDownload(CURRENT_IMG_URL, name);
+        };
         openImgModal(true);
         return;
       }
