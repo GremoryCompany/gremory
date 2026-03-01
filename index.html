@@ -15,7 +15,6 @@
   <!-- Top-right: clock -->
   <div class="clock" id="clock" aria-label="Relógio">
     <i class="fa-regular fa-clock"></i>
-<div class="views" id="views"><span class="eye">👁️</span><span id="viewsCount">0</span></div>
     <div class="clock-text">
       <div id="clockTime">--:--:--</div>
       <div id="clockDate" class="clock-date">--/--/----</div>
@@ -60,7 +59,7 @@
       <!-- Tabs -->
       <div class="tabbar" role="tablist" aria-label="Abas">
         <button class="tab active" id="tabDownloads" role="tab" aria-selected="true">Downloads</button>
-        <button class="tab" id="tabImagens" role="tab" aria-selected="false">Imagens <span class="tag-18">+18</span></button>
+        <button class="tab" id="tabImagens" role="tab" aria-selected="false">Imagens</button>
       </div>
 
       <!-- Tab: Downloads -->
@@ -77,11 +76,39 @@
       <!-- Tab: Imagens -->
       <div class="tabpane" id="paneImagens" role="tabpanel" aria-label="Opções de imagens">
         <div class="grid">
-          <button class="service" data-service="assado"><i class="fa-solid fa-image"></i><span>Ass</span></button>
+          <button class="service" data-service="shinobu"><i class="fa-solid fa-image"></i><span>shinobu</span></button>
+          <button class="service" data-service="megumin"><i class="fa-solid fa-image"></i><span>megumin</span></button>
+          <button class="service" data-service="bully"><i class="fa-solid fa-image"></i><span>bully</span></button>
+          <button class="service" data-service="cuddle"><i class="fa-solid fa-image"></i><span>cuddle</span></button>
+          <button class="service" data-service="cry"><i class="fa-solid fa-image"></i><span>cry</span></button>
+          <button class="service" data-service="hug"><i class="fa-solid fa-image"></i><span>hug</span></button>
+          <button class="service" data-service="awoo"><i class="fa-solid fa-image"></i><span>awoo</span></button>
+          <button class="service" data-service="kiss"><i class="fa-solid fa-image"></i><span>kiss</span></button>
+          <button class="service" data-service="lick"><i class="fa-solid fa-image"></i><span>lick</span></button>
+          <button class="service" data-service="pat"><i class="fa-solid fa-image"></i><span>pat</span></button>
+          <button class="service" data-service="smug"><i class="fa-solid fa-image"></i><span>smug</span></button>
+          <button class="service" data-service="bonk"><i class="fa-solid fa-image"></i><span>bonk</span></button>
+          <button class="service" data-service="yeet"><i class="fa-solid fa-image"></i><span>yeet</span></button>
+          <button class="service" data-service="blush"><i class="fa-solid fa-image"></i><span>blush</span></button>
+          <button class="service" data-service="smile"><i class="fa-solid fa-image"></i><span>smile</span></button>
+          <button class="service" data-service="wave"><i class="fa-solid fa-image"></i><span>wave</span></button>
+          <button class="service" data-service="highfive"><i class="fa-solid fa-image"></i><span>highfive</span></button>
+          <button class="service" data-service="handhold"><i class="fa-solid fa-image"></i><span>handhold</span></button>
+          <button class="service" data-service="nom"><i class="fa-solid fa-image"></i><span>nom</span></button>
+          <button class="service" data-service="bite"><i class="fa-solid fa-image"></i><span>bite</span></button>
+          <button class="service" data-service="glomp"><i class="fa-solid fa-image"></i><span>glomp</span></button>
+          <button class="service" data-service="slap"><i class="fa-solid fa-image"></i><span>slap</span></button>
+          <button class="service" data-service="kill"><i class="fa-solid fa-image"></i><span>kill</span></button>
+          <button class="service" data-service="kick"><i class="fa-solid fa-image"></i><span>kick</span></button>
+          <button class="service" data-service="happy"><i class="fa-solid fa-image"></i><span>happy</span></button>
+          <button class="service" data-service="wink"><i class="fa-solid fa-image"></i><span>wink</span></button>
+          <button class="service" data-service="poke"><i class="fa-solid fa-image"></i><span>poke</span></button>
+          <button class="service" data-service="dance"><i class="fa-solid fa-image"></i><span>dance</span></button>
+          <button class="service" data-service="cringe"><i class="fa-solid fa-image"></i><span>cringe</span></button>
         </div>
         <div class="hint">
           <div class="hint-title">Como funciona</div>
-          <div class="hint-text">Clique em uma opção para carregar uma imagem. Depois use o botão “Reiniciar” para buscar outra.</div>
+          <div class="hint-text">Clique em uma opção para carregar uma imagem. Use “Reiniciar” para buscar outra e “Baixar” para salvar.</div>
         </div>
       </div>
 
@@ -185,6 +212,7 @@
         <div class="wiki-text">
           <div id="imgDesc" class="wiki-brief"></div>
           <button class="btn primary" id="imgReload" style="margin-top:12px">Reiniciar</button>
+          <a class="btn ghost" id="imgDownload" href="#" download target="_blank" rel="noopener" style="margin-top:12px; display:inline-flex; align-items:center; gap:8px;"><i class="fa-solid fa-download"></i>Baixar</a>
         </div>
       </div>
     </div>

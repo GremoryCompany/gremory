@@ -7,6 +7,8 @@ const LINKS = {
   email: "losermodder@gmail.com"
 };
 
+const IMAGE_CATEGORIES = ["shinobu", "megumin", "bully", "cuddle", "cry", "hug", "awoo", "kiss", "lick", "pat", "smug", "bonk", "yeet", "blush", "smile", "wave", "highfive", "handhold", "nom", "bite", "glomp", "slap", "kill", "kick", "happy", "wink", "poke", "dance", "cringe"];
+
 function $(id){ return document.getElementById(id); }
 
 function openPanel(panel, open){
@@ -514,13 +516,7 @@ document.addEventListener("DOMContentLoaded", () => {
         label: "Termo de pesquisa",
         placeholder: "Ex: Genshin Impact"
       },
-      assado: {
-        title: "Assado",
-        hint: "Imagem carregada na hora. Use “Reiniciar” para trocar.",
-        label: "",
-        placeholder: ""
-      }
-    }[service];
+}[service];
 
     if (!config) return false;
 
@@ -536,16 +532,39 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.addEventListener("click", () => {
       const s = btn.dataset.service;
 
-      // Imagens: abre direto
-      if (s === "assado") {
-        $("imgTitle").innerText = "Assado";
-        $("imgDesc").innerText = "Clique em Reiniciar para buscar outra.";
-        const load = () => {
+      // Imagens (anime): abre direto
+      if (IMAGE_CATEGORIES.includes(s)) {
+        const title = s.charAt(0).toUpperCase() + s.slice(1);
+        $("imgTitle").innerText = title;
+        $("imgDesc").innerText = "SFW • waifu.pics";
+
+        const load = async () => {
           const img = $("imgPreview");
+          const dl = $("imgDownload");
           if (!img) return;
           img.style.display = "block";
-          fetch(`/api/main?action=assado&ts=${Date.now()}`).then(r=>r.json()).then(d=>{ img.src = (d.url||"") + `?t=${Date.now()}`; });
+          try{
+            const type = s;
+            const url = `https://api.waifu.pics/sfw/${type}`;
+            const r = await fetch(url, { cache: "no-store" });
+            const d = await r.json();
+            if (!d || !d.url) throw new Error("Sem imagem");
+            img.src = d.url + `?t=${Date.now()}`;
+            if (dl) dl.href = d.url;
+          }catch(e){
+            // Fallback para 'neko' caso a categoria não exista
+            try{
+              const r2 = await fetch(`https://api.waifu.pics/sfw/neko`, { cache: "no-store" });
+              const d2 = await r2.json();
+              if (d2?.url){
+                img.src = d2.url + `?t=${Date.now()}`;
+                if ($("imgDesc")) $("imgDesc").innerText = `Categoria '${s}' indisponível • mostrando 'neko'`;
+                if (dl) dl.href = d2.url;
+              }
+            }catch(_){}
+          }
         };
+
         load();
         $("imgReload").onclick = load;
         openImgModal(true);
@@ -584,22 +603,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      if (currentService === "assado") {
-        openModal(false);
-        $("imgTitle").innerText = "Assado";
-        $("imgDesc").innerText = "Clique em Reiniciar para buscar outra.";
-        const load = () => {
-          const img = $("imgPreview");
-          if (!img) return;
-          img.style.display = "block";
-          fetch(`/api/main?action=assado&ts=${Date.now()}`).then(r=>r.json()).then(d=>{ img.src = (d.url||"") + `?t=${Date.now()}`; });
-        };
-        load();
-        $("imgReload").onclick = load;
-        openImgModal(true);
-        return;
-      }
-
       setBusy(true, "Gerando download...");
 
       let r;
@@ -631,20 +634,3 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 
-// ===========================
-// 👁️ Contador de visitas (local)
-// ===========================
-(function initViewsCounter(){
-  try{
-    const key = "gremory_views_count";
-    const sessionKey = "gremory_views_session_incremented";
-    let count = Number(localStorage.getItem(key) || "0");
-    if (!sessionStorage.getItem(sessionKey)) {
-      count += 1;
-      localStorage.setItem(key, String(count));
-      sessionStorage.setItem(sessionKey, "1");
-    }
-    const el = document.getElementById("viewsCount");
-    if (el) el.textContent = String(count);
-  }catch(e){}
-})();

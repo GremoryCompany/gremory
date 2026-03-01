@@ -587,16 +587,6 @@ body{
 
 
 /* Views counter */
-.views{
-  display:flex;
-  align-items:center;
-  gap:6px;
-  font-weight:800;
-  font-size:18px;
-  padding:6px 10px;
-  border-radius:10px;
-  backdrop-filter: blur(8px);
-}
 
 
 
