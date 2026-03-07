@@ -970,3 +970,61 @@ font-weight:bold;
 cursor:pointer;
 }
 
+
+
+.login-video-bg{
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+z-index:-1;
+overflow:hidden;
+}
+
+.login-video-bg video{
+width:100%;
+height:100%;
+object-fit:cover;
+filter:brightness(.5);
+}
+
+.profile-card{
+display:flex;
+gap:30px;
+align-items:flex-start;
+}
+
+.profile-avatar-large{
+width:260px;
+height:320px;
+border-radius:18px;
+object-fit:cover;
+}
+
+.profile-editor{
+flex:1;
+background:#141a2a;
+padding:25px;
+border-radius:16px;
+}
+
+.profile-editor input{
+width:100%;
+margin:8px 0 14px 0;
+padding:10px;
+border-radius:8px;
+border:none;
+background:#1c2336;
+color:#fff;
+}
+
+.profile-editor button{
+background:#7c5cff;
+border:none;
+padding:12px;
+border-radius:10px;
+color:white;
+font-weight:700;
+cursor:pointer;
+}
