@@ -664,3 +664,33 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 
+
+
+document.addEventListener("DOMContentLoaded",()=>{
+
+const loginScreen=document.getElementById("loginScreen")
+const profileScreen=document.getElementById("profileScreen")
+
+const loginBtn=document.getElementById("loginBtn")
+
+loginBtn?.addEventListener("click",()=>{
+
+const email=document.getElementById("loginEmail").value
+const pass=document.getElementById("loginPassword").value
+
+if(email && pass){
+
+loginScreen.style.display="none"
+profileScreen.style.display="flex"
+
+document.getElementById("profileName").innerText=email.split("@")[0]
+
+}
+
+})
+
+document.getElementById("profilePhoto")?.addEventListener("input",(e)=>{
+document.getElementById("profileAvatar").src=e.target.value
+})
+
+})

@@ -355,5 +355,55 @@
 
 <script type="module" src="assets/js/firebase-auth.js"></script>
 
+
+<div id="loginScreen" class="login-screen">
+  <video autoplay muted loop class="login-video">
+    <source src="assets/video/login.mp4" type="video/mp4">
+  </video>
+
+  <div class="login-box">
+    <h1>Login</h1>
+    <input id="loginEmail" placeholder="Email">
+    <input id="loginPassword" type="password" placeholder="Senha">
+    <button id="loginBtn">Entrar</button>
+    <p>Ainda não tem uma conta? <span id="goRegister">Criar</span></p>
+  </div>
+</div>
+
+<div id="profileScreen" class="profile-screen" style="display:none;">
+  <div class="profile-wrapper">
+
+    <div class="profile-left">
+        <img id="profileAvatar" class="profile-avatar">
+        <h2 id="profileName"></h2>
+    </div>
+
+    <div class="profile-right">
+        <h2>Editar Perfil</h2>
+
+        <label>Foto URL:</label>
+        <input id="profilePhoto">
+
+        <label>Senha:</label>
+        <input id="profilePassword">
+
+        <label>ApiKey:</label>
+        <input id="profileApi">
+
+        <label>Link Website:</label>
+        <input id="profileSite">
+
+        <label>Youtube URL:</label>
+        <input id="profileYoutube">
+
+        <label>Instagram:</label>
+        <input id="profileInstagram">
+
+        <button id="saveProfile">Salvar Alterações</button>
+    </div>
+
+  </div>
+</div>
+
 </body>
 </html>
