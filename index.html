@@ -274,5 +274,85 @@
   <script src="/assets/js/app.js"></script>
 
 <h3 class="download-history-title">📁 Histórico de downloads</h3>
+
+<button id="authBtn" class="auth-fab" type="button" aria-label="Abrir login">Entrar</button>
+
+<div class="auth-modal" id="authModal" aria-hidden="true">
+  <div class="auth-backdrop" id="authBackdrop"></div>
+  <div class="auth-box" id="authBox">
+    <div class="auth-gif-bg"></div>
+    <div class="auth-overlay"></div>
+
+    <div class="auth-panel" id="authPanel">
+      <div class="auth-brand">Gremory Company</div>
+
+      <div class="auth-switch" id="authTabs">
+        <button type="button" class="auth-tab active" id="loginTab">Login</button>
+        <button type="button" class="auth-tab" id="registerTab">Registro</button>
+      </div>
+
+      <div id="authFormsWrap">
+        <form id="loginForm" class="auth-form active">
+          <h2>Entrar na conta</h2>
+          <p>Faça login para acessar sua conta.</p>
+          <label>Email</label>
+          <input id="loginEmail" type="email" placeholder="seuemail@gmail.com" required>
+          <label>Senha</label>
+          <input id="loginPassword" type="password" placeholder="********" required>
+          <button type="submit" class="auth-submit">Entrar</button>
+          <button type="button" class="auth-link-btn" id="resetPasswordBtn">Esqueci minha senha</button>
+        </form>
+
+        <form id="registerForm" class="auth-form">
+          <h2>Criar conta</h2>
+          <p>Cadastre-se para salvar seu perfil no Firebase.</p>
+          <label>Nome</label>
+          <input id="registerName" type="text" placeholder="Seu nome" required>
+          <label>Email</label>
+          <input id="registerEmail" type="email" placeholder="seuemail@gmail.com" required>
+          <label>Senha</label>
+          <input id="registerPassword" type="password" placeholder="Mínimo 6 caracteres" required>
+          <label>Confirmar senha</label>
+          <input id="registerPassword2" type="password" placeholder="Repita sua senha" required>
+          <button type="submit" class="auth-submit">Criar conta</button>
+        </form>
+      </div>
+
+      <div class="auth-status" id="authStatus"></div>
+
+      <div class="auth-user" id="authUserBox" hidden>
+        <div class="auth-user-card">
+          <img id="authUserAvatar" class="auth-user-avatar" alt="Foto do usuário">
+          <div class="auth-user-info">
+            <div class="auth-user-name" id="authUserName">Usuário</div>
+            <div class="auth-user-email" id="authUserEmail">email@email.com</div>
+          </div>
+        </div>
+
+        <div class="auth-user-grid">
+          <div class="auth-user-item">
+            <span>Status</span>
+            <strong id="authUserPremium">Padrão</strong>
+          </div>
+          <div class="auth-user-item">
+            <span>Criado em</span>
+            <strong id="authUserCreatedAt">--/--/----</strong>
+          </div>
+          <div class="auth-user-item full">
+            <span>UID</span>
+            <strong id="authUserUid">-</strong>
+          </div>
+        </div>
+
+        <button type="button" class="auth-submit auth-logout" id="logoutBtn">Sair</button>
+      </div>
+    </div>
+
+    <button class="auth-close" id="authClose" type="button" aria-label="Fechar">×</button>
+  </div>
+</div>
+
+<script type="module" src="/assets/js/firebase-auth.js"></script>
+
 </body>
 </html>

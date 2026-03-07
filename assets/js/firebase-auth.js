@@ -2,20 +2,11 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-analytics.js";
 import {
-  getAuth,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-  onAuthStateChanged,
-  signOut,
-  updateProfile
+  getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  sendPasswordResetEmail, onAuthStateChanged, signOut, updateProfile
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
 import {
-  getDatabase,
-  ref,
-  set,
-  get,
-  child
+  getDatabase, ref, set, get, child
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
 
 const firebaseConfig = {
@@ -49,7 +40,6 @@ let currentUserData = null;
 function initials(name = "U"){
   return name.trim().split(/\s+/).slice(0,2).map(v => v[0]?.toUpperCase() || "").join("") || "U";
 }
-
 function svgAvatar(name){
   const txt = initials(name);
   const svg =
@@ -60,19 +50,16 @@ function svgAvatar(name){
     '</svg>';
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
-
 function formatDate(v){
   if (!v) return "--/--/----";
   try { return new Date(v).toLocaleDateString("pt-BR"); } catch { return "--/--/----"; }
 }
-
 function setAuthOpen(open){
   if (!authModal) return;
   authModal.classList.toggle("open", !!open);
   authModal.setAttribute("aria-hidden", open ? "false" : "true");
   if (!open) authStatus.textContent = "";
 }
-
 function setAuthTab(tab){
   const login = tab === "login";
   loginTab?.classList.toggle("active", login);
@@ -81,13 +68,11 @@ function setAuthTab(tab){
   registerForm?.classList.toggle("active", !login);
   authStatus.textContent = "";
 }
-
 function showUserPanel(show){
   if (authFormsWrap) authFormsWrap.hidden = !!show;
   if ($("authTabs")) $("authTabs").hidden = !!show;
   if (authUserBox) authUserBox.hidden = !show;
 }
-
 function fillUserData(user, dbData = null){
   const nome = dbData?.nome || user?.displayName || "Usuário";
   const email = user?.email || dbData?.email || "";
@@ -99,7 +84,6 @@ function fillUserData(user, dbData = null){
   $("authUserCreatedAt").textContent = formatDate(dbData?.createdAt);
   $("authUserUid").textContent = user?.uid || "";
 }
-
 function traduzErro(err){
   const code = err?.code || "";
   const msg = err?.message || "";
@@ -126,7 +110,6 @@ authBtn?.addEventListener("click", () => {
   }
   setAuthOpen(true);
 });
-
 $("authClose")?.addEventListener("click", () => setAuthOpen(false));
 $("authBackdrop")?.addEventListener("click", () => setAuthOpen(false));
 loginTab?.addEventListener("click", () => setAuthTab("login"));
@@ -163,12 +146,8 @@ registerForm?.addEventListener("submit", async (e) => {
 
     const avatar = svgAvatar(name);
     await set(ref(db, "users/" + cred.user.uid), {
-      uid: cred.user.uid,
-      nome: name,
-      email,
-      avatar,
-      createdAt: new Date().toISOString(),
-      premium: false
+      uid: cred.user.uid, nome: name, email, avatar,
+      createdAt: new Date().toISOString(), premium: false
     });
 
     authStatus.textContent = "Conta criada com sucesso.";
