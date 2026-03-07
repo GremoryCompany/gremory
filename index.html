@@ -320,56 +320,31 @@
 
       <div class="auth-status" id="authStatus"></div>
 
-      <div class="auth-user profile-screen" id="authUserBox" hidden>
-        <div class="profile-wrapper">
-          <div class="profile-left">
-            <img id="authUserAvatar" class="profile-avatar" alt="Foto do usuário">
-            <h2 id="authUserName">Usuário</h2>
-          </div>
-
-          <div class="profile-right">
-            <h2>Editar Perfil</h2>
-
-            <label>Foto URL:</label>
-            <input id="profilePhotoUrl" type="text" placeholder="https://...">
-
-            <label>ApiKey:</label>
-            <input id="profileApiKey" type="text" placeholder="Sua chave">
-
-            <label>Link Website:</label>
-            <input id="profileWebsite" type="text" placeholder="https://...">
-
-            <label>Youtube URL:</label>
-            <input id="profileYoutube" type="text" placeholder="https://youtube.com/...">
-
-            <label>Instagram:</label>
-            <input id="profileInstagram" type="text" placeholder="@seuuser">
-
-            <div class="profile-meta">
-              <div class="profile-meta-item">
-                <span>Email</span>
-                <strong id="authUserEmail">email@email.com</strong>
-              </div>
-              <div class="profile-meta-item">
-                <span>Status</span>
-                <strong id="authUserPremium">Padrão</strong>
-              </div>
-              <div class="profile-meta-item">
-                <span>Criado em</span>
-                <strong id="authUserCreatedAt">--/--/----</strong>
-              </div>
-              <div class="profile-meta-item full">
-                <span>UID</span>
-                <strong id="authUserUid">-</strong>
-              </div>
-            </div>
-
-            <div class="profile-actions">
-              <button type="button" class="profile-save-btn" id="saveProfileBtn">Salvar Alterações</button>
-              <button type="button" class="profile-logout-btn" id="logoutBtn">Sair</button>
-            </div>
+      <div class="auth-user" id="authUserBox" hidden>
+        <div class="auth-user-card">
+          <img id="authUserAvatar" class="auth-user-avatar" alt="Foto do usuário">
+          <div class="auth-user-info">
+            <div class="auth-user-name" id="authUserName">Usuário</div>
+            <div class="auth-user-email" id="authUserEmail">email@email.com</div>
           </div>
         </div>
+
+        <div class="auth-user-grid">
+          <div class="auth-user-item">
+            <span>Status</span>
+            <strong id="authUserPremium">Padrão</strong>
+          </div>
+          <div class="auth-user-item">
+            <span>Criado em</span>
+            <strong id="authUserCreatedAt">--/--/----</strong>
+          </div>
+          <div class="auth-user-item full">
+            <span>UID</span>
+            <strong id="authUserUid">-</strong>
+          </div>
+        </div>
+
+        <button type="button" class="auth-submit auth-logout" id="logoutBtn">Sair</button>
       </div>
     </div>
 
