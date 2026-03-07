@@ -1,4 +1,3 @@
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-analytics.js";
 import {
@@ -6,7 +5,7 @@ import {
   sendPasswordResetEmail, onAuthStateChanged, signOut, updateProfile
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
 import {
-  getDatabase, ref, set, get, child
+  getDatabase, ref, set, get, child, update
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
 
 const firebaseConfig = {
@@ -33,6 +32,7 @@ const registerTab = $("registerTab");
 const loginForm = $("loginForm");
 const registerForm = $("registerForm");
 const authFormsWrap = $("authFormsWrap");
+const authTabs = $("authTabs");
 const authUserBox = $("authUserBox");
 const authStatus = $("authStatus");
 let currentUserData = null;
@@ -70,19 +70,23 @@ function setAuthTab(tab){
 }
 function showUserPanel(show){
   if (authFormsWrap) authFormsWrap.hidden = !!show;
-  if ($("authTabs")) $("authTabs").hidden = !!show;
+  if (authTabs) authTabs.hidden = !!show;
   if (authUserBox) authUserBox.hidden = !show;
 }
-function fillUserData(user, dbData = null){
-  const nome = dbData?.nome || user?.displayName || "Usuário";
-  const email = user?.email || dbData?.email || "";
-  const avatar = dbData?.avatar || user?.photoURL || svgAvatar(nome);
+function setProfileInputs(data, user){
+  const nome = data?.nome || user?.displayName || "Usuário";
+  const avatar = data?.avatar || user?.photoURL || svgAvatar(nome);
   $("authUserAvatar").src = avatar;
   $("authUserName").textContent = nome;
-  $("authUserEmail").textContent = email;
-  $("authUserPremium").textContent = dbData?.premium ? "Premium" : "Padrão";
-  $("authUserCreatedAt").textContent = formatDate(dbData?.createdAt);
+  $("authUserEmail").textContent = user?.email || data?.email || "";
+  $("authUserPremium").textContent = data?.premium ? "Premium" : "Padrão";
+  $("authUserCreatedAt").textContent = formatDate(data?.createdAt);
   $("authUserUid").textContent = user?.uid || "";
+  $("profilePhotoUrl").value = data?.avatar || "";
+  $("profileApiKey").value = data?.apiKey || "";
+  $("profileWebsite").value = data?.website || "";
+  $("profileYoutube").value = data?.youtube || "";
+  $("profileInstagram").value = data?.instagram || "";
 }
 function traduzErro(err){
   const code = err?.code || "";
@@ -100,7 +104,12 @@ function traduzErro(err){
   };
   return mapa[code] || "Não foi possível concluir a ação.";
 }
-
+function bindLiveAvatarPreview(){
+  $("profilePhotoUrl")?.addEventListener("input", (e) => {
+    const val = e.target.value.trim();
+    if (val) $("authUserAvatar").src = val;
+  });
+}
 authBtn?.addEventListener("click", () => {
   if (currentUserData?.user) {
     showUserPanel(true);
@@ -136,20 +145,25 @@ registerForm?.addEventListener("submit", async (e) => {
     const email = $("registerEmail").value.trim();
     const password = $("registerPassword").value;
     const password2 = $("registerPassword2").value;
-
     if (!name) throw new Error("Digite seu nome.");
     if (password.length < 6) throw new Error("A senha precisa ter pelo menos 6 caracteres.");
     if (password !== password2) throw new Error("As senhas não coincidem.");
-
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(cred.user, { displayName: name });
-
+    const createdAt = new Date().toISOString();
     const avatar = svgAvatar(name);
     await set(ref(db, "users/" + cred.user.uid), {
-      uid: cred.user.uid, nome: name, email, avatar,
-      createdAt: new Date().toISOString(), premium: false
+      uid: cred.user.uid,
+      nome: name,
+      email,
+      avatar,
+      createdAt,
+      premium: false,
+      apiKey: "",
+      website: "",
+      youtube: "",
+      instagram: ""
     });
-
     authStatus.textContent = "Conta criada com sucesso.";
   } catch (err) {
     authStatus.textContent = traduzErro(err);
@@ -167,6 +181,27 @@ $("resetPasswordBtn")?.addEventListener("click", async () => {
     authStatus.textContent = "Email de recuperação enviado.";
   } catch (err) {
     authStatus.textContent = traduzErro(err);
+  }
+});
+
+$("saveProfileBtn")?.addEventListener("click", async () => {
+  if (!currentUserData?.user) return;
+  const user = currentUserData.user;
+  const dbRef = ref(db, "users/" + user.uid);
+  const payload = {
+    avatar: $("profilePhotoUrl").value.trim() || svgAvatar(user.displayName || "Usuário"),
+    apiKey: $("profileApiKey").value.trim(),
+    website: $("profileWebsite").value.trim(),
+    youtube: $("profileYoutube").value.trim(),
+    instagram: $("profileInstagram").value.trim()
+  };
+  try {
+    await update(dbRef, payload);
+    currentUserData.dbData = { ...(currentUserData.dbData || {}), ...payload };
+    setProfileInputs(currentUserData.dbData, user);
+    authStatus.textContent = "Perfil salvo com sucesso.";
+  } catch {
+    authStatus.textContent = "Não foi possível salvar o perfil.";
   }
 });
 
@@ -188,7 +223,7 @@ onAuthStateChanged(auth, async (user) => {
       if (snap.exists()) dbData = snap.val();
     } catch {}
     currentUserData = { user, dbData };
-    fillUserData(user, dbData);
+    setProfileInputs(dbData, user);
     authBtn.textContent = "Minha conta";
     showUserPanel(true);
     setTimeout(() => setAuthOpen(false), 500);
@@ -197,6 +232,8 @@ onAuthStateChanged(auth, async (user) => {
     authBtn.textContent = "Entrar";
     showUserPanel(false);
     setAuthTab("login");
-    setTimeout(() => setAuthOpen(true), 150);
+    setTimeout(() => setAuthOpen(true), 200);
   }
 });
+
+bindLiveAvatarPreview();
