@@ -63,16 +63,16 @@ function setAuthOpen(open){
   if (!open) authStatus.textContent = "";
 }
 function showGate(mode = "login"){
-  authGateScreen.hidden = false;
-  authAccountView.hidden = true;
-  loginForm.classList.toggle("active", mode === "login");
-  registerForm.classList.toggle("active", mode === "register");
-  authGateTitle.textContent = mode === "login" ? "Login" : "Registro";
-  authStatus.textContent = "";
+  if (authGateScreen) authGateScreen.hidden = false;
+  if (authAccountView) authAccountView.hidden = true;
+  if (loginForm) loginForm.classList.toggle("active", mode === "login");
+  if (registerForm) registerForm.classList.toggle("active", mode === "register");
+  if (authGateTitle) authGateTitle.textContent = mode === "login" ? "Login" : "Registro";
+  if (authStatus) authStatus.textContent = "";
 }
 function showAccount(){
-  authGateScreen.hidden = true;
-  authAccountView.hidden = false;
+  if (authGateScreen) authGateScreen.hidden = true;
+  if (authAccountView) authAccountView.hidden = false;
 }
 function setProfileInputs(data, user){
   const nome = data?.nome || user?.displayName || "Usuário";
@@ -247,3 +247,8 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 bindLiveAvatarPreview();
+
+
+showGate("login");
+setBodyLocked(true);
+setAuthOpen(true);

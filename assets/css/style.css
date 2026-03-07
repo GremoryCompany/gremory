@@ -1035,3 +1035,21 @@ body.auth-locked .auth-gate-screen{ display:flex !important; }
     flex-direction:column;
   }
 }
+
+
+/* === gate/account visibility fix === */
+.auth-modal [hidden]{
+  display: none !important;
+}
+.auth-gate-screen{
+  z-index: 2;
+}
+.auth-account-view{
+  z-index: 3;
+}
+.auth-account-view[hidden]{
+  display: none !important;
+}
+.auth-gate-screen[hidden]{
+  display: none !important;
+}
