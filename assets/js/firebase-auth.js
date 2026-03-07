@@ -1,3 +1,4 @@
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-analytics.js";
 import {
@@ -27,16 +28,17 @@ const db = getDatabase(app);
 const $ = (id) => document.getElementById(id);
 const authModal = $("authModal");
 const authBtn = $("authBtn");
-const loginTab = $("loginTab");
-const registerTab = $("registerTab");
 const loginForm = $("loginForm");
 const registerForm = $("registerForm");
-const authFormsWrap = $("authFormsWrap");
-const authTabs = $("authTabs");
-const authUserBox = $("authUserBox");
 const authStatus = $("authStatus");
+const authGateTitle = $("authGateTitle");
+const authGateScreen = $("authGateScreen");
+const authAccountView = $("authAccountView");
 let currentUserData = null;
 
+function setBodyLocked(locked){
+  document.body.classList.toggle("auth-locked", !!locked);
+}
 function initials(name = "U"){
   return name.trim().split(/\s+/).slice(0,2).map(v => v[0]?.toUpperCase() || "").join("") || "U";
 }
@@ -60,18 +62,17 @@ function setAuthOpen(open){
   authModal.setAttribute("aria-hidden", open ? "false" : "true");
   if (!open) authStatus.textContent = "";
 }
-function setAuthTab(tab){
-  const login = tab === "login";
-  loginTab?.classList.toggle("active", login);
-  registerTab?.classList.toggle("active", !login);
-  loginForm?.classList.toggle("active", login);
-  registerForm?.classList.toggle("active", !login);
+function showGate(mode = "login"){
+  authGateScreen.hidden = false;
+  authAccountView.hidden = true;
+  loginForm.classList.toggle("active", mode === "login");
+  registerForm.classList.toggle("active", mode === "register");
+  authGateTitle.textContent = mode === "login" ? "Login" : "Registro";
   authStatus.textContent = "";
 }
-function showUserPanel(show){
-  if (authFormsWrap) authFormsWrap.hidden = !!show;
-  if (authTabs) authTabs.hidden = !!show;
-  if (authUserBox) authUserBox.hidden = !show;
+function showAccount(){
+  authGateScreen.hidden = true;
+  authAccountView.hidden = false;
 }
 function setProfileInputs(data, user){
   const nome = data?.nome || user?.displayName || "Usuário";
@@ -110,19 +111,25 @@ function bindLiveAvatarPreview(){
     if (val) $("authUserAvatar").src = val;
   });
 }
+
 authBtn?.addEventListener("click", () => {
   if (currentUserData?.user) {
-    showUserPanel(true);
+    showAccount();
   } else {
-    setAuthTab("login");
-    showUserPanel(false);
+    showGate("login");
   }
   setAuthOpen(true);
 });
-$("authClose")?.addEventListener("click", () => setAuthOpen(false));
-$("authBackdrop")?.addEventListener("click", () => setAuthOpen(false));
-loginTab?.addEventListener("click", () => setAuthTab("login"));
-registerTab?.addEventListener("click", () => setAuthTab("register"));
+
+$("showRegisterLink")?.addEventListener("click", () => showGate("register"));
+$("showLoginLink")?.addEventListener("click", () => showGate("login"));
+
+$("authClose")?.addEventListener("click", () => {
+  if (!document.body.classList.contains("auth-locked")) setAuthOpen(false);
+});
+$("authBackdrop")?.addEventListener("click", () => {
+  if (!document.body.classList.contains("auth-locked")) setAuthOpen(false);
+});
 
 loginForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -148,10 +155,13 @@ registerForm?.addEventListener("submit", async (e) => {
     if (!name) throw new Error("Digite seu nome.");
     if (password.length < 6) throw new Error("A senha precisa ter pelo menos 6 caracteres.");
     if (password !== password2) throw new Error("As senhas não coincidem.");
+
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(cred.user, { displayName: name });
+
     const createdAt = new Date().toISOString();
     const avatar = svgAvatar(name);
+
     await set(ref(db, "users/" + cred.user.uid), {
       uid: cred.user.uid,
       nome: name,
@@ -164,6 +174,7 @@ registerForm?.addEventListener("submit", async (e) => {
       youtube: "",
       instagram: ""
     });
+
     authStatus.textContent = "Conta criada com sucesso.";
   } catch (err) {
     authStatus.textContent = traduzErro(err);
@@ -208,10 +219,9 @@ $("saveProfileBtn")?.addEventListener("click", async () => {
 $("logoutBtn")?.addEventListener("click", async () => {
   try {
     await signOut(auth);
-    authStatus.textContent = "";
-    setAuthTab("login");
-    showUserPanel(false);
-    setAuthOpen(false);
+    showGate("login");
+    setBodyLocked(true);
+    setAuthOpen(true);
   } catch {}
 });
 
@@ -225,14 +235,14 @@ onAuthStateChanged(auth, async (user) => {
     currentUserData = { user, dbData };
     setProfileInputs(dbData, user);
     authBtn.textContent = "Minha conta";
-    showUserPanel(true);
-    setTimeout(() => setAuthOpen(false), 500);
+    setBodyLocked(false);
+    setTimeout(() => setAuthOpen(false), 250);
   } else {
     currentUserData = null;
-    authBtn.textContent = "Entrar";
-    showUserPanel(false);
-    setAuthTab("login");
-    setTimeout(() => setAuthOpen(true), 200);
+    authBtn.textContent = "Minha conta";
+    showGate("login");
+    setBodyLocked(true);
+    setTimeout(() => setAuthOpen(true), 50);
   }
 });
 

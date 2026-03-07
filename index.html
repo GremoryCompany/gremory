@@ -275,52 +275,45 @@
 
 <h3 class="download-history-title">📁 Histórico de downloads</h3>
 
-<button id="authBtn" class="auth-fab" type="button" aria-label="Abrir conta">Entrar</button>
+<button id="authBtn" class="auth-fab" type="button" aria-label="Minha conta">Minha conta</button>
 
-<div class="auth-modal" id="authModal" aria-hidden="true">
+<div class="auth-modal auth-gate" id="authModal" aria-hidden="true">
   <div class="auth-backdrop" id="authBackdrop"></div>
-  <div class="auth-box" id="authBox">
-    <div class="auth-gif-bg"></div>
-    <div class="auth-overlay"></div>
 
-    <div class="auth-panel" id="authPanel">
-      <div class="auth-brand">Gremory Company</div>
+  <div class="auth-gate-screen" id="authGateScreen">
+    <div class="auth-gate-card">
+      <div class="auth-gate-title" id="authGateTitle">Login</div>
 
-      <div class="auth-switch" id="authTabs">
-        <button type="button" class="auth-tab active" id="loginTab">Login</button>
-        <button type="button" class="auth-tab" id="registerTab">Registro</button>
-      </div>
+      <form id="loginForm" class="auth-gate-form active">
+        <input id="loginEmail" type="email" placeholder="Email" required>
+        <input id="loginPassword" type="password" placeholder="Senha" required>
+        <button type="submit" class="auth-gate-submit">Entrar</button>
+        <div class="auth-gate-switch">Ainda não tem uma conta? <button type="button" class="auth-gate-link" id="showRegisterLink">Criar</button></div>
+      </form>
 
-      <div id="authFormsWrap">
-        <form id="loginForm" class="auth-form active">
-          <h2>Entrar na conta</h2>
-          <p>Faça login para acessar sua conta.</p>
-          <label>Email</label>
-          <input id="loginEmail" type="email" placeholder="seuemail@gmail.com" required>
-          <label>Senha</label>
-          <input id="loginPassword" type="password" placeholder="********" required>
-          <button type="submit" class="auth-submit">Entrar</button>
-          <button type="button" class="auth-link-btn" id="resetPasswordBtn">Esqueci minha senha</button>
-        </form>
+      <form id="registerForm" class="auth-gate-form">
+        <input id="registerName" type="text" placeholder="Nome" required>
+        <input id="registerEmail" type="email" placeholder="Email" required>
+        <input id="registerPassword" type="password" placeholder="Senha" required>
+        <input id="registerPassword2" type="password" placeholder="Confirmar senha" required>
+        <button type="submit" class="auth-gate-submit">Criar conta</button>
+        <div class="auth-gate-switch">Já tem uma conta? <button type="button" class="auth-gate-link" id="showLoginLink">Login</button></div>
+      </form>
 
-        <form id="registerForm" class="auth-form">
-          <h2>Criar conta</h2>
-          <p>Cadastre-se para salvar seu perfil no Firebase.</p>
-          <label>Nome</label>
-          <input id="registerName" type="text" placeholder="Seu nome" required>
-          <label>Email</label>
-          <input id="registerEmail" type="email" placeholder="seuemail@gmail.com" required>
-          <label>Senha</label>
-          <input id="registerPassword" type="password" placeholder="Mínimo 6 caracteres" required>
-          <label>Confirmar senha</label>
-          <input id="registerPassword2" type="password" placeholder="Repita sua senha" required>
-          <button type="submit" class="auth-submit">Criar conta</button>
-        </form>
-      </div>
-
+      <button type="button" class="auth-gate-link auth-reset-link" id="resetPasswordBtn">Esqueci minha senha</button>
       <div class="auth-status" id="authStatus"></div>
+    </div>
+  </div>
 
-      <div class="auth-user profile-screen" id="authUserBox" hidden>
+  <div class="auth-account-view" id="authAccountView" hidden>
+    <div class="auth-account-shell">
+      <div class="auth-account-bg"></div>
+      <div class="auth-account-overlay"></div>
+
+      <div class="auth-account-panel">
+        <button class="auth-close" id="authClose" type="button" aria-label="Fechar">×</button>
+        <h1 class="auth-brand">Gremory Company</h1>
+
         <div class="profile-wrapper">
           <div class="profile-left">
             <div class="profile-avatar-wrap">
@@ -375,8 +368,6 @@
         </div>
       </div>
     </div>
-
-    <button class="auth-close" id="authClose" type="button" aria-label="Fechar">×</button>
   </div>
 </div>
 
