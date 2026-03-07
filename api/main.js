@@ -98,33 +98,7 @@ module.exports = async (req, res) => {
       return sendJson(res, 500, { erro: 'erro no proxy' });
     }
   }
-  if (action === 'assado') {
-    if (req.method !== 'GET') return sendJson(res, 405, { erro: 'Método inválido' });
-    try{
-      const url = `https://ninx.fun/api/hepo/assado?apikey=${encodeURIComponent(ninxKey)}`;
-      const r = await fetch(url);
-      const data = await r.json().catch(()=>null);
-      const imgUrl = data?.url || data?.resultado?.url || data?.image || data?.img || null;
-      if (!r.ok || !imgUrl) return sendJson(res, 502, { erro: 'Falha ao obter imagem' });
-      return sendJson(res, 200, { ok:true, url: imgUrl });
-    }catch{
-      return sendJson(res, 500, { erro: 'Falha ao obter imagem' });
-    }
-  }
-  if (action === 'wiki') {
-    if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
-    const { query } = await readJsonBody(req);
-    if (!query) return sendJson(res, 400, { erro: 'Termo obrigatório' });
-    try{
-      const apiUrl = `https://ninx.fun/api/pesquisa/wiki?nome=${encodeURIComponent(query)}&apikey=${encodeURIComponent(ninxKey)}`;
-      const r = await fetch(apiUrl);
-      const data = await r.json().catch(()=>null);
-      if (!r.ok || !data || data.status !== true) return sendJson(res, 404, { erro: 'Sem resultados' });
-      return sendJson(res, 200, { ok:true, titulo:data.titulo||"", descricao_breve:data.descricao_breve||"", resumo:data.resumo||"", imagem:data.imagem||"", link:data.link||"" });
-    }catch{
-      return sendJson(res, 500, { erro: 'Falha ao buscar na Wikipedia' });
-    }
-  }
+
   if (action === 'pinterest') {
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
     const { url } = await readJsonBody(req);
@@ -137,6 +111,7 @@ module.exports = async (req, res) => {
       let mediaUrl = matchMeta(html, ['og:video:secure_url', 'og:video', 'og:image:secure_url', 'og:image', 'twitter:image']);
       if (!mediaUrl) mediaUrl = matchJsonUrl(html);
       if (!mediaUrl) return sendJson(res, 404, { erro: 'Não foi possível extrair a mídia do Pinterest' });
+
       let ext = 'jpg';
       try{
         const pathname = new URL(mediaUrl).pathname;
@@ -145,6 +120,7 @@ module.exports = async (req, res) => {
       }catch{}
       const isVideo = /(\.mp4|\.m3u8)(\?|$)/i.test(mediaUrl) || /og:video/i.test(html);
       if (isVideo) ext = 'mp4';
+
       const filename = `pinterest-${Date.now()}.${ext}`;
       const prox = `/api/main?action=proxy&url=${encodeURIComponent(mediaUrl)}&filename=${encodeURIComponent(filename)}`;
       return sendJson(res, 200, { ok:true, downloadUrl: prox, filename });
@@ -152,32 +128,7 @@ module.exports = async (req, res) => {
       return sendJson(res, 500, { erro: 'Falha ao baixar Pinterest' });
     }
   }
-  if (action === 'spotify') {
-    if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
-    const { nome } = await readJsonBody(req);
-    if (!nome) return sendJson(res, 400, { erro: 'Nome da música obrigatório' });
-    if (!rapidKey) return sendJson(res, 500, { erro: 'RAPIDAPI_KEY não configurada na Vercel' });
-    try{
-      const searchUrl = `https://ninx.fun/api/pesquisa/spotify?nome=${encodeURIComponent(nome)}&apikey=${encodeURIComponent(ninxKey)}`;
-      const searchResp = await fetch(searchUrl);
-      const searchData = await searchResp.json().catch(()=>null);
-      const resultados = searchData?.result || searchData;
-      if (!Array.isArray(resultados) || resultados.length === 0) return sendJson(res, 404, { erro: 'Música não encontrada' });
-      const linkSpotify = resultados[0]?.url;
-      if (!linkSpotify) return sendJson(res, 502, { erro: 'Resultado sem URL do Spotify' });
-      const rapidUrl = new URL('https://spotify-downloader9.p.rapidapi.com/downloadSong');
-      rapidUrl.searchParams.set('songId', linkSpotify);
-      const dlResp = await fetch(rapidUrl.toString(), { headers: { 'x-rapidapi-key': rapidKey, 'x-rapidapi-host': 'spotify-downloader9.p.rapidapi.com' } });
-      const dl = await dlResp.json().catch(()=>null);
-      if (!dlResp.ok || !dl || !dl.success || !dl.data) return sendJson(res, 502, { erro: 'Não foi possível baixar essa música' });
-      const audioUrl = dl.data.downloadLink;
-      if (!audioUrl) return sendJson(res, 502, { erro: 'Spotify sem link de download' });
-      const title = safeFilename(dl.data.title || 'musica');
-      return sendJson(res, 200, { ok:true, downloadUrl:audioUrl, filename:`${title}.mp3`, title:dl.data.title||'', artist:dl.data.artist||'', album:dl.data.album||'', cover:dl.data.cover||'' });
-    }catch{
-      return sendJson(res, 500, { erro: 'Falha ao baixar Spotify' });
-    }
-  }
+
   if (action === 'tiktok') {
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
     const { url } = await readJsonBody(req);
@@ -186,32 +137,28 @@ module.exports = async (req, res) => {
     try{
       const body = new URLSearchParams({ url });
       const r = await fetch('https://tiktok-video-no-watermark2.p.rapidapi.com/', {
-        method:'POST',
-        headers:{ 'content-type':'application/x-www-form-urlencoded', 'x-rapidapi-host':'tiktok-video-no-watermark2.p.rapidapi.com', 'x-rapidapi-key':rapidKey },
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'x-rapidapi-host': 'tiktok-video-no-watermark2.p.rapidapi.com',
+          'x-rapidapi-key': rapidKey
+        },
         body: body.toString()
       });
       const data = await r.json().catch(()=>null);
       if (!r.ok || !data || data.code !== 0 || !data.data?.play) return sendJson(res, 502, { erro: 'Não foi possível baixar esse TikTok' });
       const title = safeFilename(data.data.title || 'tiktok-video');
-      return sendJson(res, 200, { ok:true, downloadUrl:data.data.play, filename:`${title}.mp4`, thumb:data.data.cover||'', autor:data.data.author?.nickname||'' });
+      return sendJson(res, 200, {
+        ok:true,
+        downloadUrl:data.data.play,
+        filename:`${title}.mp4`,
+        thumb:data.data.cover || '',
+        autor:data.data.author?.nickname || ''
+      });
     }catch{
       return sendJson(res, 500, { erro: 'Falha ao baixar TikTok' });
     }
   }
-  if (action === 'instagram') {
-    if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
-    const { url } = await readJsonBody(req);
-    if (!url) return sendJson(res, 400, { erro: 'URL obrigatória' });
-    try{
-      const apiUrl = `https://ninx.fun/api/download/instagram?url=${encodeURIComponent(url)}&apikey=${encodeURIComponent(ninxKey)}`;
-      const r = await fetch(apiUrl);
-      const data = await r.json().catch(()=>null);
-      const downloadUrl = data?.downloadUrl || data?.url || data?.dados?.url || data?.data?.url || data?.data?.downloadUrl || (Array.isArray(data?.url) ? data.url[0] : null) || null;
-      if (!r.ok || !downloadUrl) return sendJson(res, 502, { erro: 'Falha ao gerar download' });
-      return sendJson(res, 200, { ok:true, downloadUrl, filename:`instagram-${Date.now()}.mp4` });
-    }catch{
-      return sendJson(res, 500, { erro: 'Falha ao gerar download' });
-    }
-  }
+
   return sendJson(res, 404, { erro: 'Ação inválida' });
 };

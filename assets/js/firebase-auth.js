@@ -60,7 +60,7 @@ function setAuthOpen(open){
   if (!authModal) return;
   authModal.classList.toggle("open", !!open);
   authModal.setAttribute("aria-hidden", open ? "false" : "true");
-  if (!open) authStatus.textContent = "";
+  if (!open && authStatus) authStatus.textContent = "";
 }
 function showGate(mode = "login"){
   if (authGateScreen) authGateScreen.hidden = false;
@@ -113,11 +113,8 @@ function bindLiveAvatarPreview(){
 }
 
 authBtn?.addEventListener("click", () => {
-  if (currentUserData?.user) {
-    showAccount();
-  } else {
-    showGate("login");
-  }
+  if (!currentUserData?.user) return; // botão Minha conta é só pra conta já logada
+  showAccount();
   setAuthOpen(true);
 });
 
@@ -138,7 +135,6 @@ loginForm?.addEventListener("submit", async (e) => {
     const email = $("loginEmail").value.trim();
     const password = $("loginPassword").value;
     await signInWithEmailAndPassword(auth, email, password);
-    authStatus.textContent = "Login realizado com sucesso.";
   } catch (err) {
     authStatus.textContent = traduzErro(err);
   }
@@ -174,8 +170,6 @@ registerForm?.addEventListener("submit", async (e) => {
       youtube: "",
       instagram: ""
     });
-
-    authStatus.textContent = "Conta criada com sucesso.";
   } catch (err) {
     authStatus.textContent = traduzErro(err);
   }
@@ -219,6 +213,7 @@ $("saveProfileBtn")?.addEventListener("click", async () => {
 $("logoutBtn")?.addEventListener("click", async () => {
   try {
     await signOut(auth);
+    currentUserData = null;
     showGate("login");
     setBodyLocked(true);
     setAuthOpen(true);
@@ -236,19 +231,17 @@ onAuthStateChanged(auth, async (user) => {
     setProfileInputs(dbData, user);
     authBtn.textContent = "Minha conta";
     setBodyLocked(false);
-    setTimeout(() => setAuthOpen(false), 250);
+    setAuthOpen(false); // não mostrar conta sozinha ao logar
   } else {
     currentUserData = null;
     authBtn.textContent = "Minha conta";
     showGate("login");
     setBodyLocked(true);
-    setTimeout(() => setAuthOpen(true), 50);
+    setAuthOpen(true); // mostrar login sempre ao entrar sem sessão
   }
 });
 
 bindLiveAvatarPreview();
-
-
 showGate("login");
 setBodyLocked(true);
 setAuthOpen(true);
