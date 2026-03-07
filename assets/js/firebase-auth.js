@@ -3,7 +3,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/fireba
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-analytics.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  sendPasswordResetEmail, onAuthStateChanged, signOut, updateProfile
+  sendPasswordResetEmail, onAuthStateChanged, signOut, updateProfile, setPersistence, browserSessionPersistence
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
 import {
   getDatabase, ref, set, get, child, update
@@ -35,6 +35,9 @@ const authGateTitle = $("authGateTitle");
 const authGateScreen = $("authGateScreen");
 const authAccountView = $("authAccountView");
 let currentUserData = null;
+let hasInteractedAuth = false;
+
+setPersistence(auth, browserSessionPersistence).catch(() => {});
 
 function setBodyLocked(locked){
   document.body.classList.toggle("auth-locked", !!locked);
@@ -60,7 +63,7 @@ function setAuthOpen(open){
   if (!authModal) return;
   authModal.classList.toggle("open", !!open);
   authModal.setAttribute("aria-hidden", open ? "false" : "true");
-  if (!open) authStatus.textContent = "";
+  if (!open && authStatus) authStatus.textContent = "";
 }
 function showGate(mode = "login"){
   if (authGateScreen) authGateScreen.hidden = false;
@@ -113,17 +116,12 @@ function bindLiveAvatarPreview(){
 }
 
 authBtn?.addEventListener("click", () => {
-  if (currentUserData?.user) {
-    showAccount();
-  } else {
-    showGate("login");
-  }
+  if (!currentUserData?.user) return;
+  showAccount();
   setAuthOpen(true);
 });
-
 $("showRegisterLink")?.addEventListener("click", () => showGate("register"));
 $("showLoginLink")?.addEventListener("click", () => showGate("login"));
-
 $("authClose")?.addEventListener("click", () => {
   if (!document.body.classList.contains("auth-locked")) setAuthOpen(false);
 });
@@ -133,12 +131,12 @@ $("authBackdrop")?.addEventListener("click", () => {
 
 loginForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
+  hasInteractedAuth = true;
   authStatus.textContent = "Entrando...";
   try {
     const email = $("loginEmail").value.trim();
     const password = $("loginPassword").value;
     await signInWithEmailAndPassword(auth, email, password);
-    authStatus.textContent = "Login realizado com sucesso.";
   } catch (err) {
     authStatus.textContent = traduzErro(err);
   }
@@ -146,6 +144,7 @@ loginForm?.addEventListener("submit", async (e) => {
 
 registerForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
+  hasInteractedAuth = true;
   authStatus.textContent = "Criando conta...";
   try {
     const name = $("registerName").value.trim();
@@ -174,8 +173,6 @@ registerForm?.addEventListener("submit", async (e) => {
       youtube: "",
       instagram: ""
     });
-
-    authStatus.textContent = "Conta criada com sucesso.";
   } catch (err) {
     authStatus.textContent = traduzErro(err);
   }
@@ -219,6 +216,8 @@ $("saveProfileBtn")?.addEventListener("click", async () => {
 $("logoutBtn")?.addEventListener("click", async () => {
   try {
     await signOut(auth);
+    currentUserData = null;
+    hasInteractedAuth = false;
     showGate("login");
     setBodyLocked(true);
     setAuthOpen(true);
@@ -236,19 +235,24 @@ onAuthStateChanged(auth, async (user) => {
     setProfileInputs(dbData, user);
     authBtn.textContent = "Minha conta";
     setBodyLocked(false);
-    setTimeout(() => setAuthOpen(false), 250);
+    if (hasInteractedAuth) {
+      setAuthOpen(false);
+    } else {
+      // sessão antiga: mantém login gate até ação explícita do usuário
+      showGate("login");
+      setBodyLocked(true);
+      setAuthOpen(true);
+    }
   } else {
     currentUserData = null;
     authBtn.textContent = "Minha conta";
     showGate("login");
     setBodyLocked(true);
-    setTimeout(() => setAuthOpen(true), 50);
+    setAuthOpen(true);
   }
 });
 
 bindLiveAvatarPreview();
-
-
 showGate("login");
 setBodyLocked(true);
 setAuthOpen(true);

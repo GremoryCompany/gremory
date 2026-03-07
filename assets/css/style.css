@@ -717,6 +717,7 @@ body{
 
 
 
+
 /* === LOGIN GATE + ACCOUNT === */
 .auth-fab{
   position: fixed;
@@ -739,14 +740,13 @@ body{
   z-index: 5000;
 }
 .auth-modal.open{ display:block; }
+.auth-modal [hidden]{ display:none !important; }
 .auth-backdrop{
   position:absolute;
   inset:0;
   background: rgba(0,0,0,.65);
   backdrop-filter: blur(6px);
 }
-
-/* full-screen login gate */
 .auth-gate-screen{
   position: absolute;
   inset: 0;
@@ -754,6 +754,7 @@ body{
   align-items:center;
   justify-content:center;
   background: url("/assets/video/login.gif") center/cover no-repeat;
+  z-index: 2;
 }
 .auth-gate-screen::before{
   content:"";
@@ -828,8 +829,6 @@ body{
   font-size: 14px;
   font-weight: 700;
 }
-
-/* body lock before login */
 body.auth-locked{
   overflow: hidden !important;
 }
@@ -847,13 +846,13 @@ body.auth-locked .auth-fab{
 body.auth-locked .auth-account-view{ display:none !important; }
 body.auth-locked .auth-gate-screen{ display:flex !important; }
 
-/* account/customization view */
 .auth-account-view{
   position:absolute;
   inset:0;
   display:flex;
   align-items:center;
   justify-content:center;
+  z-index: 3;
 }
 .auth-account-shell{
   position: relative;
@@ -945,6 +944,7 @@ body.auth-locked .auth-gate-screen{ display:flex !important; }
   border-radius:22px;
   padding:24px;
   color:#fff;
+  overflow: auto;
 }
 .profile-right h2{
   margin:0 0 16px;
@@ -1016,12 +1016,20 @@ body.auth-locked .auth-gate-screen{ display:flex !important; }
   .auth-gate-title{ font-size: 32px; }
   .auth-account-shell{
     width: calc(100% - 16px);
-    min-height: 560px;
-    border-radius: 24px;
+    min-height: 100dvh;
+    border-radius: 18px;
+  }
+  .auth-account-panel{
+    padding: 18px 12px 24px;
+    max-height: 100dvh;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .profile-wrapper{
     grid-template-columns: 1fr;
+    gap: 16px;
   }
+  .profile-left{ width:100%; }
   .profile-avatar-wrap{
     max-width:320px;
     margin:0 auto;
@@ -1031,25 +1039,53 @@ body.auth-locked .auth-gate-screen{ display:flex !important; }
   .profile-avatar-gif{
     height:380px;
   }
+  .profile-right{
+    padding:16px;
+    border-radius:18px;
+  }
+  .profile-meta{
+    grid-template-columns:1fr;
+  }
+  .profile-meta-item.full{
+    grid-column:auto;
+  }
   .profile-actions{
     flex-direction:column;
   }
+  .profile-save-btn,
+  .profile-logout-btn{
+    width:100%;
+  }
 }
-
-
-/* === gate/account visibility fix === */
-.auth-modal [hidden]{
-  display: none !important;
-}
-.auth-gate-screen{
-  z-index: 2;
-}
-.auth-account-view{
-  z-index: 3;
-}
-.auth-account-view[hidden]{
-  display: none !important;
-}
-.auth-gate-screen[hidden]{
-  display: none !important;
+@media (max-width: 700px){
+  .auth-account-shell{
+    width: 100vw !important;
+    min-height: 100dvh !important;
+    border-radius: 0 !important;
+    border: 0 !important;
+  }
+  .auth-account-panel{
+    padding: 20px 14px 24px !important;
+  }
+  .profile-avatar-wrap{
+    max-width: 280px !important;
+    height: 320px !important;
+  }
+  .profile-avatar,
+  .profile-avatar-gif{
+    height: 320px !important;
+  }
+  .profile-left h2{
+    font-size: 20px !important;
+  }
+  .profile-right h2{
+    font-size: 18px !important;
+  }
+  .profile-right label{
+    font-size: 13px !important;
+  }
+  .profile-right input{
+    padding: 11px 12px !important;
+    font-size: 14px !important;
+  }
 }
