@@ -1,5 +1,4 @@
-// Single Serverless Function for Vercel Hobby plan (<=12 funcs)
-// Routes via ?action=...
+
 function sendJson(res, status, obj){
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -48,31 +47,60 @@ function blockPrivateHost(host){
 async function streamAsAttachment(res, fileResp, filename){
   const contentType = fileResp.headers.get('content-type') || 'application/octet-stream';
   const len = fileResp.headers.get('content-length');
-
   res.statusCode = 200;
   res.setHeader('Content-Type', contentType);
   res.setHeader('Content-Disposition', `attachment; filename="${safeFilename(filename)}"`);
   res.setHeader('Cache-Control', 'no-store');
   if (len) res.setHeader('Content-Length', len);
-
   const { Readable } = require('stream');
   Readable.fromWeb(fileResp.body).pipe(res);
+}
+
+async function fetchText(url, headers = {}){
+  const r = await fetch(url, { headers, redirect: 'follow' });
+  if (!r.ok) throw new Error('Falha ao buscar página');
+  return await r.text();
+}
+
+function matchMeta(html, keys){
+  for (const key of keys){
+    const patterns = [
+      new RegExp(`<meta[^>]+property=["']${key}["'][^>]+content=["']([^"']+)["']`, 'i'),
+      new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']${key}["']`, 'i'),
+      new RegExp(`<meta[^>]+name=["']${key}["'][^>]+content=["']([^"']+)["']`, 'i'),
+      new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+name=["']${key}["']`, 'i')
+    ];
+    for (const rgx of patterns){
+      const m = html.match(rgx);
+      if (m && m[1]) return m[1].replace(/&amp;/g, '&');
+    }
+  }
+  return null;
+}
+
+function matchJsonUrl(html){
+  const regexes = [
+    /"image_url":"(https:[^"]+)"/i,
+    /"orig":\{"url":"(https:[^"]+)"/i,
+    /"url":"(https:\\\/\\\/i\.pinimg\.com[^"]+)"/i,
+    /"contentUrl":"(https:[^"]+)"/i
+  ];
+  for (const rgx of regexes){
+    const m = html.match(rgx);
+    if (m && m[1]) return m[1].replace(/\\u002F/g, '/').replace(/\\\//g, '/');
+  }
+  return null;
 }
 
 module.exports = async (req, res) => {
   const ninxKey = process.env.NINX_API_KEY || 'fuJe';
   const rapidKey = process.env.RAPIDAPI_KEY || '6e6739bedbmsh671d99355539a01p1d9748jsn68265b82360a';
-
   const action = (qp(req, 'action') || '').toLowerCase();
 
-  // ===========================
-  // Proxy: GET /api/main?action=proxy&url=...&filename=...
-  // ===========================
   if (action === 'proxy') {
     if (req.method !== 'GET') return sendJson(res, 405, { erro: 'Método inválido' });
     const url = qp(req, 'url');
     const filename = qp(req, 'filename') || 'download';
-
     if (!url) return sendJson(res, 400, { erro: 'url obrigatória' });
 
     let target;
@@ -89,14 +117,10 @@ module.exports = async (req, res) => {
     }
   }
 
-  // ===========================
-  // Assado image: GET /api/main?action=assado  -> JSON { url }
-  // (Safe endpoint as requested)
-  // ===========================
   if (action === 'assado') {
     if (req.method !== 'GET') return sendJson(res, 405, { erro: 'Método inválido' });
     try{
-      const url = `https://ninx.fun/api/hentai/ass?apikey=${encodeURIComponent(ninxKey)}`;
+      const url = `https://ninx.fun/api/hepo/assado?apikey=${encodeURIComponent(ninxKey)}`;
       const r = await fetch(url);
       const data = await r.json().catch(()=>null);
       const imgUrl = data?.url || data?.resultado?.url || data?.image || data?.img || null;
@@ -107,9 +131,6 @@ module.exports = async (req, res) => {
     }
   }
 
-  // ===========================
-  // Wikipedia: POST /api/main?action=wiki { query }
-  // ===========================
   if (action === 'wiki') {
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
     const { query } = await readJsonBody(req);
@@ -134,64 +155,45 @@ module.exports = async (req, res) => {
     }
   }
 
-  // ===========================
-  // Pinterest: POST /api/main?action=pinterest { url }
-  // -> returns same-origin proxy link so download always starts in-site
-  // ===========================
   if (action === 'pinterest') {
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
     const { url } = await readJsonBody(req);
     if (!url) return sendJson(res, 400, { erro: 'URL obrigatória' });
 
     try{
-      const apiUrl = `https://ninx.fun/api/download/pinterest?url=${encodeURIComponent(url)}&apikey=${encodeURIComponent(ninxKey)}`;
-      const metaResp = await fetch(apiUrl);
-      const metaData = await metaResp.json().catch(()=>null);
-      const medias = metaData?.dados?.medias || metaData?.medias || null;
+      const html = await fetchText(url, {
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'accept-language': 'pt-BR,pt;q=0.9,en;q=0.8'
+      });
 
-      if (!metaResp.ok || !metaData || !Array.isArray(medias) || medias.length === 0) {
-        return sendJson(res, 404, { erro: 'Conteúdo não encontrado no Pinterest' });
+      let mediaUrl = matchMeta(html, ['og:video:secure_url', 'og:video', 'og:image:secure_url', 'og:image', 'twitter:image']);
+      if (!mediaUrl) mediaUrl = matchJsonUrl(html);
+
+      if (!mediaUrl) {
+        return sendJson(res, 404, { erro: 'Não foi possível extrair a mídia do Pinterest' });
       }
 
-      const pick =
-        medias.find(m => (m?.quality || '').toLowerCase() === 'image') ||
-        medias.find(m => !!m?.url) ||
-        medias[0];
+      let ext = 'jpg';
+      try{
+        const pathname = new URL(mediaUrl).pathname;
+        const match = pathname.match(/\.([a-zA-Z0-9]+)$/);
+        if (match) ext = match[1];
+      }catch{}
+      const isVideo = /(\.mp4|\.m3u8)(\?|$)/i.test(mediaUrl) || /og:video/i.test(html);
+      if (isVideo) ext = 'mp4';
 
-      const mediaUrl = pick?.url;
-      if (!mediaUrl) return sendJson(res, 404, { erro: 'Mídia indisponível' });
-
-      const title = safeFilename(metaData?.dados?.title || 'pinterest');
-      const ext = String(pick?.extension || 'jpg').replace(/[^a-z0-9]/gi, '') || 'jpg';
-      const filename = `${title}.${ext}`;
-
-      // Use our own proxy (same-origin) so browser downloads instead of opening image tab
+      const filename = `pinterest-${Date.now()}.${ext}`;
       const prox = `/api/main?action=proxy&url=${encodeURIComponent(mediaUrl)}&filename=${encodeURIComponent(filename)}`;
-
-      return sendJson(res, 200, {
-        ok: true,
-        downloadUrl: prox,
-        filename,
-        meta: {
-          source: metaData?.dados?.source || 'pinterest',
-          size: pick?.formattedSize || null
-        }
-      });
+      return sendJson(res, 200, { ok: true, downloadUrl: prox, filename });
     }catch{
       return sendJson(res, 500, { erro: 'Falha ao baixar Pinterest' });
     }
   }
 
-
-  // ===========================
-  // Spotify: POST /api/main?action=spotify { nome } -> JSON with downloadUrl (cross-origin)
-  // Front will call startDownload() which proxies via /api/main?action=proxy
-  // ===========================
   if (action === 'spotify') {
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
     const { nome } = await readJsonBody(req);
     if (!nome) return sendJson(res, 400, { erro: 'Nome da música obrigatório' });
-
     if (!rapidKey) return sendJson(res, 500, { erro: 'RAPIDAPI_KEY não configurada na Vercel' });
 
     try{
@@ -200,12 +202,9 @@ module.exports = async (req, res) => {
       const searchData = await searchResp.json().catch(()=>null);
       const resultados = searchData?.result || searchData;
 
-      if (!Array.isArray(resultados) || resultados.length === 0) {
-        return sendJson(res, 404, { erro: 'Música não encontrada' });
-      }
+      if (!Array.isArray(resultados) || resultados.length === 0) return sendJson(res, 404, { erro: 'Música não encontrada' });
 
-      const primeira = resultados[0];
-      const linkSpotify = primeira.url;
+      const linkSpotify = resultados[0]?.url;
       if (!linkSpotify) return sendJson(res, 502, { erro: 'Resultado sem URL do Spotify' });
 
       const rapidUrl = new URL('https://spotify-downloader9.p.rapidapi.com/downloadSong');
@@ -219,20 +218,16 @@ module.exports = async (req, res) => {
       });
       const dl = await dlResp.json().catch(()=>null);
 
-      if (!dlResp.ok || !dl || !dl.success || !dl.data) {
-        return sendJson(res, 502, { erro: 'Não foi possível baixar essa música' });
-      }
+      if (!dlResp.ok || !dl || !dl.success || !dl.data) return sendJson(res, 502, { erro: 'Não foi possível baixar essa música' });
 
       const audioUrl = dl.data.downloadLink;
       if (!audioUrl) return sendJson(res, 502, { erro: 'Spotify sem link de download' });
 
-      const title = dl.data.title || 'musica';
-      const safeTitle = safeFilename(title) || 'musica';
-
+      const title = safeFilename(dl.data.title || 'musica');
       return sendJson(res, 200, {
         ok: true,
         downloadUrl: audioUrl,
-        filename: `${safeTitle}.mp3`,
+        filename: `${title}.mp3`,
         title: dl.data.title || '',
         artist: dl.data.artist || '',
         album: dl.data.album || '',
@@ -243,34 +238,68 @@ module.exports = async (req, res) => {
     }
   }
 
-  // ===========================
-  // TikTok / Instagram (keep JSON)
-  // ===========================
-  if (action === 'tiktok' || action === 'instagram') {
+  if (action === 'tiktok') {
+    if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
+    const { url } = await readJsonBody(req);
+    if (!url) return sendJson(res, 400, { erro: 'URL obrigatória' });
+    if (!rapidKey) return sendJson(res, 500, { erro: 'RAPIDAPI_KEY não configurada na Vercel' });
+
+    try{
+      const body = new URLSearchParams({ url });
+      const r = await fetch('https://tiktok-video-no-watermark2.p.rapidapi.com/', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'x-rapidapi-host': 'tiktok-video-no-watermark2.p.rapidapi.com',
+          'x-rapidapi-key': rapidKey
+        },
+        body: body.toString()
+      });
+      const data = await r.json().catch(()=>null);
+
+      if (!r.ok || !data || data.code !== 0 || !data.data?.play) {
+        return sendJson(res, 502, { erro: 'Não foi possível baixar esse TikTok' });
+      }
+
+      const title = safeFilename(data.data.title || 'tiktok-video');
+      return sendJson(res, 200, {
+        ok: true,
+        downloadUrl: data.data.play,
+        filename: `${title}.mp4`,
+        thumb: data.data.cover || '',
+        autor: data.data.author?.nickname || ''
+      });
+    }catch{
+      return sendJson(res, 500, { erro: 'Falha ao baixar TikTok' });
+    }
+  }
+
+  if (action === 'instagram') {
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
     const { url } = await readJsonBody(req);
     if (!url) return sendJson(res, 400, { erro: 'URL obrigatória' });
 
-    const base = action === 'tiktok' ? 'https://ninx.fun/api/download/tiktok' : 'https://ninx.fun/api/download/instagram';
     try{
-      const apiUrl = `${base}?url=${encodeURIComponent(url)}&apikey=${encodeURIComponent(ninxKey)}`;
+      const apiUrl = `https://ninx.fun/api/download/instagram?url=${encodeURIComponent(url)}&apikey=${encodeURIComponent(ninxKey)}`;
       const r = await fetch(apiUrl);
       const data = await r.json().catch(()=>null);
 
-      // Accept a few common shapes
       const downloadUrl =
         data?.downloadUrl ||
         data?.url ||
         data?.dados?.url ||
         data?.data?.url ||
         data?.data?.downloadUrl ||
+        (Array.isArray(data?.url) ? data.url[0] : null) ||
         null;
 
-      if (!r.ok || !data || !downloadUrl) return sendJson(res, 502, { erro: 'Falha ao gerar download' });
+      if (!r.ok || !downloadUrl) return sendJson(res, 502, { erro: 'Falha ao gerar download' });
 
-      const filename = safeFilename((data?.filename || data?.dados?.filename || `${action}-download`)) + '.mp4';
-
-      return sendJson(res, 200, { ok:true, downloadUrl, filename });
+      return sendJson(res, 200, {
+        ok: true,
+        downloadUrl,
+        filename: `instagram-${Date.now()}.mp4`
+      });
     }catch{
       return sendJson(res, 500, { erro: 'Falha ao gerar download' });
     }
