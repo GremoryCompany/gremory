@@ -512,9 +512,9 @@ document.addEventListener("DOMContentLoaded", () => {
       },
       spotify: {
         title: "Spotify",
-        hint: "Cole o link da música do Spotify. O download vai iniciar aqui no site.",
-        label: "Link do Spotify",
-        placeholder: "https://open.spotify.com/track/..."
+        hint: "Digite o nome da música. Vamos gerar o link e iniciar o download.",
+        label: "Nome da música",
+        placeholder: "Ex: Starboy"
       },
       pinterest: {
         title: "Pinterest",
@@ -641,7 +641,7 @@ document.addEventListener("DOMContentLoaded", () => {
       } else if (currentService === "instagram") {
         r = await postJson("/api/main?action=instagram", { url: input });
       } else if (currentService === "spotify") {
-        r = await postJson("/api/main?action=spotify", { url: input });
+        r = await postJson("/api/main?action=spotify", { nome: input });
       } else if (currentService === "pinterest") {
         r = await postJson("/api/main?action=pinterest", { url: input });
       } else {
@@ -654,7 +654,7 @@ document.addEventListener("DOMContentLoaded", () => {
       await startDownload(r.downloadUrl, r.filename);
 
       // Feedback
-      $("modalStatus").innerText = "✅ Pronto! O download foi iniciado.";
+      $("modalStatus").innerText = `✅ Pronto! Se o download não iniciar, abra o link: ${r.downloadUrl}`;
 
     }catch(e){
       setBusy(false);
