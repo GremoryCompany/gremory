@@ -16,7 +16,11 @@ function qp(req, key){
   }catch{ return null; }
 }
 function safeFilename(name){
-  return String(name || 'download').replace(/[\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120) || 'download';
+  return String(name || 'download')
+    .replace(/[\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120) || 'download';
 }
 function blockPrivateHost(host){
   const h = (host || '').toLowerCase();
@@ -76,6 +80,7 @@ function matchJsonUrl(html){
   }
   return null;
 }
+
 module.exports = async (req, res) => {
   const rapidKey = process.env.RAPIDAPI_KEY || '6e6739bedbmsh671d99355539a01p1d9748jsn68265b82360a';
   const action = (qp(req, 'action') || '').toLowerCase();
@@ -85,10 +90,12 @@ module.exports = async (req, res) => {
     const url = qp(req, 'url');
     const filename = qp(req, 'filename') || 'download';
     if (!url) return sendJson(res, 400, { erro: 'url obrigatória' });
+
     let target;
     try { target = new URL(url); } catch { return sendJson(res, 400, { erro: 'url inválida' }); }
     if (!['https:', 'http:'].includes(target.protocol)) return sendJson(res, 400, { erro: 'protocolo inválido' });
     if (blockPrivateHost(target.hostname)) return sendJson(res, 400, { erro: 'host bloqueado' });
+
     try{
       const r = await fetch(target.toString(), { redirect: 'follow' });
       if (!r.ok || !r.body) return sendJson(res, 502, { erro: 'falha ao obter arquivo' });
@@ -100,12 +107,13 @@ module.exports = async (req, res) => {
 
   if (action === 'instagram') {
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
-    const body = await readJsonBody(req);
-    const url = body.url;
+    const { url } = await readJsonBody(req);
     if (!url) return sendJson(res, 400, { erro: 'URL obrigatória' });
+
     try{
       const rapidUrl = new URL('https://instagram-downloader-download-instagram-stories-videos4.p.rapidapi.com/convert');
       rapidUrl.searchParams.set('url', url);
+
       const r = await fetch(rapidUrl.toString(), {
         method: 'GET',
         headers: {
@@ -114,18 +122,23 @@ module.exports = async (req, res) => {
         }
       });
       const data = await r.json().catch(()=>null);
+
       const mediaUrl =
         data?.video_url ||
         data?.download_url ||
         data?.url ||
+        data?.media ||
         data?.data?.url ||
         data?.data?.video_url ||
         (Array.isArray(data?.media) ? data.media[0]?.url : null) ||
         null;
+
       if (!r.ok || !mediaUrl) return sendJson(res, 502, { erro: 'Falha ao gerar download do Instagram' });
-      const ext = /(\.jpg|\.jpeg|\.png)(\?|$)/i.test(mediaUrl) ? 'jpg' : 'mp4';
+
+      const ext = /(\.jpg|\.jpeg|\.png|\.webp)(\?|$)/i.test(String(mediaUrl)) ? 'jpg' : 'mp4';
       const filename = `instagram-${Date.now()}.${ext}`;
-      return sendJson(res, 200, { ok:true, downloadUrl: mediaUrl, filename });
+      const prox = `/api/main?action=proxy&url=${encodeURIComponent(mediaUrl)}&filename=${encodeURIComponent(filename)}`;
+      return sendJson(res, 200, { ok:true, downloadUrl: prox, filename });
     }catch{
       return sendJson(res, 500, { erro: 'Falha ao gerar download do Instagram' });
     }
@@ -136,9 +149,11 @@ module.exports = async (req, res) => {
     const body = await readJsonBody(req);
     const songId = body.url || body.songId;
     if (!songId) return sendJson(res, 400, { erro: 'Link do Spotify obrigatório' });
+
     try{
       const rapidUrl = new URL('https://spotify-downloader9.p.rapidapi.com/downloadSong');
       rapidUrl.searchParams.set('songId', songId);
+
       const r = await fetch(rapidUrl.toString(), {
         method: 'GET',
         headers: {
@@ -147,16 +162,21 @@ module.exports = async (req, res) => {
         }
       });
       const data = await r.json().catch(()=>null);
-      if (!r.ok || !data || !data.success || !data.data?.downloadLink) return sendJson(res, 502, { erro: 'Falha ao baixar Spotify' });
+
+      if (!r.ok || !data || !data.success || !data.data?.downloadLink) {
+        return sendJson(res, 502, { erro: 'Falha ao baixar Spotify' });
+      }
+
       const title = safeFilename(data.data.title || 'musica');
+      const prox = `/api/main?action=proxy&url=${encodeURIComponent(data.data.downloadLink)}&filename=${encodeURIComponent(title + '.mp3')}`;
       return sendJson(res, 200, {
         ok:true,
-        downloadUrl:data.data.downloadLink,
-        filename:`${title}.mp3`,
-        title:data.data.title || '',
-        artist:data.data.artist || '',
-        album:data.data.album || '',
-        cover:data.data.cover || ''
+        downloadUrl: prox,
+        filename: `${title}.mp3`,
+        title: data.data.title || '',
+        artist: data.data.artist || '',
+        album: data.data.album || '',
+        cover: data.data.cover || ''
       });
     }catch{
       return sendJson(res, 500, { erro: 'Falha ao baixar Spotify' });
@@ -165,14 +185,15 @@ module.exports = async (req, res) => {
 
   if (action === 'pinterest') {
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
-    const body = await readJsonBody(req);
-    const url = body.url;
+    const { url } = await readJsonBody(req);
     if (!url) return sendJson(res, 400, { erro: 'URL obrigatória' });
+
     try{
       const html = await fetchText(url, {
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         'accept-language': 'pt-BR,pt;q=0.9,en;q=0.8'
       });
+
       let mediaUrl = matchMeta(html, ['og:video:secure_url', 'og:video', 'og:image:secure_url', 'og:image', 'twitter:image']);
       if (!mediaUrl) mediaUrl = matchJsonUrl(html);
       if (!mediaUrl) return sendJson(res, 404, { erro: 'Não foi possível extrair a mídia do Pinterest' });
@@ -185,6 +206,7 @@ module.exports = async (req, res) => {
       }catch{}
       const isVideo = /(\.mp4|\.m3u8)(\?|$)/i.test(mediaUrl) || /og:video/i.test(html);
       if (isVideo) ext = 'mp4';
+
       const filename = `pinterest-${Date.now()}.${ext}`;
       const prox = `/api/main?action=proxy&url=${encodeURIComponent(mediaUrl)}&filename=${encodeURIComponent(filename)}`;
       return sendJson(res, 200, { ok:true, downloadUrl: prox, filename });
@@ -195,9 +217,9 @@ module.exports = async (req, res) => {
 
   if (action === 'tiktok') {
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
-    const body = await readJsonBody(req);
-    const url = body.url;
+    const { url } = await readJsonBody(req);
     if (!url) return sendJson(res, 400, { erro: 'URL obrigatória' });
+
     try{
       const form = new URLSearchParams({ url });
       const r = await fetch('https://tiktok-video-no-watermark2.p.rapidapi.com/', {
@@ -210,11 +232,16 @@ module.exports = async (req, res) => {
         body: form.toString()
       });
       const data = await r.json().catch(()=>null);
-      if (!r.ok || !data || data.code !== 0 || !data.data?.play) return sendJson(res, 502, { erro: 'Não foi possível baixar esse TikTok' });
+
+      if (!r.ok || !data || data.code !== 0 || !data.data?.play) {
+        return sendJson(res, 502, { erro: 'Não foi possível baixar esse TikTok' });
+      }
+
       const title = safeFilename(data.data.title || 'tiktok-video');
+      const prox = `/api/main?action=proxy&url=${encodeURIComponent(data.data.play)}&filename=${encodeURIComponent(title + '.mp4')}`;
       return sendJson(res, 200, {
         ok:true,
-        downloadUrl:data.data.play,
+        downloadUrl: prox,
         filename:`${title}.mp4`,
         thumb:data.data.cover || '',
         autor:data.data.author?.nickname || ''
