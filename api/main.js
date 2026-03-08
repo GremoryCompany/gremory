@@ -16,7 +16,7 @@ function qp(req, key){
   }catch{ return null; }
 }
 function safeFilename(name){
-  return String(name || 'download').replace(/[\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120) || 'download';
+  return String(name || 'download').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120) || 'download';
 }
 function blockPrivateHost(host){
   const h = (host || '').toLowerCase();
@@ -118,14 +118,16 @@ module.exports = async (req, res) => {
         data?.video_url ||
         data?.download_url ||
         data?.url ||
+        data?.media ||
         data?.data?.url ||
         data?.data?.video_url ||
         (Array.isArray(data?.media) ? data.media[0]?.url : null) ||
         null;
       if (!r.ok || !mediaUrl) return sendJson(res, 502, { erro: 'Falha ao gerar download do Instagram' });
-      const ext = /(\.jpg|\.jpeg|\.png)(\?|$)/i.test(mediaUrl) ? 'jpg' : 'mp4';
+      const ext = /(\.jpg|\.jpeg|\.png|\.webp)(\?|$)/i.test(String(mediaUrl)) ? 'jpg' : 'mp4';
       const filename = `instagram-${Date.now()}.${ext}`;
-      return sendJson(res, 200, { ok:true, downloadUrl: mediaUrl, filename });
+      const prox = `/api/main?action=proxy&url=${encodeURIComponent(mediaUrl)}&filename=${encodeURIComponent(filename)}`;
+      return sendJson(res, 200, { ok:true, downloadUrl: prox, filename });
     }catch{
       return sendJson(res, 500, { erro: 'Falha ao gerar download do Instagram' });
     }
@@ -149,14 +151,15 @@ module.exports = async (req, res) => {
       const data = await r.json().catch(()=>null);
       if (!r.ok || !data || !data.success || !data.data?.downloadLink) return sendJson(res, 502, { erro: 'Falha ao baixar Spotify' });
       const title = safeFilename(data.data.title || 'musica');
+      const prox = `/api/main?action=proxy&url=${encodeURIComponent(data.data.downloadLink)}&filename=${encodeURIComponent(title + '.mp3')}`;
       return sendJson(res, 200, {
         ok:true,
-        downloadUrl:data.data.downloadLink,
-        filename:`${title}.mp3`,
-        title:data.data.title || '',
-        artist:data.data.artist || '',
-        album:data.data.album || '',
-        cover:data.data.cover || ''
+        downloadUrl: prox,
+        filename: `${title}.mp3`,
+        title: data.data.title || '',
+        artist: data.data.artist || '',
+        album: data.data.album || '',
+        cover: data.data.cover || ''
       });
     }catch{
       return sendJson(res, 500, { erro: 'Falha ao baixar Spotify' });
@@ -176,7 +179,6 @@ module.exports = async (req, res) => {
       let mediaUrl = matchMeta(html, ['og:video:secure_url', 'og:video', 'og:image:secure_url', 'og:image', 'twitter:image']);
       if (!mediaUrl) mediaUrl = matchJsonUrl(html);
       if (!mediaUrl) return sendJson(res, 404, { erro: 'Não foi possível extrair a mídia do Pinterest' });
-
       let ext = 'jpg';
       try{
         const pathname = new URL(mediaUrl).pathname;
@@ -212,9 +214,10 @@ module.exports = async (req, res) => {
       const data = await r.json().catch(()=>null);
       if (!r.ok || !data || data.code !== 0 || !data.data?.play) return sendJson(res, 502, { erro: 'Não foi possível baixar esse TikTok' });
       const title = safeFilename(data.data.title || 'tiktok-video');
+      const prox = `/api/main?action=proxy&url=${encodeURIComponent(data.data.play)}&filename=${encodeURIComponent(title + '.mp4')}`;
       return sendJson(res, 200, {
         ok:true,
-        downloadUrl:data.data.play,
+        downloadUrl: prox,
         filename:`${title}.mp4`,
         thumb:data.data.cover || '',
         autor:data.data.author?.nickname || ''
