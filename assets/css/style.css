@@ -352,6 +352,17 @@ body{
 }
 .modal-input:focus{ border-color: rgba(255,61,110,.55); }
 
+.modal-select{
+  margin-top: 0;
+  appearance:none;
+  -webkit-appearance:none;
+  -moz-appearance:none;
+  cursor:pointer;
+}
+.modal-select option{
+  color:#111;
+}
+
 .modal-status{
   min-height:18px;
   margin-top:10px;

@@ -68,7 +68,7 @@
           <button class="service" data-service="tiktok"><i class="fa-brands fa-tiktok"></i><span>TikTok</span></button>
           <button class="service" data-service="instagram"><i class="fa-brands fa-instagram"></i><span>Instagram</span></button>
           <button class="service" data-service="spotify"><i class="fa-brands fa-spotify"></i><span>Spotify</span></button>
-          <button class="service" data-service="wiki"><i class="fa-brands fa-wikipedia-w"></i><span>Wikipedia</span></button>
+          <button class="service" data-service="youtube"><i class="fa-brands fa-youtube"></i><span>YouTube</span></button>
           <button class="service" data-service="pinterest"><i class="fa-brands fa-pinterest"></i><span>Pinterest</span></button>
         </div>
       </div>
@@ -188,6 +188,12 @@
       <div class="modal-body">
         <div class="modal-hint" id="modalHint"></div><label class="modal-label" id="modalInputLabel"></label>
         <input class="modal-input" id="modalInput" placeholder="" />
+
+        <label class="modal-label" id="modalExtraLabel" hidden>Tipo de download</label>
+        <select class="modal-input modal-select" id="modalExtra" hidden>
+          <option value="video">Vídeo (.mp4)</option>
+          <option value="audio">Música / áudio (.m4a ou .webm)</option>
+        </select>
 
         <div class="modal-status" id="modalStatus"></div>
       </div>

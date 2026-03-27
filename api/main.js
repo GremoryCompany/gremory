@@ -1,3 +1,5 @@
+const ytdl = require('@distube/ytdl-core');
+
 function sendJson(res, status, obj){
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -192,6 +194,62 @@ module.exports = async (req, res) => {
       return sendJson(res, 200, { ok:true, downloadUrl: prox, filename });
     }catch{
       return sendJson(res, 500, { erro: 'Falha ao baixar Pinterest' });
+    }
+  }
+
+  if (action === 'youtube') {
+    if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
+    const body = await readJsonBody(req);
+    const url = body.url;
+    const mode = String(body.mode || 'video').toLowerCase();
+    if (!url) return sendJson(res, 400, { erro: 'URL obrigatória' });
+    if (!ytdl.validateURL(url)) return sendJson(res, 400, { erro: 'Link do YouTube inválido' });
+    try {
+      const info = await ytdl.getInfo(url);
+      const title = safeFilename(info?.videoDetails?.title || 'youtube');
+      const formats = Array.isArray(info?.formats) ? info.formats : [];
+
+      let format = null;
+      if (mode === 'audio') {
+        const audioFormats = formats.filter((f) => f.hasAudio && !f.hasVideo && !f.isHLS && !f.isDashMPD && f.url);
+        format =
+          audioFormats
+            .filter((f) => ['m4a', 'mp4'].includes(String(f.container || '').toLowerCase()))
+            .sort((a, b) => (b.audioBitrate || 0) - (a.audioBitrate || 0))[0] ||
+          audioFormats.sort((a, b) => (b.audioBitrate || 0) - (a.audioBitrate || 0))[0] ||
+          null;
+      } else {
+        const muxedFormats = formats.filter((f) => f.hasAudio && f.hasVideo && !f.isHLS && !f.isDashMPD && f.url);
+        format =
+          muxedFormats
+            .filter((f) => String(f.container || '').toLowerCase() === 'mp4')
+            .sort((a, b) => (b.height || 0) - (a.height || 0) || (b.bitrate || 0) - (a.bitrate || 0))[0] ||
+          muxedFormats.sort((a, b) => (b.height || 0) - (a.height || 0) || (b.bitrate || 0) - (a.bitrate || 0))[0] ||
+          null;
+      }
+
+      if (!format?.url) return sendJson(res, 404, { erro: 'Não foi possível encontrar um formato compatível para esse vídeo' });
+
+      const ext = (mode === 'audio')
+        ? (['mp4', 'm4a', 'webm'].includes(String(format.container || '').toLowerCase()) ? String(format.container).toLowerCase() : 'm4a')
+        : (String(format.container || '').toLowerCase() || 'mp4');
+      const filename = `${title}.${ext}`;
+      const prox = `/api/main?action=proxy&url=${encodeURIComponent(format.url)}&filename=${encodeURIComponent(filename)}`;
+
+      return sendJson(res, 200, {
+        ok: true,
+        downloadUrl: prox,
+        filename,
+        title: info?.videoDetails?.title || '',
+        author: info?.videoDetails?.author?.name || '',
+        mode,
+      });
+    } catch (err) {
+      const msg = String(err?.message || '');
+      if (/confirm you're not a bot|sign in/i.test(msg)) {
+        return sendJson(res, 503, { erro: 'O YouTube bloqueou a extração automática nesse vídeo. Tente outro link ou outro vídeo.' });
+      }
+      return sendJson(res, 500, { erro: 'Falha ao gerar download do YouTube' });
     }
   }
 
