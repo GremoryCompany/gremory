@@ -68,7 +68,7 @@
           <button class="service" data-service="tiktok"><i class="fa-brands fa-tiktok"></i><span>TikTok</span></button>
           <button class="service" data-service="instagram"><i class="fa-brands fa-instagram"></i><span>Instagram</span></button>
           <button class="service" data-service="spotify"><i class="fa-brands fa-spotify"></i><span>Spotify</span></button>
-          <button class="service" data-service="youtube"><i class="fa-brands fa-youtube"></i><span>YouTube</span></button>
+          <button class="service" data-service="wiki"><i class="fa-brands fa-wikipedia-w"></i><span>Wikipedia</span></button>
           <button class="service" data-service="pinterest"><i class="fa-brands fa-pinterest"></i><span>Pinterest</span></button>
         </div>
       </div>
@@ -188,12 +188,6 @@
       <div class="modal-body">
         <div class="modal-hint" id="modalHint"></div><label class="modal-label" id="modalInputLabel"></label>
         <input class="modal-input" id="modalInput" placeholder="" />
-
-        <label class="modal-label" id="modalExtraLabel" hidden>Tipo de download</label>
-        <select class="modal-input modal-select" id="modalExtra" hidden>
-          <option value="video">Vídeo (.mp4)</option>
-          <option value="audio">Música / áudio (.m4a ou .webm)</option>
-        </select>
 
         <div class="modal-status" id="modalStatus"></div>
       </div>
@@ -330,24 +324,9 @@
           </div>
 
           <div class="profile-right">
-            <h2>Editar Perfil</h2>
+            <h2>Meu perfil</h2>
 
-            <label>Foto URL:</label>
-            <input id="profilePhotoUrl" type="text" placeholder="https://...">
-
-            <label>ApiKey:</label>
-            <input id="profileApiKey" type="text" placeholder="Sua chave">
-
-            <label>Link Website:</label>
-            <input id="profileWebsite" type="text" placeholder="https://...">
-
-            <label>Youtube URL:</label>
-            <input id="profileYoutube" type="text" placeholder="https://youtube.com/...">
-
-            <label>Instagram:</label>
-            <input id="profileInstagram" type="text" placeholder="@seuuser">
-
-            <div class="profile-meta">
+            <div class="profile-meta profile-meta-top">
               <div class="profile-meta-item">
                 <span>Email</span>
                 <strong id="authUserEmail">email@email.com</strong>
@@ -357,12 +336,72 @@
                 <strong id="authUserPremium">Padrão</strong>
               </div>
               <div class="profile-meta-item">
+                <span>Nível</span>
+                <strong id="authUserLevel">0</strong>
+              </div>
+              <div class="profile-meta-item">
+                <span>Saldo</span>
+                <strong id="authUserSaldo">0</strong>
+              </div>
+              <div class="profile-meta-item">
                 <span>Criado em</span>
                 <strong id="authUserCreatedAt">--/--/----</strong>
               </div>
-              <div class="profile-meta-item full">
+              <div class="profile-meta-item">
                 <span>UID</span>
                 <strong id="authUserUid">-</strong>
+              </div>
+            </div>
+
+            <div class="profile-grid">
+              <div class="profile-field full">
+                <label for="profileDisplayName">Nome</label>
+                <input id="profileDisplayName" type="text" placeholder="Seu nome">
+              </div>
+
+              <div class="profile-field">
+                <label for="profilePhotoUrl">Foto URL</label>
+                <input id="profilePhotoUrl" type="text" placeholder="https://...">
+              </div>
+
+              <div class="profile-field">
+                <label for="profileWallpaper">Wallpaper URL</label>
+                <input id="profileWallpaper" type="text" placeholder="https://...">
+              </div>
+
+              <div class="profile-field">
+                <label for="profileApiKey">ApiKey</label>
+                <input id="profileApiKey" type="text" placeholder="Sua chave">
+              </div>
+
+              <div class="profile-field">
+                <label for="profileWebsite">Website</label>
+                <input id="profileWebsite" type="text" placeholder="https://...">
+              </div>
+
+              <div class="profile-field">
+                <label for="profileYoutube">YouTube</label>
+                <input id="profileYoutube" type="text" placeholder="https://youtube.com/...">
+              </div>
+
+              <div class="profile-field">
+                <label for="profileInstagram">Instagram</label>
+                <input id="profileInstagram" type="text" placeholder="https://instagram.com/... ou @usuario">
+              </div>
+
+              <div class="profile-field">
+                <label for="profileWhatsapp">WhatsApp</label>
+                <input id="profileWhatsapp" type="text" placeholder="5511999999999">
+              </div>
+            </div>
+
+            <div class="profile-links-card">
+              <div class="profile-links-title">Links rápidos</div>
+              <div class="profile-links">
+                <a id="profileOpenInstagram" class="profile-link-btn" href="#" target="_blank" rel="noreferrer">Instagram</a>
+                <a id="profileOpenYoutube" class="profile-link-btn" href="#" target="_blank" rel="noreferrer">YouTube</a>
+                <a id="profileOpenWhatsapp" class="profile-link-btn" href="#" target="_blank" rel="noreferrer">WhatsApp</a>
+                <a id="profileOpenWebsite" class="profile-link-btn" href="#" target="_blank" rel="noreferrer">Website</a>
               </div>
             </div>
 

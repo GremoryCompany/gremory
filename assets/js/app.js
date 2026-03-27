@@ -522,11 +522,11 @@ document.addEventListener("DOMContentLoaded", () => {
         label: "Link do Pinterest",
         placeholder: "https://br.pinterest.com/pin/..." 
       },
-      youtube: {
-        title: "YouTube",
-        hint: "Cole o link do YouTube e escolha se quer baixar vídeo ou música usando ytdl.",
-        label: "Link do YouTube",
-        placeholder: "https://www.youtube.com/watch?v=..."
+      wiki: {
+        title: "Wikipedia",
+        hint: "Digite um termo. Vamos mostrar a imagem e o texto em um popup no centro.",
+        label: "Termo de pesquisa",
+        placeholder: "Ex: Genshin Impact"
       },
 }[service];
 
@@ -536,18 +536,6 @@ document.addEventListener("DOMContentLoaded", () => {
     $("modalHint").innerText = config.hint;
     $("modalInputLabel").innerText = config.label;
     $("modalInput").placeholder = config.placeholder;
-
-    const extraLabel = $("modalExtraLabel");
-    const extra = $("modalExtra");
-    if (service === "youtube") {
-      extraLabel.hidden = false;
-      extra.hidden = false;
-      extra.value = "video";
-    } else {
-      extraLabel.hidden = true;
-      extra.hidden = true;
-      extra.value = "video";
-    }
 
     return true;
   }
@@ -628,6 +616,23 @@ document.addEventListener("DOMContentLoaded", () => {
       const input = $("modalInput").value.trim();
       if (!input && currentService !== "assado") return alert("Preencha o campo.");
 
+      if (currentService === "wiki") {
+        setBusy(true, "Buscando...");
+        const r = await postJson("/api/main?action=wiki", { query: input });
+        setBusy(false);
+        openModal(false);
+        // Popup central
+        $("wikiTitle").innerText = r?.titulo || "Wikipedia";
+        $("wikiBrief").innerText = r?.descricao_breve || "";
+        $("wikiResumo").innerText = r?.resumo || r?.text || "Sem resultado.";
+        $("wikiLink").href = r?.link || "#";
+        const img = $("wikiImg");
+        if (img && r?.imagem) { img.src = r.imagem; img.style.display = "block"; }
+        else if (img) { img.src = ""; img.style.display = "none"; }
+        openWikiModal(true);
+        return;
+      }
+
       setBusy(true, "Gerando download...");
 
       let r;
@@ -639,8 +644,6 @@ document.addEventListener("DOMContentLoaded", () => {
         r = await postJson("/api/main?action=spotify", { url: input });
       } else if (currentService === "pinterest") {
         r = await postJson("/api/main?action=pinterest", { url: input });
-      } else if (currentService === "youtube") {
-        r = await postJson("/api/main?action=youtube", { url: input, mode: $("modalExtra")?.value || "video" });
       } else {
         throw new Error("Serviço inválido");
       }
