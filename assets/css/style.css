@@ -1040,24 +1040,40 @@ body.auth-locked .auth-gate-screen{ display:flex !important; }
     overflow: auto;
     -webkit-overflow-scrolling: touch;
   }
+@media (max-width: 860px){
+  .auth-account-shell{
+    width: min(96vw, 680px);
+    max-height: 92vh;
+    min-height: auto;
+    border-radius: 18px;
+  }
+
+  .auth-account-panel{
+    padding: 16px 12px 20px;
+    max-height: 92vh;
+    overflow: auto;
+  }
+
   .profile-wrapper{
     grid-template-columns: 1fr;
-    gap: 16px;
+    gap: 14px;
   }
-  .profile-left{ width:100%; }
+
   .profile-avatar-wrap{
-    max-width:320px;
-    margin:0 auto;
-    height:380px;
+    max-width:260px;
+    height:280px;
   }
+
   .profile-avatar,
   .profile-avatar-gif{
-    height:380px;
+    height:280px;
   }
+
   .profile-right{
-    padding:16px;
-    border-radius:18px;
+    padding:14px;
+    border-radius:16px;
   }
+}
   .profile-meta{
     grid-template-columns:1fr;
   }
