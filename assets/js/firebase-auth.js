@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/fireba
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-analytics.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  sendPasswordResetEmail, onAuthStateChanged, signOut, updateProfile, setPersistence, browserSessionPersistence
+  sendPasswordResetEmail, onAuthStateChanged, signOut, updateProfile, setPersistence, browserLocalPersistence, browserSessionPersistence
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
 import {
   getDatabase, ref, set, get, child, update
@@ -36,8 +36,11 @@ const authAccountView = $("authAccountView");
 const accountBg = document.querySelector(".auth-account-bg");
 let currentUserData = null;
 let hasInteractedAuth = false;
+let authBootstrapped = false;
 
-setPersistence(auth, browserSessionPersistence).catch(() => {});
+const authReady = setPersistence(auth, browserLocalPersistence)
+  .catch(() => setPersistence(auth, browserSessionPersistence))
+  .catch(() => {});
 
 function setBodyLocked(locked){
   document.body.classList.toggle("auth-locked", !!locked);
@@ -190,7 +193,12 @@ function bindLiveProfilePreview(){
 }
 
 authBtn?.addEventListener("click", () => {
-  if (!currentUserData?.user) return;
+  if (!currentUserData?.user) {
+    showGate("login");
+    setBodyLocked(true);
+    setAuthOpen(true);
+    return;
+  }
   showAccount();
   setAuthOpen(true);
 });
@@ -214,9 +222,11 @@ loginForm?.addEventListener("submit", async (e) => {
   hasInteractedAuth = true;
   authStatus.textContent = "Entrando...";
   try {
+    await authReady;
     const email = $("loginEmail").value.trim();
     const password = $("loginPassword").value;
     await signInWithEmailAndPassword(auth, email, password);
+    authStatus.textContent = "";
   } catch (err) {
     authStatus.textContent = traduzErro(err);
   }
@@ -227,6 +237,7 @@ registerForm?.addEventListener("submit", async (e) => {
   hasInteractedAuth = true;
   authStatus.textContent = "Criando conta...";
   try {
+    await authReady;
     const name = $("registerName").value.trim();
     const email = $("registerEmail").value.trim();
     const password = $("registerPassword").value;
@@ -236,12 +247,11 @@ registerForm?.addEventListener("submit", async (e) => {
     if (password !== password2) throw new Error("As senhas não coincidem.");
 
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-    await updateProfile(cred.user, { displayName: name });
+    await updateProfile(cred.user, { displayName: name, photoURL: svgAvatar(name) }).catch(() => {});
 
     const createdAt = new Date().toISOString();
     const avatar = svgAvatar(name);
-
-    await set(ref(db, "users/" + cred.user.uid), {
+    const profilePayload = {
       uid: cred.user.uid,
       nome: name,
       email,
@@ -256,7 +266,15 @@ registerForm?.addEventListener("submit", async (e) => {
       wallpaper: "",
       saldo: 50,
       total: 0
-    });
+    };
+
+    try {
+      await set(ref(db, "users/" + cred.user.uid), profilePayload);
+      authStatus.textContent = "Conta criada com sucesso.";
+    } catch (dbErr) {
+      console.warn("Falha ao salvar perfil inicial no Realtime Database:", dbErr);
+      authStatus.textContent = "Conta criada. O perfil será sincronizado quando o banco responder.";
+    }
   } catch (err) {
     authStatus.textContent = traduzErro(err);
   }
@@ -323,6 +341,7 @@ $("logoutBtn")?.addEventListener("click", async () => {
 });
 
 onAuthStateChanged(auth, async (user) => {
+  await authReady.catch(() => {});
   if (user) {
     let dbData = null;
     try {
@@ -387,11 +406,13 @@ onAuthStateChanged(auth, async (user) => {
     currentUserData = { user, dbData };
     setProfileInputs(dbData, user);
     authBtn.textContent = safeText(dbData?.nome || user.displayName, "Minha conta");
+    authBootstrapped = true;
     setBodyLocked(false);
     setAuthOpen(false);
   } else {
     currentUserData = null;
     authBtn.textContent = "Minha conta";
+    authBootstrapped = true;
     showGate("login");
     setBodyLocked(true);
     setAuthOpen(true);
@@ -400,5 +421,7 @@ onAuthStateChanged(auth, async (user) => {
 
 bindLiveProfilePreview();
 showGate("login");
-setBodyLocked(true);
-setAuthOpen(true);
+if (!authBootstrapped) {
+  setBodyLocked(false);
+  setAuthOpen(false);
+}
