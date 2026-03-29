@@ -2,10 +2,11 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/fireba
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-analytics.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  sendPasswordResetEmail, onAuthStateChanged, signOut, updateProfile, setPersistence, browserLocalPersistence, browserSessionPersistence
+  sendPasswordResetEmail, onAuthStateChanged, signOut, updateProfile,
+  setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
 import {
-  getDatabase, ref, set, get, child, update
+  getDatabase, ref, set, get, update
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
 
 const firebaseConfig = {
@@ -25,6 +26,9 @@ const auth = getAuth(app);
 const db = getDatabase(app);
 
 const $ = (id) => document.getElementById(id);
+const setText = (id, value) => { const el = $(id); if (el) el.textContent = value ?? ""; };
+const setValue = (id, value) => { const el = $(id); if (el) el.value = value ?? ""; };
+const setSrc = (id, value) => { const el = $(id); if (el) el.src = value ?? ""; };
 const authModal = $("authModal");
 const authBtn = $("authBtn");
 const loginForm = $("loginForm");
@@ -36,12 +40,75 @@ const authAccountView = $("authAccountView");
 const accountBg = document.querySelector(".auth-account-bg");
 let currentUserData = null;
 let hasInteractedAuth = false;
-let authBootstrapped = false;
 
-const authReady = setPersistence(auth, browserLocalPersistence)
-  .catch(() => setPersistence(auth, browserSessionPersistence))
-  .catch(() => {});
+const authPersistenceReady = (async () => {
+  try {
+    await setPersistence(auth, browserLocalPersistence);
+    return "local";
+  } catch {
+    try {
+      await setPersistence(auth, browserSessionPersistence);
+      return "session";
+    } catch {
+      try {
+        await setPersistence(auth, inMemoryPersistence);
+        return "memory";
+      } catch {
+        return "none";
+      }
+    }
+  }
+})();
 
+function setSubmitBusy(form, busy){
+  if (!form) return;
+  form.querySelectorAll("button, input").forEach((el) => {
+    if (busy) el.setAttribute("data-was-disabled", el.disabled ? "1" : "0");
+    const wasDisabled = el.getAttribute("data-was-disabled") === "1";
+    el.disabled = !!busy || wasDisabled;
+    if (!busy) el.removeAttribute("data-was-disabled");
+  });
+}
+async function ensurePersistence(){
+  try { await authPersistenceReady; } catch {}
+}
+async function ensureUserProfile(user, overrides = {}){
+  if (!user?.uid) return null;
+  const userRef = ref(db, "users/" + user.uid);
+  let current = null;
+  try {
+    const snap = await get(userRef);
+    if (snap.exists()) current = snap.val();
+  } catch {}
+
+  const baseName = overrides.nome || current?.nome || user.displayName || "Usuário";
+  const payload = {
+    uid: user.uid,
+    nome: baseName,
+    email: overrides.email || current?.email || user.email || "",
+    avatar: overrides.avatar || current?.avatar || user.photoURL || svgAvatar(baseName),
+    createdAt: overrides.createdAt || current?.createdAt || new Date(user.metadata?.creationTime || Date.now()).toISOString(),
+    premium: typeof overrides.premium === "boolean" ? overrides.premium : !!current?.premium,
+    apiKey: overrides.apiKey ?? current?.apiKey ?? "",
+    website: overrides.website ?? current?.website ?? "",
+    youtube: overrides.youtube ?? current?.youtube ?? "",
+    instagram: overrides.instagram ?? current?.instagram ?? "",
+    whatsapp: overrides.whatsapp ?? current?.whatsapp ?? current?.zap ?? "",
+    wallpaper: overrides.wallpaper ?? current?.wallpaper ?? "",
+    saldo: Number(overrides.saldo ?? current?.saldo ?? 50),
+    total: Number(overrides.total ?? current?.total ?? 0)
+  };
+
+  try {
+    if (current) {
+      await update(userRef, payload);
+    } else {
+      await set(userRef, payload);
+    }
+  } catch {}
+
+  return payload;
+}
 function setBodyLocked(locked){
   document.body.classList.toggle("auth-locked", !!locked);
 }
@@ -127,8 +194,8 @@ function applyVisualProfile(data, user){
   const avatar = data?.avatar || user?.photoURL || svgAvatar(nome);
   const wallpaper = data?.wallpaper || "";
 
-  $("authUserAvatar").src = avatar;
-  $("authUserName").textContent = nome;
+  setSrc("authUserAvatar", avatar);
+  setText("authUserName", nome);
   if (wallpaper && accountBg) {
     accountBg.style.backgroundImage = `url("${wallpaper.replace(/"/g, '\\"')}")`;
   } else if (accountBg) {
@@ -138,20 +205,20 @@ function applyVisualProfile(data, user){
 function setProfileInputs(data, user){
   const nome = data?.nome || user?.displayName || "Usuário";
   applyVisualProfile(data, user);
-  $("authUserEmail").textContent = user?.email || data?.email || "";
-  $("authUserPremium").textContent = data?.premium ? "Premium" : "Padrão";
-  $("authUserCreatedAt").textContent = formatDate(data?.createdAt || user?.metadata?.creationTime);
-  $("authUserUid").textContent = user?.uid || "";
-  $("authUserLevel").textContent = String(data?.total ?? 0);
-  $("authUserSaldo").textContent = String(data?.saldo ?? 50);
-  $("profileDisplayName").value = nome;
-  $("profilePhotoUrl").value = data?.avatar || "";
-  $("profileWallpaper").value = data?.wallpaper || "";
-  $("profileApiKey").value = data?.apiKey || "";
-  $("profileWebsite").value = data?.website || "";
-  $("profileYoutube").value = data?.youtube || "";
-  $("profileInstagram").value = data?.instagram || "";
-  $("profileWhatsapp").value = data?.whatsapp || data?.zap || "";
+  setText("authUserEmail", user?.email || data?.email || "");
+  setText("authUserPremium", data?.premium ? "Premium" : "Padrão");
+  setText("authUserCreatedAt", formatDate(data?.createdAt || user?.metadata?.creationTime));
+  setText("authUserUid", user?.uid || "");
+  setText("authUserLevel", String(data?.total ?? 0));
+  setText("authUserSaldo", String(data?.saldo ?? 50));
+  setValue("profileDisplayName", nome);
+  setValue("profilePhotoUrl", data?.avatar || "");
+  setValue("profileWallpaper", data?.wallpaper || "");
+  setValue("profileApiKey", data?.apiKey || "");
+  setValue("profileWebsite", data?.website || "");
+  setValue("profileYoutube", data?.youtube || "");
+  setValue("profileInstagram", data?.instagram || "");
+  setValue("profileWhatsapp", data?.whatsapp || data?.zap || "");
 
   setQuickLink("profileOpenInstagram", sanitizeInstagram(data?.instagram || ""));
   setQuickLink("profileOpenYoutube", sanitizeYoutube(data?.youtube || ""));
@@ -177,7 +244,7 @@ function traduzErro(err){
 function bindLiveProfilePreview(){
   $("profilePhotoUrl")?.addEventListener("input", (e) => {
     const val = e.target.value.trim();
-    if (val) $("authUserAvatar").src = val;
+    if (val) setSrc("authUserAvatar", val);
   });
   $("profileWallpaper")?.addEventListener("input", (e) => {
     const val = e.target.value.trim();
@@ -185,20 +252,15 @@ function bindLiveProfilePreview(){
   });
   $("profileDisplayName")?.addEventListener("input", (e) => {
     const val = e.target.value.trim();
-    $("authUserName").textContent = val || "Usuário";
+    setText("authUserName", val || "Usuário");
     if (!$("profilePhotoUrl")?.value.trim()) {
-      $("authUserAvatar").src = svgAvatar(val || "Usuário");
+      setSrc("authUserAvatar", svgAvatar(val || "Usuário"));
     }
   });
 }
 
 authBtn?.addEventListener("click", () => {
-  if (!currentUserData?.user) {
-    showGate("login");
-    setBodyLocked(true);
-    setAuthOpen(true);
-    return;
-  }
+  if (!currentUserData?.user) return;
   showAccount();
   setAuthOpen(true);
 });
@@ -221,14 +283,17 @@ loginForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   hasInteractedAuth = true;
   authStatus.textContent = "Entrando...";
+  setSubmitBusy(loginForm, true);
   try {
-    await authReady;
     const email = $("loginEmail").value.trim();
     const password = $("loginPassword").value;
+    await ensurePersistence();
     await signInWithEmailAndPassword(auth, email, password);
-    authStatus.textContent = "";
+    authStatus.textContent = "Login realizado com sucesso.";
   } catch (err) {
     authStatus.textContent = traduzErro(err);
+  } finally {
+    setSubmitBusy(loginForm, false);
   }
 });
 
@@ -236,8 +301,8 @@ registerForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   hasInteractedAuth = true;
   authStatus.textContent = "Criando conta...";
+  setSubmitBusy(registerForm, true);
   try {
-    await authReady;
     const name = $("registerName").value.trim();
     const email = $("registerEmail").value.trim();
     const password = $("registerPassword").value;
@@ -246,17 +311,15 @@ registerForm?.addEventListener("submit", async (e) => {
     if (password.length < 6) throw new Error("A senha precisa ter pelo menos 6 caracteres.");
     if (password !== password2) throw new Error("As senhas não coincidem.");
 
+    await ensurePersistence();
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-    await updateProfile(cred.user, { displayName: name, photoURL: svgAvatar(name) }).catch(() => {});
-
-    const createdAt = new Date().toISOString();
     const avatar = svgAvatar(name);
-    const profilePayload = {
-      uid: cred.user.uid,
+    await updateProfile(cred.user, { displayName: name, photoURL: avatar }).catch(() => {});
+    await ensureUserProfile(cred.user, {
       nome: name,
       email,
       avatar,
-      createdAt,
+      createdAt: new Date().toISOString(),
       premium: false,
       apiKey: "",
       website: "",
@@ -266,17 +329,14 @@ registerForm?.addEventListener("submit", async (e) => {
       wallpaper: "",
       saldo: 50,
       total: 0
-    };
+    });
 
-    try {
-      await set(ref(db, "users/" + cred.user.uid), profilePayload);
-      authStatus.textContent = "Conta criada com sucesso.";
-    } catch (dbErr) {
-      console.warn("Falha ao salvar perfil inicial no Realtime Database:", dbErr);
-      authStatus.textContent = "Conta criada. O perfil será sincronizado quando o banco responder.";
-    }
+    authStatus.textContent = "Conta criada com sucesso.";
+    registerForm.reset();
   } catch (err) {
     authStatus.textContent = traduzErro(err);
+  } finally {
+    setSubmitBusy(registerForm, false);
   }
 });
 
@@ -341,87 +401,24 @@ $("logoutBtn")?.addEventListener("click", async () => {
 });
 
 onAuthStateChanged(auth, async (user) => {
-  await authReady.catch(() => {});
   if (user) {
-    let dbData = null;
-    try {
-      const snap = await get(child(ref(db), "users/" + user.uid));
-      if (snap.exists()) dbData = snap.val();
-    } catch {}
-
-    if (!dbData) {
-      dbData = {
-        uid: user.uid,
-        nome: user.displayName || "Usuário",
-        email: user.email || "",
-        avatar: user.photoURL || svgAvatar(user.displayName || "Usuário"),
-        createdAt: new Date(user.metadata?.creationTime || Date.now()).toISOString(),
-        premium: false,
-        apiKey: "",
-        website: "",
-        youtube: "",
-        instagram: "",
-        whatsapp: "",
-        wallpaper: "",
-        saldo: 50,
-        total: 0
-      };
-      try { await set(ref(db, "users/" + user.uid), dbData); } catch {}
-    } else {
-      const normalized = {
-        nome: dbData.nome || user.displayName || "Usuário",
-        email: dbData.email || user.email || "",
-        avatar: dbData.avatar || user.photoURL || svgAvatar(dbData.nome || user.displayName || "Usuário"),
-        createdAt: dbData.createdAt || new Date(user.metadata?.creationTime || Date.now()).toISOString(),
-        premium: !!dbData.premium,
-        apiKey: dbData.apiKey || "",
-        website: dbData.website || "",
-        youtube: dbData.youtube || "",
-        instagram: dbData.instagram || "",
-        whatsapp: dbData.whatsapp || dbData.zap || "",
-        wallpaper: dbData.wallpaper || "",
-        saldo: Number(dbData.saldo ?? 50),
-        total: Number(dbData.total ?? 0)
-      };
-      if (JSON.stringify(normalized) !== JSON.stringify({
-        nome: dbData.nome,
-        email: dbData.email,
-        avatar: dbData.avatar,
-        createdAt: dbData.createdAt,
-        premium: !!dbData.premium,
-        apiKey: dbData.apiKey || "",
-        website: dbData.website || "",
-        youtube: dbData.youtube || "",
-        instagram: dbData.instagram || "",
-        whatsapp: dbData.whatsapp || dbData.zap || "",
-        wallpaper: dbData.wallpaper || "",
-        saldo: Number(dbData.saldo ?? 50),
-        total: Number(dbData.total ?? 0)
-      })) {
-        try { await update(ref(db, "users/" + user.uid), normalized); } catch {}
-      }
-      dbData = { ...dbData, ...normalized };
-    }
-
+    const dbData = await ensureUserProfile(user);
     currentUserData = { user, dbData };
     setProfileInputs(dbData, user);
     authBtn.textContent = safeText(dbData?.nome || user.displayName, "Minha conta");
-    authBootstrapped = true;
     setBodyLocked(false);
     setAuthOpen(false);
-  } else {
-    currentUserData = null;
-    authBtn.textContent = "Minha conta";
-    authBootstrapped = true;
-    showGate("login");
-    setBodyLocked(true);
-    setAuthOpen(true);
+    return;
   }
+
+  currentUserData = null;
+  authBtn.textContent = "Minha conta";
+  showGate("login");
+  setBodyLocked(true);
+  setAuthOpen(true);
 });
 
 bindLiveProfilePreview();
 showGate("login");
-if (!authBootstrapped) {
-  setBodyLocked(false);
-  setAuthOpen(false);
-}
+setBodyLocked(true);
+setAuthOpen(true);
