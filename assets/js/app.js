@@ -1,259 +1,666 @@
-/* Gremory Pokédex leve para Vercel
-   Sem GIFs locais: usa sprites externos por número da Pokédex.
-*/
-
-const POKEDEX_GENERATIONS = {
-  1: { start: 1, end: 151, label: '1ª Geração' },
-  2: { start: 152, end: 251, label: '2ª Geração' },
-  3: { start: 252, end: 386, label: '3ª Geração' }
+// Gremory Company • Site (downloads no próprio site)
+const LINKS = {
+  whatsapp: "https://wa.me/5521973747709",
+  discord: "https://discord.gg/DEdUfdKFRR",
+  instagram: "https://instagram.com/loserzinn",
+  youtube: "https://www.youtube.com/@Loserzinn",
+  email: "losermodder@gmail.com"
 };
 
-const SPRITE_ANIMATED_BASE = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated';
-const SPRITE_FALLBACK_BASE = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon';
-const POKEAPI_BASE = 'https://pokeapi.co/api/v2/pokemon';
+const IMAGE_CATEGORIES = ["shinobu", "megumin", "bully", "cuddle", "cry", "hug", "awoo", "kiss", "lick", "pat", "smug", "bonk", "yeet", "blush", "smile", "wave", "highfive", "handhold", "nom", "bite", "glomp", "slap", "kill", "kick", "happy", "wink", "poke", "dance", "cringe"];
 
-let currentGeneration = 1;
-const pokemonCache = new Map();
+// Estado do modal de imagem (para reiniciar/baixar sem trocar a imagem)
+let CURRENT_IMG_TYPE = null;
+let CURRENT_IMG_URL = null; // URL original (sem cache-buster)
 
-function formatPokemonNumber(id) {
-  return `#${String(id).padStart(3, '0')}`;
+function guessExtFromUrl(u){
+  try{
+    const p = new URL(u).pathname;
+    const m = p.match(/\.(png|jpe?g|gif|webp)$/i);
+    return m ? m[0].toLowerCase() : ".jpg";
+  }catch{ return ".jpg"; }
 }
 
-function formatName(name) {
-  if (!name) return 'Carregando...';
-  return name
-    .replace(/-/g, ' ')
-    .replace(/\b\w/g, letter => letter.toUpperCase());
+function $(id){ return document.getElementById(id); }
+
+function openPanel(panel, open){
+  panel.classList.toggle("open", !!open);
 }
 
-function getAnimatedSpriteUrl(id) {
-  return `${SPRITE_ANIMATED_BASE}/${id}.gif`;
+function openModal(open){
+  $("modal").classList.toggle("open", !!open);
+  if (!open) {
+    $("modalService").innerText = "";
+    $("modalHint").innerText = "";
+    $("modalInput").value = "";
+    $("modalInput").placeholder = "";
+    $("modalInputLabel").innerText = "";
+    $("modalSend").disabled = false;
+    $("modalStatus").innerText = "";
+  }
 }
 
-function getFallbackSpriteUrl(id) {
-  return `${SPRITE_FALLBACK_BASE}/${id}.png`;
+
+function openWikiModal(open){
+  const el = $("wikiModal");
+  if (!el) return;
+  el.classList.toggle("open", !!open);
+  el.setAttribute("aria-hidden", open ? "false" : "true");
+  if (!open) {
+    $("wikiTitle").innerText = "Wikipedia";
+    $("wikiBrief").innerText = "";
+    $("wikiResumo").innerText = "";
+    $("wikiLink").href = "#";
+    const img = $("wikiImg");
+    if (img) { img.src = ""; img.style.display = "none"; }
+  }
 }
 
-function setStatus(message, active = false) {
-  const status = document.getElementById('pokedexStatus');
-  if (!status) return;
-  status.textContent = message;
-  status.classList.toggle('active', active);
+function openUpdates(open){
+  const pop = $("updatesPop");
+  if (!pop) return;
+  pop.classList.toggle("open", !!open);
 }
 
-async function fetchPokemon(id) {
-  if (pokemonCache.has(id)) return pokemonCache.get(id);
+function openShop(open){
+  const el = $("shopModal");
+  if (!el) return;
+  el.classList.toggle("open", !!open);
+  el.setAttribute("aria-hidden", open ? "false" : "true");
+}
 
-  const cacheKey = `gremory_pokemon_${id}`;
-  const saved = localStorage.getItem(cacheKey);
+function safeText(s){
+  return (s ?? "").toString();
+}
 
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved);
-      pokemonCache.set(id, parsed);
-      return parsed;
-    } catch (_) {}
+async function postJson(url, body){
+  const API_BASE = (window.API_BASE || "").replace(/\/$/, "");
+  const res = await fetch(API_BASE + url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {})
+  });
+  const data = await res.json().catch(()=> ({}));
+  if (!res.ok) throw new Error(data.erro || "Falha na requisição");
+  return data;
+}
+
+function setBusy(busy, text){
+  $("modalSend").disabled = !!busy;
+  $("modalStatus").innerText = busy ? (text || "Processando...") : "";
+}
+
+function startDownload(downloadUrl, filename){
+  if (!downloadUrl) throw new Error("Link de download inválido");
+
+  const isSameOrigin = (() => {
+    try{
+      if (downloadUrl.startsWith("/")) return true;
+      const u = new URL(downloadUrl, window.location.href);
+      return u.origin === window.location.origin;
+    }catch{ return false; }
+  })();
+
+  // Para links do mesmo domínio, baixa via Blob (força download sempre).
+  if (isSameOrigin) {
+    return fetch(downloadUrl)
+      .then(r => {
+        if (!r.ok) throw new Error("Falha ao baixar arquivo");
+        return Promise.all([r.blob(), r.headers.get("content-disposition")]);
+      })
+      .then(([blob, cd]) => {
+        let name = filename;
+        if (!name && cd) {
+          const m = cd.match(/filename="(.+?)"/i);
+          if (m) name = m[1];
+        }
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = name || "download";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+      })
+      .catch(() => {
+        // fallback
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.target = "_blank";
+        if (filename) a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      });
   }
 
-  const response = await fetch(`${POKEAPI_BASE}/${id}`);
-  if (!response.ok) throw new Error(`Erro ao buscar Pokémon ${id}`);
-  const data = await response.json();
-
-  const pokemon = {
-    id,
-    name: data.name,
-    height: data.height,
-    weight: data.weight,
-    types: (data.types || []).map(item => item.type.name),
-    stats: (data.stats || []).map(item => ({
-      name: item.stat.name,
-      value: item.base_stat
-    }))
-  };
-
-  pokemonCache.set(id, pokemon);
-  localStorage.setItem(cacheKey, JSON.stringify(pokemon));
-  return pokemon;
-}
-
-function createPokedexCard(id) {
-  const card = document.createElement('button');
-  card.type = 'button';
-  card.className = 'pokedex-card';
-  card.dataset.id = String(id);
-  card.dataset.name = '';
-
-  card.innerHTML = `
-    <img src="${getAnimatedSpriteUrl(id)}" alt="Pokémon ${id}" loading="lazy" onerror="this.onerror=null;this.src='${getFallbackSpriteUrl(id)}'">
-    <div class="poke-number">${formatPokemonNumber(id)}</div>
-    <div class="poke-name">Carregando...</div>
-  `;
-
-  card.addEventListener('click', () => openPokemonDetail(id));
-
-  fetchPokemon(id)
-    .then(pokemon => {
-      card.dataset.name = pokemon.name.toLowerCase();
-      const nameEl = card.querySelector('.poke-name');
-      if (nameEl) nameEl.textContent = formatName(pokemon.name);
-      const img = card.querySelector('img');
-      if (img) img.alt = formatName(pokemon.name);
-      applySearchFilter();
+  // Cross-origin: usa proxy no servidor (mesmo domínio) para forçar download sem abrir outra aba
+  const prox = `/api/main?action=proxy&url=${encodeURIComponent(downloadUrl)}${filename ? `&filename=${encodeURIComponent(filename)}` : ""}`;
+  return fetch(prox)
+    .then(r => {
+      if (!r.ok) throw new Error("Falha ao baixar arquivo");
+      return Promise.all([r.blob(), r.headers.get("content-disposition")]);
     })
-    .catch(() => {
-      const nameEl = card.querySelector('.poke-name');
-      if (nameEl) nameEl.textContent = `Pokémon ${id}`;
+    .then(([blob, cd]) => {
+      let name = filename;
+      if (!name && cd) {
+        const m = cd.match(/filename="(.+?)"/i);
+        if (m) name = m[1];
+      }
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name || "download";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1500);
     });
-
-  return card;
 }
 
-function renderPokedexGeneration(gen = 1) {
-  const grid = document.getElementById('pokedexGrid');
-  const search = document.getElementById('pokedexSearch');
-  if (!grid) return;
+document.addEventListener("DOMContentLoaded", () => {
+  // Panels
+  const downloadsBtn = $("downloadsBtn");
+  const downloadsPanel = $("downloadsPanel");
+  const closeDownloads = $("closeDownloads");
 
-  currentGeneration = gen;
-  const config = POKEDEX_GENERATIONS[gen];
+  downloadsBtn.addEventListener("click", () => openPanel(downloadsPanel, true));
+  closeDownloads.addEventListener("click", () => openPanel(downloadsPanel, false));
 
-  if (search) search.value = '';
-  grid.innerHTML = '';
-  setStatus(`Carregando ${config.label}...`, true);
+  const supportBtn = $("supportBtn");
+  const supportPanel = $("supportPanel");
+  const closeSupport = $("closeSupport");
 
-  const fragment = document.createDocumentFragment();
-  for (let id = config.start; id <= config.end; id++) {
-    fragment.appendChild(createPokedexCard(id));
-  }
-  grid.appendChild(fragment);
+  supportBtn.addEventListener("click", () => openPanel(supportPanel, true));
+  closeSupport.addEventListener("click", () => openPanel(supportPanel, false));
 
-  setTimeout(() => setStatus('', false), 500);
-}
-
-function applySearchFilter() {
-  const search = document.getElementById('pokedexSearch');
-  const term = (search?.value || '').toLowerCase().trim();
-  const cards = document.querySelectorAll('.pokedex-card');
-
-  cards.forEach(card => {
-    const name = card.dataset.name || '';
-    const id = card.dataset.id || '';
-    const show = !term || name.includes(term) || id.includes(term) || formatPokemonNumber(id).includes(term);
-    card.style.display = show ? '' : 'none';
-  });
-}
-
-function statLabel(statName) {
-  const labels = {
-    hp: 'HP',
-    attack: 'Ataque',
-    defense: 'Defesa',
-    'special-attack': 'Sp. Atk',
-    'special-defense': 'Sp. Def',
-    speed: 'Velocidade'
-  };
-  return labels[statName] || statName;
-}
-
-async function openPokemonDetail(id) {
-  const overlay = document.getElementById('pokemonDetailOverlay');
-  const content = document.getElementById('pokemonDetailContent');
-  if (!overlay || !content) return;
-
-  overlay.classList.add('active');
-  overlay.setAttribute('aria-hidden', 'false');
-  content.innerHTML = '<div class="detail-main"><p>Carregando detalhes...</p></div>';
-
-  try {
-    const pokemon = await fetchPokemon(id);
-    const statsHtml = pokemon.stats.map(stat => {
-      const width = Math.min(100, Math.round((stat.value / 180) * 100));
-      return `
-        <div class="stat-line">
-          <span>${statLabel(stat.name)}</span>
-          <div class="stat-bar"><div class="stat-fill" style="width:${width}%"></div></div>
-          <strong>${stat.value}</strong>
-        </div>
-      `;
-    }).join('');
-
-    content.innerHTML = `
-      <div class="detail-main">
-        <img src="${getAnimatedSpriteUrl(id)}" alt="${formatName(pokemon.name)}" onerror="this.onerror=null;this.src='${getFallbackSpriteUrl(id)}'">
-        <div class="poke-number">${formatPokemonNumber(id)}</div>
-        <h3>${formatName(pokemon.name)}</h3>
-        <div class="detail-types">
-          ${pokemon.types.map(type => `<span class="type-pill">${formatName(type)}</span>`).join('')}
-        </div>
-        <p>Altura: <strong>${pokemon.height / 10}m</strong> · Peso: <strong>${pokemon.weight / 10}kg</strong></p>
-        <div class="detail-stats">${statsHtml}</div>
-      </div>
-    `;
-  } catch (error) {
-    content.innerHTML = '<div class="detail-main"><p>Não consegui carregar os detalhes desse Pokémon.</p></div>';
-  }
-}
-
-function closePokemonDetail() {
-  const overlay = document.getElementById('pokemonDetailOverlay');
-  if (!overlay) return;
-  overlay.classList.remove('active');
-  overlay.setAttribute('aria-hidden', 'true');
-}
-
-function initGremoryPokedex() {
-  const openBtn = document.getElementById('openPokedexBtn');
-  const closeBtn = document.getElementById('closePokedexBtn');
-  const overlay = document.getElementById('pokedexOverlay');
-  const tabs = document.querySelectorAll('.pokedex-tab');
-  const search = document.getElementById('pokedexSearch');
-  const closeDetailBtn = document.getElementById('closePokemonDetailBtn');
-  const detailOverlay = document.getElementById('pokemonDetailOverlay');
-
-  if (!openBtn || !closeBtn || !overlay) return;
-
-  openBtn.addEventListener('click', () => {
-    overlay.classList.add('active');
-    overlay.setAttribute('aria-hidden', 'false');
-    renderPokedexGeneration(currentGeneration || 1);
-  });
-
-  closeBtn.addEventListener('click', () => {
-    overlay.classList.remove('active');
-    overlay.setAttribute('aria-hidden', 'true');
-  });
-
-  overlay.addEventListener('click', event => {
-    if (event.target === overlay) {
-      overlay.classList.remove('active');
-      overlay.setAttribute('aria-hidden', 'true');
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      openPanel(downloadsPanel, false);
+      openPanel(supportPanel, false);
+      openModal(false);
+      openWikiModal(false);
+      openShop(false);
+      // image modal
+      const imgM = $("imgModal");
+      if (imgM && imgM.classList.contains("open")) imgM.classList.remove("open");
     }
   });
 
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      tabs.forEach(item => item.classList.remove('active'));
-      tab.classList.add('active');
-      renderPokedexGeneration(Number(tab.dataset.gen || 1));
-    });
+  document.addEventListener("click", (e) => {
+    const insideDownloads = downloadsPanel.contains(e.target) || downloadsBtn.contains(e.target);
+    const insideSupport = supportPanel.contains(e.target) || supportBtn.contains(e.target);
+    const insideModal = $("modalBox").contains(e.target);
+    const shopBox = $("shopBox");
+    const insideShop = (shopBox && shopBox.contains(e.target)) || $("shopBtn")?.contains(e.target);
+    if (!insideDownloads) openPanel(downloadsPanel, false);
+    if (!insideSupport) openPanel(supportPanel, false);
+    if ($("modal").classList.contains("open") && !insideModal && !e.target.classList.contains("service")) openModal(false);
+    if ($("shopModal")?.classList.contains("open") && !insideShop) openShop(false);
   });
 
-  if (search) search.addEventListener('input', applySearchFilter);
+  // Social links
+  $("linkWhats").href = LINKS.whatsapp;
+  $("linkDiscord").href = LINKS.discord;
+  $("linkInsta").href = LINKS.instagram;
+  $("linkYoutube").href = LINKS.youtube;
 
-  if (closeDetailBtn) closeDetailBtn.addEventListener('click', closePokemonDetail);
+  // Clock
+  function initClock(){
+    const pad = (n) => String(n).padStart(2, "0");
+    const tick = () => {
+      const now = new Date();
+      if ($("clockTime")) $("clockTime").innerText = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      if ($("clockDate")) $("clockDate").innerText = now.toLocaleDateString("pt-BR");
+    };
+    tick();
+    setInterval(tick, 1000);
+  }
 
-  if (detailOverlay) {
-    detailOverlay.addEventListener('click', event => {
-      if (event.target === detailOverlay) closePokemonDetail();
+  // Updates (sininho)
+  function loadUpdates(){
+    try{
+      const raw = localStorage.getItem("gremory_updates");
+      if (raw) return JSON.parse(raw);
+    }catch{}
+    return Array.isArray(window.UPDATES_DEFAULT) ? window.UPDATES_DEFAULT : [];
+  }
+
+  function saveUpdates(list){
+    try{ localStorage.setItem("gremory_updates", JSON.stringify(list)); }catch{}
+  }
+
+  function renderUpdates(){
+    const list = loadUpdates();
+    const box = $("updatesList");
+    if (!box) return;
+
+    const badge = $("updatesBadge");
+    if (badge){
+      const n = list.length;
+      badge.hidden = n === 0;
+      badge.innerText = n > 99 ? "99+" : String(n);
+    }
+
+    if (list.length === 0){
+      box.innerHTML = '<div style="opacity:.8;font-size:13px;">Sem atualizações por enquanto.</div>';
+      return;
+    }
+
+    box.innerHTML = "";
+    list.slice().reverse().forEach((u, idxFromEnd) => {
+      const idx = list.length - 1 - idxFromEnd;
+
+      const item = document.createElement("div");
+      item.className = "update-item";
+
+      const meta = document.createElement("div");
+      meta.className = "update-meta";
+      meta.innerHTML = `<span>${safeText(u.date || "")}</span>`;
+
+      const del = document.createElement("button");
+      del.className = "icon-btn update-del";
+      del.title = "Remover";
+      del.innerHTML = '<i class="fa-solid fa-trash"></i>';
+      del.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const next = loadUpdates();
+        next.splice(idx, 1);
+        saveUpdates(next);
+        renderUpdates();
+      });
+
+      meta.appendChild(del);
+
+      const text = document.createElement("div");
+      text.className = "update-text";
+      text.innerText = safeText(u.text || "");
+
+      item.appendChild(meta);
+      item.appendChild(text);
+
+      box.appendChild(item);
     });
   }
 
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape') {
-      overlay.classList.remove('active');
-      overlay.setAttribute('aria-hidden', 'true');
-      closePokemonDetail();
+  function initUpdates(){
+    const btn = $("updatesBtn");
+    const close = $("closeUpdates");
+    const add = $("addUpdate");
+
+    btn && btn.addEventListener("click", () => {
+      const pop = $("updatesPop");
+      const open = !pop.classList.contains("open");
+      openUpdates(open);
+      if (open) renderUpdates();
+    });
+
+    close && close.addEventListener("click", () => openUpdates(false));
+
+    add && add.addEventListener("click", () => {
+      const text = prompt("Digite a atualização (texto):");
+      if (!text) return;
+      const list = loadUpdates();
+      list.push({ date: new Date().toISOString().slice(0,10), text: text.trim() });
+      saveUpdates(list);
+      renderUpdates();
+      openUpdates(true);
+    });
+
+    // Clique fora fecha
+    document.addEventListener("click", (e) => {
+      const pop = $("updatesPop");
+      if (!pop || !pop.classList.contains("open")) return;
+      if (pop.contains(e.target) || e.target === btn) return;
+      openUpdates(false);
+    });
+
+    renderUpdates();
+  }
+
+  // Wiki modal close
+  function initWikiModal(){
+    $("wikiClose")?.addEventListener("click", () => openWikiModal(false));
+    $("wikiBackdrop")?.addEventListener("click", () => openWikiModal(false));
+  }
+
+  // Image modal
+  function openImgModal(open){
+    const el = $("imgModal");
+    if (!el) return;
+    el.classList.toggle("open", !!open);
+    el.setAttribute("aria-hidden", open ? "false" : "true");
+    if (!open) {
+      $("imgTitle").innerText = "Imagem";
+      $("imgDesc").innerText = "";
+      const img = $("imgPreview");
+      if (img) { img.src = ""; img.style.display = "none"; }
+    }
+  }
+
+  function initImgModal(){
+    $("imgClose")?.addEventListener("click", () => openImgModal(false));
+    $("imgBackdrop")?.addEventListener("click", () => openImgModal(false));
+  }
+
+  initClock();
+  initUpdates();
+  initWikiModal();
+  initImgModal();
+
+  // Shop (carrinho)
+  function initShop(){
+    const btn = $("shopBtn");
+    const close = $("shopClose");
+    const backdrop = $("shopBackdrop");
+
+    // Cards (edite aqui quando quiser trocar/adição de bots)
+    const bots = [
+      {
+        title: "Bot de Vendas (Discord)",
+        desc: "Tickets privados, catálogo por menus, Pix/QR Code, logs e transcript.",
+        price: "Sob consulta",
+        waText: "Quero comprar o Bot de Vendas (Discord). Me passa valores e detalhes."
+      },
+      {
+        title: "Bot Whitelist (FiveM)",
+        desc: "Aprovação/reprovação por botões, formulário, logs e painel de status.",
+        price: "Sob consulta",
+        waText: "Quero comprar o Bot de Whitelist (FiveM). Me passa valores e detalhes."
+      },
+      {
+        title: "Bot Automação/Engajamento",
+        desc: "Mensagens automáticas, anúncios, lembretes, respostas rápidas e utilidades.",
+        price: "Sob consulta",
+        waText: "Quero comprar um Bot de Automação/Engajamento. Me passa valores e opções."
+      }
+    ];
+
+    const premium = [
+      { days: 7, price: 5, waText: "Quero Premium Charlotte (7 dias) - R$ 5" },
+      { days: 15, price: 10, waText: "Quero Premium Charlotte (15 dias) - R$ 10" },
+      { days: 30, price: 22, waText: "Quero Premium Charlotte (30 dias) - R$ 22" }
+    ];
+
+    const buildCard = ({ title, desc, price, waText }) => {
+      const card = document.createElement("div");
+      card.className = "shop-card";
+
+      const t = document.createElement("div");
+      t.className = "shop-card-title";
+      t.innerText = title;
+
+      const d = document.createElement("div");
+      d.className = "shop-card-desc";
+      d.innerText = desc;
+
+      const p = document.createElement("div");
+      p.className = "shop-card-price";
+      p.innerText = price;
+
+      const actions = document.createElement("div");
+      actions.className = "shop-card-actions";
+
+      const buy = document.createElement("button");
+      buy.className = "btn primary";
+      buy.type = "button";
+      buy.innerText = "Comprar";
+      buy.addEventListener("click", () => {
+        const msg = encodeURIComponent(waText);
+        const url = LINKS.whatsapp + "?text=" + msg;
+        window.open(url, "_blank");
+      });
+
+      actions.appendChild(buy);
+
+      card.appendChild(t);
+      card.appendChild(d);
+      card.appendChild(p);
+      card.appendChild(actions);
+      return card;
+    };
+
+    const botsGrid = $("botsGrid");
+    if (botsGrid){
+      botsGrid.innerHTML = "";
+      bots.forEach(b => botsGrid.appendChild(buildCard(b)));
+    }
+
+    const premiumGrid = $("premiumGrid");
+    if (premiumGrid){
+      premiumGrid.innerHTML = "";
+      premium.forEach(pk => {
+        premiumGrid.appendChild(buildCard({
+          title: `${pk.days} dias`,
+          desc: "Acesso premium para a Charlotte.",
+          price: `R$ ${pk.price}`,
+          waText: pk.waText
+        }));
+      });
+    }
+
+    btn && btn.addEventListener("click", () => openShop(true));
+    close && close.addEventListener("click", () => openShop(false));
+    backdrop && backdrop.addEventListener("click", () => openShop(false));
+  }
+
+  initShop();
+
+  // Tabs (Downloads / Imagens)
+  const tabDownloads = $("tabDownloads");
+  const tabImagens = $("tabImagens");
+  const paneDownloads = $("paneDownloads");
+  const paneImagens = $("paneImagens");
+  function setTab(which){
+    const isDl = which === "downloads";
+    tabDownloads?.classList.toggle("active", isDl);
+    tabImagens?.classList.toggle("active", !isDl);
+    tabDownloads?.setAttribute("aria-selected", isDl ? "true" : "false");
+    tabImagens?.setAttribute("aria-selected", !isDl ? "true" : "false");
+    paneDownloads?.classList.toggle("active", isDl);
+    paneImagens?.classList.toggle("active", !isDl);
+  }
+  tabDownloads?.addEventListener("click", () => setTab("downloads"));
+  tabImagens?.addEventListener("click", () => setTab("imagens"));
+
+
+  // Support values
+  $("supportWhatsValue").innerText = LINKS.whatsapp.replace("https://wa.me/", "+");
+  $("supportEmailValue").innerText = LINKS.email;
+
+  $("supportWhatsOpen").addEventListener("click", async () => {
+    try{
+      await navigator.clipboard.writeText(LINKS.whatsapp.replace("https://wa.me/",""));
+      window.open(LINKS.whatsapp, "_blank");
+      $("supportWhatsOpen").innerText = "Abrindo";
+      setTimeout(() => ($("supportWhatsOpen").innerText = "Abrir"), 1200);
+    }catch{
+      alert("Não consegui copiar. Copie manualmente: " + LINKS.whatsapp);
     }
   });
-}
 
-document.addEventListener('DOMContentLoaded', initGremoryPokedex);
+  $("supportEmailCopy").addEventListener("click", async () => {
+    try{
+      await navigator.clipboard.writeText(LINKS.email);
+      $("supportEmailCopy").innerText = "Copiado";
+      setTimeout(() => ($("supportEmailCopy").innerText = "Copiar"), 1200);
+    }catch{
+      alert("Não consegui copiar. Copie manualmente: " + LINKS.email);
+    }
+  });
+
+  // Modal events
+  $("modalClose").addEventListener("click", () => openModal(false));
+  $("modalCancel").addEventListener("click", () => openModal(false));
+
+  let currentService = null;
+
+  function configModal(service){
+    currentService = service;
+
+    const config = {
+      tiktok: {
+        title: "TikTok",
+        hint: "Cole o link do TikTok. O download vai iniciar aqui no site.",
+        label: "Link do TikTok",
+        placeholder: "https://www.tiktok.com/..."
+      },
+      instagram: {
+        title: "Instagram",
+        hint: "Cole o link do post/reels. O download vai iniciar aqui no site.",
+        label: "Link do Instagram",
+        placeholder: "https://www.instagram.com/..."
+      },
+      spotify: {
+        title: "Spotify",
+        hint: "Cole o link da música do Spotify. O download vai iniciar aqui no site.",
+        label: "Link do Spotify",
+        placeholder: "https://open.spotify.com/track/..."
+      },
+      pinterest: {
+        title: "Pinterest",
+        hint: "Cole o link do Pin do Pinterest. O download vai iniciar aqui no site.",
+        label: "Link do Pinterest",
+        placeholder: "https://br.pinterest.com/pin/..." 
+      },
+      wiki: {
+        title: "Wikipedia",
+        hint: "Digite um termo. Vamos mostrar a imagem e o texto em um popup no centro.",
+        label: "Termo de pesquisa",
+        placeholder: "Ex: Genshin Impact"
+      },
+}[service];
+
+    if (!config) return false;
+
+    $("modalService").innerText = config.title;
+    $("modalHint").innerText = config.hint;
+    $("modalInputLabel").innerText = config.label;
+    $("modalInput").placeholder = config.placeholder;
+
+    return true;
+  }
+
+  document.querySelectorAll(".service").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const s = btn.dataset.service;
+
+      // Imagens (anime): abre direto
+      if (IMAGE_CATEGORIES.includes(s)) {
+        const title = s.charAt(0).toUpperCase() + s.slice(1);
+        $("imgTitle").innerText = title;
+        $("imgDesc").innerText = "SFW • waifu.pics";
+
+        CURRENT_IMG_TYPE = s;
+        CURRENT_IMG_URL = null;
+
+        const load = async () => {
+          const img = $("imgPreview");
+          if (!img) return;
+          img.style.display = "block";
+          try{
+            const type = s;
+            const url = `https://api.waifu.pics/sfw/${type}`;
+            const r = await fetch(url, { cache: "no-store" });
+            const d = await r.json();
+            if (!d || !d.url) throw new Error("Sem imagem");
+            CURRENT_IMG_TYPE = type;
+            CURRENT_IMG_URL = d.url;
+            img.src = d.url + `?t=${Date.now()}`;
+          }catch(e){
+            // Fallback para 'neko' caso a categoria não exista
+            try{
+              const r2 = await fetch(`https://api.waifu.pics/sfw/neko`, { cache: "no-store" });
+              const d2 = await r2.json();
+              if (d2?.url){
+                CURRENT_IMG_TYPE = "neko";
+                CURRENT_IMG_URL = d2.url;
+                img.src = d2.url + `?t=${Date.now()}`;
+                if ($("imgDesc")) $("imgDesc").innerText = `Categoria '${s}' indisponível • mostrando 'neko'`;
+              }
+            }catch(_){}
+          }
+        };
+
+        load();
+        // Reiniciar: busca outra imagem da MESMA categoria atual
+        $("imgReload").onclick = (ev) => {
+          ev?.preventDefault?.();
+          load();
+        };
+
+        // Baixar: salva a imagem atual (sem abrir outra guia e sem puxar outra imagem)
+        $("imgDownload").onclick = async (ev) => {
+          ev?.preventDefault?.();
+          ev?.stopPropagation?.();
+          if (!CURRENT_IMG_URL) return;
+          const ext = guessExtFromUrl(CURRENT_IMG_URL);
+          const name = `${CURRENT_IMG_TYPE || "anime"}-${Date.now()}${ext}`;
+          await startDownload(CURRENT_IMG_URL, name);
+        };
+        openImgModal(true);
+        return;
+      }
+
+      const ok = configModal(s);
+      if (!ok) {
+        alert("Em breve: " + s);
+        return;
+      }
+      openModal(true);
+      $("modalInput").focus();
+    });
+  });
+
+  $("modalSend").addEventListener("click", async () => {
+    try{
+      const input = $("modalInput").value.trim();
+      if (!input && currentService !== "assado") return alert("Preencha o campo.");
+
+      if (currentService === "wiki") {
+        setBusy(true, "Buscando...");
+        const r = await postJson("/api/main?action=wiki", { query: input });
+        setBusy(false);
+        openModal(false);
+        // Popup central
+        $("wikiTitle").innerText = r?.titulo || "Wikipedia";
+        $("wikiBrief").innerText = r?.descricao_breve || "";
+        $("wikiResumo").innerText = r?.resumo || r?.text || "Sem resultado.";
+        $("wikiLink").href = r?.link || "#";
+        const img = $("wikiImg");
+        if (img && r?.imagem) { img.src = r.imagem; img.style.display = "block"; }
+        else if (img) { img.src = ""; img.style.display = "none"; }
+        openWikiModal(true);
+        return;
+      }
+
+      setBusy(true, "Gerando download...");
+
+      let r;
+      if (currentService === "tiktok") {
+        r = await postJson("/api/main?action=tiktok", { url: input });
+      } else if (currentService === "instagram") {
+        r = await postJson("/api/main?action=instagram", { url: input });
+      } else if (currentService === "spotify") {
+        r = await postJson("/api/main?action=spotify", { url: input });
+      } else if (currentService === "pinterest") {
+        r = await postJson("/api/main?action=pinterest", { url: input });
+      } else {
+        throw new Error("Serviço inválido");
+      }
+
+      setBusy(false);
+
+      // Inicia download
+      await startDownload(r.downloadUrl, r.filename);
+
+      // Feedback
+      $("modalStatus").innerText = "✅ Pronto! O download foi iniciado.";
+
+    }catch(e){
+      setBusy(false);
+      alert("❌ " + (e?.message || "Erro"));
+    }
+  });
+});
+
+

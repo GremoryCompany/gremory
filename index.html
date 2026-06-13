@@ -7,81 +7,6 @@
   <link rel="stylesheet" href="/assets/css/style.css" />
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-
-
-  <!-- CSS adicionado somente para o botão Pokédex -->
-  <style id="pokedex-button-only-style">
-    .pokedex-float-btn {
-      position: fixed;
-      left: 50%;
-      bottom: 28px;
-      transform: translateX(-50%);
-      z-index: 99999;
-
-      width: 170px;
-      height: 72px;
-
-      border: 1px solid rgba(168, 105, 255, 0.9);
-      border-radius: 999px;
-
-      background: rgba(13, 14, 31, 0.96);
-      color: #fff;
-
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-
-      cursor: pointer;
-      font-weight: 800;
-      font-size: 15px;
-      font-family: inherit;
-
-      box-shadow:
-        0 0 18px rgba(146, 70, 255, 0.9),
-        0 0 36px rgba(120, 45, 255, 0.55),
-        inset 0 0 18px rgba(130, 80, 255, 0.18);
-
-      transition: transform 0.25s ease, box-shadow 0.25s ease;
-    }
-
-    .pokedex-float-btn:hover {
-      transform: translateX(-50%) scale(1.05);
-      box-shadow:
-        0 0 24px rgba(176, 105, 255, 1),
-        0 0 48px rgba(145, 70, 255, 0.8),
-        inset 0 0 20px rgba(160, 100, 255, 0.25);
-    }
-
-    .pokedex-float-btn img {
-      width: 48px;
-      height: 48px;
-      object-fit: contain;
-      image-rendering: auto;
-      pointer-events: none;
-    }
-
-    .pokedex-float-btn span {
-      color: #fff;
-      letter-spacing: 0.3px;
-      pointer-events: none;
-    }
-
-    @media (max-width: 480px) {
-      .pokedex-float-btn {
-        width: 150px;
-        height: 64px;
-        bottom: 20px;
-        font-size: 14px;
-      }
-
-      .pokedex-float-btn img {
-        width: 42px;
-        height: 42px;
-      }
-    }
-  </style>
-
 </head>
 
 <body>
@@ -148,7 +73,10 @@
           <button class="service" data-service="pinterest"><i class="fa-brands fa-pinterest"></i><span>Pinterest</span></button>
         </div>
       </div>
-
+<button id="openPokedexBtn" class="pokedex-float-btn" title="Abrir Pokédex" aria-label="Abrir Pokédex">
+  <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/92.gif" alt="Gastly" />
+  <span>Pokédex</span>
+</button>
       <!-- Tab: Imagens -->
       <div class="tabpane" id="paneImagens" role="tabpanel" aria-label="Opções de imagens">
         <div class="grid">
