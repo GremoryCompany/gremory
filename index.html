@@ -418,5 +418,401 @@
 
 <script type="module" src="/assets/js/firebase-auth.js"></script>
 
+
+<!-- GREMORY POKEDEX ADDON: START -->
+<style>
+  .gremory-pokedex-btn {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    z-index: 99999;
+    width: 174px;
+    height: 72px;
+    border: 1px solid rgba(170, 105, 255, 0.92);
+    border-radius: 999px;
+    background: rgba(13, 14, 31, 0.96);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    cursor: pointer;
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: .3px;
+    box-shadow:
+      0 0 18px rgba(146, 70, 255, 0.90),
+      0 0 36px rgba(120, 45, 255, 0.55),
+      inset 0 0 18px rgba(130, 80, 255, 0.18);
+    transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+  }
+
+  .gremory-pokedex-btn:hover {
+    transform: translateX(-50%) scale(1.05);
+    border-color: rgba(212, 170, 255, 1);
+    box-shadow:
+      0 0 24px rgba(176, 105, 255, 1),
+      0 0 48px rgba(145, 70, 255, 0.80),
+      inset 0 0 20px rgba(160, 100, 255, 0.25);
+  }
+
+  .gremory-pokedex-btn img {
+    width: 50px;
+    height: 50px;
+    object-fit: contain;
+    pointer-events: none;
+  }
+
+  .gremory-pokedex-btn span {
+    pointer-events: none;
+    color: #fff;
+    text-shadow: 0 0 10px rgba(190, 130, 255, .7);
+  }
+
+  .gremory-pokedex-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99998;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 22px;
+    background: rgba(0, 0, 0, .68);
+    backdrop-filter: blur(7px);
+  }
+
+  .gremory-pokedex-overlay.open {
+    display: flex;
+  }
+
+  .gremory-pokedex-box {
+    width: min(900px, 94vw);
+    max-height: 84vh;
+    overflow: hidden;
+    border-radius: 24px;
+    color: #fff;
+    background: rgba(13, 14, 31, .97);
+    border: 1px solid rgba(170, 105, 255, .55);
+    box-shadow:
+      0 0 28px rgba(146, 70, 255, .60),
+      0 0 70px rgba(120, 45, 255, .38),
+      inset 0 0 24px rgba(130, 80, 255, .10);
+    transform: scale(.94);
+    opacity: 0;
+    animation: gremoryPokedexPop .18s ease forwards;
+  }
+
+  @keyframes gremoryPokedexPop {
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  .gremory-pokedex-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 22px 12px;
+  }
+
+  .gremory-pokedex-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .gremory-pokedex-title img {
+    width: 46px;
+    height: 46px;
+    object-fit: contain;
+  }
+
+  .gremory-pokedex-title h2 {
+    margin: 0;
+    font-size: 26px;
+    line-height: 1.1;
+  }
+
+  .gremory-pokedex-title p {
+    margin: 4px 0 0;
+    color: rgba(255, 255, 255, .66);
+    font-size: 13px;
+  }
+
+  .gremory-pokedex-close {
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 50%;
+    cursor: pointer;
+    color: #fff;
+    font-size: 28px;
+    line-height: 40px;
+    background: rgba(255, 255, 255, .10);
+    transition: .18s ease;
+  }
+
+  .gremory-pokedex-close:hover {
+    background: rgba(255, 65, 105, .85);
+  }
+
+  .gremory-pokedex-tabs {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 0 22px 14px;
+  }
+
+  .gremory-pokedex-tab {
+    border: 1px solid rgba(170, 105, 255, .22);
+    border-radius: 14px;
+    cursor: pointer;
+    padding: 10px 14px;
+    color: #fff;
+    background: rgba(255,255,255,.09);
+    font-weight: 800;
+    transition: .18s ease;
+  }
+
+  .gremory-pokedex-tab:hover,
+  .gremory-pokedex-tab.active {
+    background: linear-gradient(135deg, #743cff, #d64cff);
+    box-shadow: 0 0 16px rgba(180, 80, 255, .55);
+  }
+
+  .gremory-pokedex-search-wrap {
+    padding: 0 22px 15px;
+  }
+
+  .gremory-pokedex-search {
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 15px;
+    border: 1px solid rgba(170, 105, 255, .35);
+    padding: 12px 14px;
+    outline: none;
+    color: #fff;
+    background: rgba(255,255,255,.08);
+  }
+
+  .gremory-pokedex-search::placeholder {
+    color: rgba(255,255,255,.45);
+  }
+
+  .gremory-pokedex-grid {
+    padding: 0 22px 22px;
+    max-height: 54vh;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(125px, 1fr));
+    gap: 14px;
+  }
+
+  .gremory-pokedex-card {
+    border: 1px solid rgba(170, 105, 255, .22);
+    border-radius: 18px;
+    padding: 12px 8px;
+    text-align: center;
+    background: rgba(255,255,255,.07);
+    transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
+  }
+
+  .gremory-pokedex-card:hover {
+    transform: translateY(-4px);
+    background: rgba(130, 70, 255, .24);
+    box-shadow: 0 0 18px rgba(180, 80, 255, .36);
+  }
+
+  .gremory-pokedex-card img {
+    width: 78px;
+    height: 78px;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto 8px;
+  }
+
+  .gremory-pokedex-num {
+    font-size: 12px;
+    color: rgba(255,255,255,.58);
+  }
+
+  .gremory-pokedex-name {
+    margin-top: 4px;
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: capitalize;
+    word-break: break-word;
+  }
+
+  @media (max-width: 560px) {
+    .gremory-pokedex-btn {
+      width: 74px;
+      height: 74px;
+      gap: 0;
+    }
+    .gremory-pokedex-btn span {
+      display: none;
+    }
+    .gremory-pokedex-grid {
+      grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+    }
+  }
+</style>
+
+<button id="gremoryOpenPokedex" class="gremory-pokedex-btn" type="button" title="Abrir Pokédex" aria-label="Abrir Pokédex">
+  <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/92.gif" alt="Gastly">
+  <span>Pokédex</span>
+</button>
+
+<div id="gremoryPokedexOverlay" class="gremory-pokedex-overlay" aria-hidden="true">
+  <div class="gremory-pokedex-box" role="dialog" aria-modal="true" aria-label="Pokédex">
+    <div class="gremory-pokedex-head">
+      <div class="gremory-pokedex-title">
+        <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/92.gif" alt="Gastly">
+        <div>
+          <h2>Pokédex</h2>
+          <p>Escolha uma geração ou pesquise pelo nome/número.</p>
+        </div>
+      </div>
+      <button id="gremoryClosePokedex" class="gremory-pokedex-close" type="button" aria-label="Fechar">×</button>
+    </div>
+
+    <div class="gremory-pokedex-tabs" aria-label="Gerações da Pokédex">
+      <button class="gremory-pokedex-tab active" type="button" data-gen="1">1ª Geração</button>
+      <button class="gremory-pokedex-tab" type="button" data-gen="2">2ª Geração</button>
+      <button class="gremory-pokedex-tab" type="button" data-gen="3">3ª Geração</button>
+    </div>
+
+    <div class="gremory-pokedex-search-wrap">
+      <input id="gremoryPokedexSearch" class="gremory-pokedex-search" type="text" placeholder="Pesquisar Pokémon...">
+    </div>
+
+    <div id="gremoryPokedexGrid" class="gremory-pokedex-grid"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const GENS = {
+    1: { start: 1, end: 151 },
+    2: { start: 152, end: 251 },
+    3: { start: 252, end: 386 }
+  };
+
+  const names = {};
+  let currentGen = 1;
+
+  const animatedBase = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated';
+  const fallbackBase = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon';
+
+  function prettyName(name, id) {
+    if (!name) return 'Pokémon #' + id;
+    return String(name).replace(/-/g, ' ');
+  }
+
+  function makeCard(id) {
+    const name = prettyName(names[id], id);
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'gremory-pokedex-card';
+    card.dataset.id = String(id);
+    card.dataset.name = name.toLowerCase();
+    card.innerHTML =
+      '<img src="' + animatedBase + '/' + id + '.gif" alt="' + name + '" loading="lazy" onerror="this.onerror=null;this.src=\'' + fallbackBase + '/' + id + '.png\';">' +
+      '<div class="gremory-pokedex-num">#' + String(id).padStart(3, '0') + '</div>' +
+      '<div class="gremory-pokedex-name">' + name + '</div>';
+    return card;
+  }
+
+  function render(gen) {
+    const grid = document.getElementById('gremoryPokedexGrid');
+    const search = document.getElementById('gremoryPokedexSearch');
+    if (!grid) return;
+
+    currentGen = gen || 1;
+    const range = GENS[currentGen] || GENS[1];
+    grid.innerHTML = '';
+
+    for (let id = range.start; id <= range.end; id++) {
+      grid.appendChild(makeCard(id));
+    }
+
+    if (search) search.value = '';
+  }
+
+  function filterCards(term) {
+    term = String(term || '').toLowerCase().trim();
+    document.querySelectorAll('.gremory-pokedex-card').forEach(function (card) {
+      const id = card.dataset.id || '';
+      const name = card.dataset.name || '';
+      card.style.display = (!term || id.includes(term) || name.includes(term)) ? '' : 'none';
+    });
+  }
+
+  async function loadNames() {
+    try {
+      const res = await fetch('https://pokeapi.co/api/v2/pokemon?limit=386');
+      const data = await res.json();
+      (data.results || []).forEach(function (poke, index) {
+        names[index + 1] = poke.name;
+      });
+      render(currentGen);
+    } catch (e) {
+      // Se a API não carregar, a Pokédex continua funcionando por número.
+    }
+  }
+
+  function init() {
+    const openBtn = document.getElementById('gremoryOpenPokedex');
+    const closeBtn = document.getElementById('gremoryClosePokedex');
+    const overlay = document.getElementById('gremoryPokedexOverlay');
+    const search = document.getElementById('gremoryPokedexSearch');
+    const tabs = document.querySelectorAll('.gremory-pokedex-tab');
+
+    if (!openBtn || !closeBtn || !overlay) return;
+
+    openBtn.addEventListener('click', function () {
+      overlay.classList.add('open');
+      overlay.setAttribute('aria-hidden', 'false');
+      render(currentGen);
+      loadNames();
+    });
+
+    closeBtn.addEventListener('click', function () {
+      overlay.classList.remove('open');
+      overlay.setAttribute('aria-hidden', 'true');
+    });
+
+    overlay.addEventListener('click', function (event) {
+      if (event.target === overlay) {
+        overlay.classList.remove('open');
+        overlay.setAttribute('aria-hidden', 'true');
+      }
+    });
+
+    tabs.forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        tabs.forEach(function (item) { item.classList.remove('active'); });
+        tab.classList.add('active');
+        render(Number(tab.dataset.gen || 1));
+      });
+    });
+
+    if (search) {
+      search.addEventListener('input', function () {
+        filterCards(search.value);
+      });
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+<!-- GREMORY POKEDEX ADDON: END -->
+
 </body>
 </html>
