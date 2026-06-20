@@ -7,6 +7,7 @@
   let currentEpisode = null;
   let currentSources = [];
   let currentSource = null;
+  let currentPlayToken = 0;
 
   const rows = [
     {
@@ -40,10 +41,27 @@
     return value;
   }
 
-  function mediaProxyUrl(url){
+  function mediaProxyUrl(url, provider){
     const clean = normalizeUrl(url);
     if (!clean) return '';
-    return `${API_BASE()}/api/main?action=media_proxy&url=${encodeURIComponent(clean)}`;
+    return `${API_BASE()}/api/main?action=media_proxy&url=${encodeURIComponent(clean)}${provider ? `&provider=${encodeURIComponent(provider)}` : ''}`;
+  }
+
+  function animeFileUrl(url, filename, provider){
+    const clean = normalizeUrl(url);
+    if (!clean) return '';
+    return `${API_BASE()}/api/main?action=anime_file&url=${encodeURIComponent(clean)}${filename ? `&filename=${encodeURIComponent(filename)}` : ''}${provider ? `&provider=${encodeURIComponent(provider)}` : ''}`;
+  }
+
+  function nativeDownload(downloadUrl, filename){
+    if (!downloadUrl) throw new Error('Link de download inválido');
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    if (filename) a.download = filename;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   function getApiKey(){
@@ -127,6 +145,8 @@
     const video = $('animeVideo');
     if (video) {
       video.pause();
+      video.onerror = null;
+      video.oncanplay = null;
       video.removeAttribute('src');
       video.load();
     }
@@ -148,14 +168,46 @@
     const key = String(query || '').toLowerCase().trim();
     if (!key) return null;
     if (cache.has(key)) return cache.get(key);
-    const p = post('anime_search', { query }).then(data => {
-      const list = Array.isArray(data.result) ? data.result : [];
-      const q = key.replace(/dublado/g, '').trim();
-      const selected = list.find(x => String(x.title || x.name || '').toLowerCase().includes(q)) || list[0] || { title: query, name: query, cover: '', link: '' };
-      return { ...selected, cover: normalizeUrl(selected.cover), link: normalizeUrl(selected.link) };
-    }).catch(() => ({ title: query, name: query, cover: '', link: '' }));
+
+    const p = post('anime_search', { query })
+      .then(data => {
+        const list = Array.isArray(data.result) ? data.result : [];
+        const q = key.replace(/dublado/g, '').replace(/legendado/g, '').trim();
+        const selected =
+          list.find(x => normalizeUrl(x.cover) && String(x.title || x.name || '').toLowerCase().includes(q)) ||
+          list.find(x => String(x.title || x.name || '').toLowerCase().includes(q)) ||
+          list.find(x => normalizeUrl(x.cover) && (x.link || x.slug)) ||
+          list.find(x => x.link || x.slug) ||
+          null;
+
+        if (!selected) throw new Error('sem resultado');
+
+        const picked = {
+          ...selected,
+          cover: normalizeUrl(selected.cover),
+          link: normalizeUrl(selected.link),
+          slug: selected.slug || '',
+          provider: selected.provider || selected.source || ''
+        };
+        if (!picked.cover && (picked.link || picked.slug)) {
+          return post('anime_eps', { url: picked.link, slug: picked.slug, provider: picked.provider })
+            .then(detailsData => {
+              const d = detailsData.anime || {};
+              return { ...picked, cover: normalizeUrl(d.cover || picked.cover), rating: picked.rating || d.score || d.rating || '', audio: picked.audio || d.audio || '', year: picked.year || d.year || '' };
+            })
+            .catch(() => picked);
+        }
+        return picked;
+      })
+      .catch(() => {
+        cache.delete(key);
+        return { title: query, name: query, cover: '', link: '', slug: '' };
+      });
+
     cache.set(key, p);
-    return p;
+    const result = await p;
+    if (!result.link && !result.slug && !result.cover) cache.delete(key);
+    return result;
   }
 
   function renderHomeRowsSkeleton(){
@@ -189,14 +241,16 @@
   }
 
   function loadHome(force = false){
-    if (homeLoaded && !force) {
-      renderRanking('homeRankingList', 5);
-      return;
+    const hasCards = document.querySelectorAll('#animeRows .anime-card').length > 0;
+    if (!homeLoaded || force || !hasCards) {
+      homeLoaded = true;
+      renderHomeRowsSkeleton();
     }
-    homeLoaded = true;
-    renderHomeRowsSkeleton();
     renderRanking('homeRankingList', 5);
     hydrateHomeRows();
+    // Repete depois de um instante para pegar a ApiKey/perfil caso o Firebase ainda esteja carregando.
+    setTimeout(hydrateHomeRows, 1200);
+    setTimeout(hydrateHomeRows, 3200);
   }
 
   function renderSearchResults(list){
@@ -330,18 +384,52 @@
   function setVideoSource(source){
     currentSource = source ? {
       ...source,
-      src: normalizeUrl(source.src),
-      playUrl: source.playUrl || mediaProxyUrl(source.src),
+      src: normalizeUrl(source.src || source.directUrl),
+      directUrl: normalizeUrl(source.directUrl || source.src),
+      playUrl: source.playUrl || mediaProxyUrl(source.src || source.directUrl, source.provider),
       downloadUrl: source.downloadUrl || '',
-      filename: source.filename || ''
+      filename: source.filename || '',
+      provider: source.provider || ''
     } : source;
+
     const video = $('animeVideo');
     if (video && currentSource?.src){
-      $('playerStatus').textContent = 'Carregando vídeo...';
-      video.src = currentSource.playUrl || mediaProxyUrl(currentSource.src);
-      video.load();
-      const playPromise = video.play?.();
-      if (playPromise?.catch) playPromise.catch(() => {});
+      const token = ++currentPlayToken;
+      const urls = [];
+      const pushUrl = (value) => {
+        const clean = normalizeUrl(value);
+        if (clean && !urls.includes(clean)) urls.push(clean);
+      };
+      pushUrl(currentSource.playUrl);
+      pushUrl(currentSource.directUrl || currentSource.src);
+
+      let attempt = 0;
+      const useAttempt = () => {
+        if (token !== currentPlayToken) return;
+        const url = urls[attempt];
+        if (!url) {
+          $('playerStatus').textContent = 'Não consegui transmitir esse link. Tente baixar o episódio ou escolha outra qualidade.';
+          return;
+        }
+        $('playerStatus').textContent = attempt === 0 ? 'Carregando vídeo...' : 'Tentando player alternativo...';
+        video.pause();
+        video.removeAttribute('src');
+        video.src = url;
+        video.load();
+        const playPromise = video.play?.();
+        if (playPromise?.catch) playPromise.catch(() => {});
+      };
+
+      video.onerror = () => {
+        if (token !== currentPlayToken) return;
+        attempt += 1;
+        useAttempt();
+      };
+      video.oncanplay = () => {
+        if (token === currentPlayToken) $('playerStatus').textContent = 'Pronto para assistir.';
+      };
+
+      useAttempt();
     }
     document.querySelectorAll('#playerSources button').forEach(btn => btn.classList.toggle('active', btn.dataset.src === currentSource?.src));
   }
@@ -369,11 +457,13 @@
       });
       currentSources = (data.sources || data.result || []).map((src, index) => ({
         label: src.label || src.quality || src.resolution || `${index + 1}ª opção`,
-        src: normalizeUrl(src.src || src.url || src.link || src.download),
+        src: normalizeUrl(src.src || src.url || src.link || src.download || src.directUrl),
+        directUrl: normalizeUrl(src.directUrl || src.src || src.url || src.link || src.download),
         playUrl: src.playUrl || '',
         downloadUrl: src.downloadUrl || '',
-        filename: src.filename || ''
-      })).filter(src => src.src);
+        filename: src.filename || '',
+        provider: src.provider || data.provider || ''
+      })).filter(src => src.src || src.playUrl);
       if (!currentSources.length) throw new Error('Sem links retornados');
       $('playerSources').innerHTML = currentSources.map((src, index) => `<button type="button" data-index="${index}" data-src="${htmlEscape(src.src)}">${htmlEscape(src.label || `${index + 1}ª opção`)}</button>`).join('');
       $('playerSources').querySelectorAll('button').forEach(btn => {
@@ -440,8 +530,7 @@
     try{
       if (status) status.textContent = 'Preparando download...';
       const data = await post('apk_download', { url: app.downloadUrl, name: app.name, package: app.package });
-      await window.startDownload?.(data.downloadUrl, data.filename);
-      if (!window.startDownload) window.open(data.downloadUrl, '_blank');
+      nativeDownload(data.downloadUrl, data.filename);
       if (status) status.textContent = '✅ Download iniciado.';
       recordActivity('baixou apk', 3);
     }catch(e){
@@ -508,14 +597,17 @@
       searchApk(q);
     }));
     $('playerDownload')?.addEventListener('click', async () => {
-      if (!currentSource?.src) return alert('Escolha uma qualidade primeiro.');
-      const filename = (currentSource.filename || `${currentAnime?.title || 'anime'}-${currentEpisode?.title || 'episodio'}.mp4`).replace(/[\\/:*?"<>|]+/g, '-');
-      const downloadUrl = currentSource.downloadUrl || `${API_BASE()}/api/main?action=anime_file&url=${encodeURIComponent(normalizeUrl(currentSource.src))}&filename=${encodeURIComponent(filename)}`;
-      $('playerStatus').textContent = 'Preparando download...';
-      await window.startDownload?.(downloadUrl, filename);
-      if (!window.startDownload) window.open(downloadUrl, '_blank');
-      $('playerStatus').textContent = 'Download iniciado.';
-      recordActivity('baixou episódio', 3);
+      if (!currentSource?.src && !currentSource?.downloadUrl) return alert('Escolha uma qualidade primeiro.');
+      const filename = (currentSource.filename || `${currentAnime?.title || 'anime'}-${currentEpisode?.title || 'episodio'}.mp4`).replace(/[\/:*?"<>|]+/g, '-');
+      const downloadUrl = currentSource.downloadUrl || animeFileUrl(currentSource.src, filename, currentSource.provider);
+      try{
+        $('playerStatus').textContent = 'Iniciando download...';
+        nativeDownload(downloadUrl, filename);
+        $('playerStatus').textContent = 'Download iniciado.';
+        recordActivity('baixou episódio', 3);
+      }catch(e){
+        $('playerStatus').textContent = 'Erro ao iniciar download: ' + (e.message || 'falha');
+      }
     });
     $('sendComment')?.addEventListener('click', () => {
       const text = $('commentText')?.value.trim();

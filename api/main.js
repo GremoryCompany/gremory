@@ -51,10 +51,11 @@ async function streamAsMedia(res, fileResp){
   res.statusCode = fileResp.status || 200;
   res.setHeader('Content-Type', contentType);
   res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Content-Disposition', 'inline');
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Accept-Ranges', acceptRanges || 'bytes');
   if (len) res.setHeader('Content-Length', len);
   if (contentRange) res.setHeader('Content-Range', contentRange);
-  if (acceptRanges) res.setHeader('Accept-Ranges', acceptRanges);
   const { Readable } = require('stream');
   Readable.fromWeb(fileResp.body).pipe(res);
 }
@@ -97,7 +98,7 @@ function matchJsonUrl(html){
   return null;
 }
 function pickDarkKey(body = {}){
-  return process.env.DARKSTARS_API_KEY || process.env.DARK_API_KEY || process.env.GREMORY_APIKEY || process.env.APIKEY || body.apikey || body.apiKey || '';
+  return process.env.DARKSTARS_API_KEY || process.env.DARK_API_KEY || process.env.GREMORY_APIKEY || process.env.APIKEY || body.apikey || body.apiKey || 'gremory';
 }
 function darkAnimeUrl(path, params = {}, key = ''){
   const u = new URL(`https://darkstarsapi.online${path}`);
@@ -199,6 +200,24 @@ function providerLabel(provider){
   if (provider === 'nexus') return 'Nexus';
   return provider || 'Anime';
 }
+function refererForProvider(provider, fileUrl = ''){
+  const p = String(provider || '').toLowerCase();
+  const u = String(fileUrl || '').toLowerCase();
+  if (p.includes('animefire') || u.includes('animefire')) return 'https://animefire.io/';
+  // Na segunda fonte, muitos links já vêm de CDNs externos. Referer errado pode bloquear.
+  return '';
+}
+function buildVideoHeaders(req, targetUrl, provider){
+  const headers = {
+    'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
+    'Accept': req.headers.accept || 'video/mp4,video/*,*/*',
+    'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8'
+  };
+  const ref = refererForProvider(provider, targetUrl);
+  if (ref) headers.Referer = ref;
+  if (req.headers.range) headers.Range = req.headers.range;
+  return headers;
+}
 async function getAnimeFireSearch(name, key){
   const url = darkAnimeUrl('/api/anime/p2h/animefire', { name }, key);
   const data = await fetchJsonTimeout(url.toString(), { headers: { accept: 'application/json' } });
@@ -270,12 +289,13 @@ async function getNexusSources(slugOrUrl, key){
   const sources = asArray(data).map((src, i) => normalizeVideoSource({ ...src, provider: 'nexus' }, i, 'nexus')).filter(x => x.src);
   return { provider: 'nexus', sources, raw: data };
 }
-function animeProxyUrl(req, action, fileUrl, filename){
+function animeProxyUrl(req, action, fileUrl, filename, provider){
   const base = new URL(req.url, 'http://localhost');
   const u = new URL('/api/main', base.origin);
   u.searchParams.set('action', action);
   u.searchParams.set('url', fileUrl);
   if (filename) u.searchParams.set('filename', filename);
+  if (provider) u.searchParams.set('provider', provider);
   return u.pathname + u.search;
 }
 function normalizeAptoideApp(app = {}){
@@ -330,13 +350,7 @@ module.exports = async (req, res) => {
     if (!['https:', 'http:'].includes(target.protocol)) return sendJson(res, 400, { erro: 'protocolo inválido' });
     if (blockPrivateHost(target.hostname)) return sendJson(res, 400, { erro: 'host bloqueado' });
     try{
-      const headers = {
-        'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
-        'Accept': req.headers.accept || 'video/mp4,video/*,*/*',
-        'Referer': 'https://animefire.io/',
-        'Origin': 'https://animefire.io'
-      };
-      if (req.headers.range) headers.Range = req.headers.range;
+      const headers = buildVideoHeaders(req, target.toString(), qp(req, 'provider'));
       const r = await fetch(target.toString(), { headers, redirect: 'follow' });
       if (!r.ok || !r.body) return sendJson(res, 502, { erro: 'falha ao obter mídia' });
       return streamAsMedia(res, r);
@@ -582,12 +596,15 @@ module.exports = async (req, res) => {
       }
       if (!data || !data.sources.length) return sendJson(res, 502, { erro: 'Não encontrei links para esse episódio', detalhes: errors });
       const sources = data.sources.map((src, i) => {
+        const srcProvider = src.provider || data.provider || provider || '';
         const filename = `${title}-${safeFilename(src.label || i + 1)}.mp4`;
         return {
           ...src,
-          label: `${src.label || `${i + 1}ª opção`} • ${providerLabel(src.provider || data.provider)}`,
-          playUrl: animeProxyUrl(req, 'media_proxy', src.src, ''),
-          downloadUrl: animeProxyUrl(req, 'anime_file', src.src, filename),
+          provider: srcProvider,
+          label: `${src.label || `${i + 1}ª opção`} • ${providerLabel(srcProvider)}`,
+          directUrl: src.src,
+          playUrl: animeProxyUrl(req, 'media_proxy', src.src, '', srcProvider),
+          downloadUrl: animeProxyUrl(req, 'anime_file', src.src, filename, srcProvider),
           filename
         };
       });
@@ -615,12 +632,7 @@ module.exports = async (req, res) => {
     try{
       const r = await fetch(target.toString(), {
         redirect: 'follow',
-        headers: {
-          'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
-          'Referer': 'https://animefire.io/',
-          'Origin': 'https://animefire.io',
-          'Accept': 'video/mp4,video/*,*/*'
-        }
+        headers: buildVideoHeaders(req, target.toString(), qp(req, 'provider'))
       });
       if (!r.ok || !r.body) return sendJson(res, 502, { erro: 'falha ao obter episódio' });
       return streamAsAttachment(res, r, filename);
