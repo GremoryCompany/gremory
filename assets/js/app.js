@@ -157,6 +157,8 @@ function startDownload(downloadUrl, filename){
     });
 }
 
+window.startDownload = startDownload;
+
 document.addEventListener("DOMContentLoaded", () => {
   // Panels
   const downloadsBtn = $("downloadsBtn");
@@ -598,6 +600,15 @@ document.addEventListener("DOMContentLoaded", () => {
           await startDownload(CURRENT_IMG_URL, name);
         };
         openImgModal(true);
+        return;
+      }
+
+      if (s === "anime-open" || s === "apk-open") {
+        if (typeof window.openGremoryStream === "function") {
+          window.openGremoryStream(s === "apk-open" ? "apps" : "home");
+        } else {
+          alert("Área carregando, tente novamente em alguns segundos.");
+        }
         return;
       }
 

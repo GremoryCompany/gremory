@@ -76,6 +76,59 @@ function matchJsonUrl(html){
   }
   return null;
 }
+function pickDarkKey(body = {}){
+  return process.env.DARKSTARS_API_KEY || process.env.DARK_API_KEY || process.env.GREMORY_APIKEY || process.env.APIKEY || body.apikey || body.apiKey || '';
+}
+function darkAnimeUrl(path, params = {}, key = ''){
+  const u = new URL(`https://darkstarsapi.online${path}`);
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && String(v).trim() !== '') u.searchParams.set(k, String(v));
+  });
+  if (key) u.searchParams.set('apikey', key);
+  return u;
+}
+function asArray(v){
+  if (Array.isArray(v)) return v;
+  if (Array.isArray(v?.result)) return v.result;
+  if (Array.isArray(v?.resultado)) return v.resultado;
+  if (Array.isArray(v?.results)) return v.results;
+  if (Array.isArray(v?.data)) return v.data;
+  if (Array.isArray(v?.animes)) return v.animes;
+  return [];
+}
+function normalizeAnimeItem(item = {}){
+  return {
+    name: item.name || item.title || item.nome || 'Anime',
+    title: item.title || item.name || item.nome || 'Anime',
+    alt: item.alt || item.alternativeTitle || item.subtitle || '',
+    link: item.link || item.url || item.href || '',
+    cover: item.cover || item.image || item.img || item.thumbnail || item.poster || '',
+    rating: item.rating || item.score || item.nota || '',
+    year: item.year || item.ano || '',
+    status: item.status || '',
+    audio: item.audio || item.tipo || ''
+  };
+}
+function normalizeAptoideApp(app = {}){
+  const file = app.file || {};
+  const stats = app.stats || {};
+  const rating = stats.rating || {};
+  let download = file.path || file.path_alt || file.url || app.download || '';
+  if (download && !/^https?:\/\//i.test(download)) download = 'https:' + download;
+  return {
+    name: app.name || app.title || 'Aplicativo',
+    package: app.package || app.package_name || '',
+    icon: app.icon || app.icon_hd || '',
+    graphic: app.graphic || '',
+    version: file.vername || app.version || '',
+    size: file.filesize || app.size || 0,
+    downloads: stats.downloads || stats.pdownloads || app.downloads || 0,
+    rating: rating.avg || app.rating || '',
+    store: app.store?.name || app.store || '',
+    downloadUrl: download
+  };
+}
+
 module.exports = async (req, res) => {
   const rapidKey = process.env.RAPIDAPI_KEY || '6e6739bedbmsh671d99355539a01p1d9748jsn68265b82360a';
   const action = (qp(req, 'action') || '').toLowerCase();
@@ -225,6 +278,117 @@ module.exports = async (req, res) => {
     }catch{
       return sendJson(res, 500, { erro: 'Falha ao baixar TikTok' });
     }
+  }
+
+
+  if (action === 'anime_search' || action === 'animesearch') {
+    if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
+    const body = await readJsonBody(req);
+    const name = body.name || body.query || body.q;
+    if (!name) return sendJson(res, 400, { erro: 'Nome do anime obrigatório' });
+    try{
+      const key = pickDarkKey(body);
+      const url = darkAnimeUrl('/api/anime/p2h/animefire', { name }, key);
+      const r = await fetch(url.toString(), { headers: { 'accept': 'application/json' } });
+      const data = await r.json().catch(()=>null);
+      const list = asArray(data).map(normalizeAnimeItem).filter(x => x.link || x.title);
+      if (!r.ok || !data) return sendJson(res, 502, { erro: 'Falha ao pesquisar anime' });
+      return sendJson(res, 200, { ok:true, result:list, raw:data });
+    }catch(e){
+      return sendJson(res, 500, { erro: 'Erro ao pesquisar anime' });
+    }
+  }
+
+  if (action === 'anime_eps' || action === 'animeeps') {
+    if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
+    const body = await readJsonBody(req);
+    const animeUrl = body.url || body.link;
+    if (!animeUrl) return sendJson(res, 400, { erro: 'URL do anime obrigatória' });
+    try{
+      const key = pickDarkKey(body);
+      const url = darkAnimeUrl('/api/anime/p2h/animefireEp', { url: animeUrl }, key);
+      const r = await fetch(url.toString(), { headers: { 'accept': 'application/json' } });
+      const data = await r.json().catch(()=>null);
+      const obj = data?.result && !Array.isArray(data.result) ? data.result : (data?.data && !Array.isArray(data.data) ? data.data : data);
+      const episodesRaw = Array.isArray(obj?.episodes) ? obj.episodes : asArray(obj?.episodes || data?.episodes || data?.result?.episodes);
+      const episodes = episodesRaw.map((ep, i) => ({
+        title: ep.title || ep.name || ep.nome || `Episódio ${i + 1}`,
+        url: ep.url || ep.link || ep.href || ''
+      })).filter(ep => ep.url);
+      if (!r.ok || !data) return sendJson(res, 502, { erro: 'Falha ao buscar episódios' });
+      return sendJson(res, 200, {
+        ok:true,
+        anime: {
+          title: obj?.title || obj?.name || obj?.nome || 'Anime',
+          subtitle: obj?.subtitle || obj?.alternativeTitle || '',
+          cover: obj?.cover || obj?.image || obj?.poster || '',
+          score: obj?.score || obj?.rating || '',
+          audio: obj?.audio || '',
+          status: obj?.status || '',
+          year: obj?.year || '',
+          synopsis: obj?.synopsis || obj?.sinopse || '',
+          url: obj?.url || animeUrl,
+          episodes
+        },
+        raw:data
+      });
+    }catch(e){
+      return sendJson(res, 500, { erro: 'Erro ao buscar episódios' });
+    }
+  }
+
+  if (action === 'anime_download' || action === 'animedownload') {
+    if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
+    const body = await readJsonBody(req);
+    const epUrl = body.url || body.link;
+    if (!epUrl) return sendJson(res, 400, { erro: 'URL do episódio obrigatória' });
+    try{
+      const key = pickDarkKey(body);
+      const url = darkAnimeUrl('/api/anime/p2h/animefireDow', { url: epUrl }, key);
+      const r = await fetch(url.toString(), { headers: { 'accept': 'application/json' } });
+      const data = await r.json().catch(()=>null);
+      const sources = asArray(data).map((src, i) => ({
+        label: src.label || src.quality || src.resolution || `${i + 1}ª opção`,
+        src: src.src || src.url || src.link || src.download || ''
+      })).filter(x => x.src);
+      if (!r.ok || !data || sources.length === 0) return sendJson(res, 502, { erro: 'Não encontrei links para esse episódio' });
+      return sendJson(res, 200, { ok:true, result:sources, sources, raw:data });
+    }catch(e){
+      return sendJson(res, 500, { erro: 'Erro ao buscar player/download do episódio' });
+    }
+  }
+
+  if (action === 'apk_search' || action === 'apksearch') {
+    if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
+    const body = await readJsonBody(req);
+    const query = body.query || body.q || body.name;
+    if (!query) return sendJson(res, 400, { erro: 'Nome do APK obrigatório' });
+    try{
+      const url = `https://ws75.aptoide.com/api/7/apps/search/query=${encodeURIComponent(query)}/limit=${Number(body.limit || 18) || 18}`;
+      const r = await fetch(url, { headers: { 'accept': 'application/json' } });
+      const data = await r.json().catch(()=>null);
+      const list = (data?.datalist?.list || data?.list || data?.data || []).map(normalizeAptoideApp).filter(x => x.name);
+      if (!r.ok || !data) return sendJson(res, 502, { erro: 'Falha ao pesquisar APK' });
+      return sendJson(res, 200, { ok:true, result:list, raw:data });
+    }catch(e){
+      return sendJson(res, 500, { erro: 'Erro ao pesquisar APK' });
+    }
+  }
+
+  if (action === 'apk_download' || action === 'apkdownload') {
+    if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
+    const body = await readJsonBody(req);
+    const fileUrl = body.url || body.downloadUrl;
+    const name = safeFilename(body.name || body.package || 'app');
+    if (!fileUrl) return sendJson(res, 400, { erro: 'Link do APK obrigatório' });
+    let target;
+    try { target = new URL(fileUrl); } catch { return sendJson(res, 400, { erro: 'Link do APK inválido' }); }
+    if (!['https:', 'http:'].includes(target.protocol)) return sendJson(res, 400, { erro: 'protocolo inválido' });
+    if (blockPrivateHost(target.hostname)) return sendJson(res, 400, { erro: 'host bloqueado' });
+    const ext = /\.xapk(\?|$)/i.test(fileUrl) ? '.xapk' : '.apk';
+    const filename = `${name}${ext}`;
+    const prox = `/api/main?action=proxy&url=${encodeURIComponent(fileUrl)}&filename=${encodeURIComponent(filename)}`;
+    return sendJson(res, 200, { ok:true, downloadUrl: prox, filename });
   }
 
   return sendJson(res, 404, { erro: 'Ação inválida' });

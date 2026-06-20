@@ -95,6 +95,10 @@ async function ensureUserProfile(user, overrides = {}){
     instagram: overrides.instagram ?? current?.instagram ?? "",
     whatsapp: overrides.whatsapp ?? current?.whatsapp ?? current?.zap ?? "",
     wallpaper: overrides.wallpaper ?? current?.wallpaper ?? "",
+    bio: overrides.bio ?? current?.bio ?? "",
+    favoriteAnime: overrides.favoriteAnime ?? current?.favoriteAnime ?? current?.animeFavorito ?? "",
+    theme: overrides.theme ?? current?.theme ?? "purple",
+    activity: overrides.activity ?? current?.activity ?? {},
     saldo: Number(overrides.saldo ?? current?.saldo ?? 50),
     total: Number(overrides.total ?? current?.total ?? 0)
   };
@@ -201,6 +205,8 @@ function applyVisualProfile(data, user){
   } else if (accountBg) {
     accountBg.style.backgroundImage = 'url("/assets/video/login.gif")';
   }
+  document.body.classList.remove("profile-theme-purple", "profile-theme-blue", "profile-theme-red", "profile-theme-green");
+  document.body.classList.add("profile-theme-" + (data?.theme || "purple"));
 }
 function setProfileInputs(data, user){
   const nome = data?.nome || user?.displayName || "Usuário";
@@ -219,6 +225,12 @@ function setProfileInputs(data, user){
   setValue("profileYoutube", data?.youtube || "");
   setValue("profileInstagram", data?.instagram || "");
   setValue("profileWhatsapp", data?.whatsapp || data?.zap || "");
+  setValue("profileBio", data?.bio || "");
+  setValue("profileFavoriteAnime", data?.favoriteAnime || data?.animeFavorito || "");
+  setValue("profileTheme", data?.theme || "purple");
+  setText("profileActivityPoints", String(data?.total ?? 0));
+  setText("profileLastAction", data?.activity?.lastAction || "-");
+  setText("profileFavoriteAnimeView", data?.favoriteAnime || data?.animeFavorito || "-");
 
   setQuickLink("profileOpenInstagram", sanitizeInstagram(data?.instagram || ""));
   setQuickLink("profileOpenYoutube", sanitizeYoutube(data?.youtube || ""));
@@ -257,7 +269,59 @@ function bindLiveProfilePreview(){
       setSrc("authUserAvatar", svgAvatar(val || "Usuário"));
     }
   });
+  $("profileFavoriteAnime")?.addEventListener("input", (e) => {
+    setText("profileFavoriteAnimeView", e.target.value.trim() || "-");
+  });
+  $("profileTheme")?.addEventListener("change", (e) => {
+    document.body.classList.remove("profile-theme-purple", "profile-theme-blue", "profile-theme-red", "profile-theme-green");
+    document.body.classList.add("profile-theme-" + (e.target.value || "purple"));
+  });
 }
+
+window.gremoryAuthGetUser = () => currentUserData;
+
+window.gremoryRecordActivity = async (action = "atividade", points = 1) => {
+  if (!currentUserData?.user?.uid) return false;
+  const user = currentUserData.user;
+  const now = new Date().toISOString();
+  const current = currentUserData.dbData || {};
+  const activity = { ...(current.activity || {}) };
+  activity[action] = Number(activity[action] || 0) + 1;
+  activity.lastAction = action;
+  activity.lastAt = now;
+  const total = Number(current.total || 0) + Number(points || 1);
+  const payload = { total, activity, updatedAt: now };
+  try {
+    await update(ref(db, "users/" + user.uid), payload);
+    currentUserData.dbData = { ...current, ...payload };
+    setText("authUserLevel", String(total));
+    setText("profileActivityPoints", String(total));
+    setText("profileLastAction", action);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+window.gremoryGetRanking = async () => {
+  try {
+    const snap = await get(ref(db, "users"));
+    if (!snap.exists()) return [];
+    const users = snap.val() || {};
+    return Object.values(users)
+      .map((u) => ({
+        nome: u.nome || u.email || "Usuário",
+        avatar: u.avatar || "",
+        total: Number(u.total || 0),
+        premium: !!u.premium,
+        activity: u.activity || {}
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 50);
+  } catch {
+    return [];
+  }
+};
 
 authBtn?.addEventListener("click", () => {
   if (!currentUserData?.user) return;
@@ -327,6 +391,10 @@ registerForm?.addEventListener("submit", async (e) => {
       instagram: "",
       whatsapp: "",
       wallpaper: "",
+      bio: "",
+      favoriteAnime: "",
+      theme: "purple",
+      activity: {},
       saldo: 50,
       total: 0
     });
@@ -368,6 +436,10 @@ $("saveProfileBtn")?.addEventListener("click", async () => {
     youtube: sanitizeYoutube($("profileYoutube").value),
     instagram: sanitizeInstagram($("profileInstagram").value),
     whatsapp: sanitizeWhatsapp($("profileWhatsapp").value),
+    bio: $("profileBio")?.value.trim() || "",
+    favoriteAnime: $("profileFavoriteAnime")?.value.trim() || "",
+    theme: $("profileTheme")?.value || "purple",
+    activity: currentUserData?.dbData?.activity || {},
     email: user.email || currentUserData?.dbData?.email || "",
     createdAt: currentUserData?.dbData?.createdAt || new Date().toISOString(),
     saldo: Number(currentUserData?.dbData?.saldo ?? 50),
