@@ -7,8 +7,8 @@
   let currentEpisode = null;
   let currentSources = [];
   let currentSource = null;
-  let currentSourceIndex = -1;
   let currentPlayToken = 0;
+  let currentHls = null;
 
   const rows = [
     {
@@ -496,6 +496,7 @@
   function resetPlayers(){
     const video = $('animeVideo');
     const frame = ensurePlayerFrame();
+    if (currentHls) { try{ currentHls.destroy(); }catch{} currentHls = null; }
     if (video) {
       video.pause();
       video.onerror = null;
@@ -511,8 +512,7 @@
     }
   }
 
-  function setVideoSource(source, index = -1){
-    currentSourceIndex = index;
+  function setVideoSource(source){
     currentSource = source ? {
       ...source,
       type: source.type || source.playType || '',
@@ -525,6 +525,7 @@
 
     const video = $('animeVideo');
     const frame = ensurePlayerFrame();
+    if (currentHls) { try{ currentHls.destroy(); }catch{} currentHls = null; }
     resetPlayers();
 
     if (!currentSource?.playUrl && !currentSource?.src) {
@@ -549,7 +550,6 @@
         const clean = normalizeUrl(value);
         if (clean && !urls.includes(clean)) urls.push(clean);
       };
-      // Agora tenta direto primeiro. Proxy fica só como reserva.
       pushUrl(mainUrl);
       pushUrl(currentSource.directUrl);
       pushUrl(currentSource.proxyUrl || mediaProxyUrl(currentSource.src || currentSource.directUrl, currentSource.provider));
@@ -568,12 +568,36 @@
         video.onerror = () => { if (token === currentPlayToken){ attempt += 1; useAttempt(); } };
         video.onloadedmetadata = () => { if (token === currentPlayToken) setStatus('Vídeo carregado. Aperte play para assistir.'); };
         video.oncanplay = () => { if (token === currentPlayToken) setStatus('Pronto para assistir.'); };
+
+        if (/\.m3u8(\?|$)/i.test(url) || type === 'hls') {
+          if (currentHls) { try{ currentHls.destroy(); }catch{} currentHls = null; }
+          if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = url;
+            video.load();
+            return;
+          }
+          if (window.Hls && window.Hls.isSupported()) {
+            currentHls = new window.Hls({ enableWorker:true, lowLatencyMode:false });
+            currentHls.on(window.Hls.Events.ERROR, function(_event, data){
+              if (data && data.fatal && token === currentPlayToken) {
+                try{ currentHls.destroy(); }catch{}
+                currentHls = null;
+                attempt += 1;
+                useAttempt();
+              }
+            });
+            currentHls.loadSource(url);
+            currentHls.attachMedia(video);
+            return;
+          }
+        }
+
         video.src = url;
         video.load();
       };
       useAttempt();
     }
-    document.querySelectorAll('#playerSources button').forEach(btn => btn.classList.toggle('active', Number(btn.dataset.index) === currentSourceIndex));
+    document.querySelectorAll('#playerSources button').forEach(btn => btn.classList.toggle('active', Number(btn.dataset.index) === currentSources.indexOf(currentSource)));
   }
 
   async function openEpisodePlayer(ep){
@@ -609,9 +633,9 @@
       if (!currentSources.length) throw new Error('Sem player retornado');
       $('playerSources').innerHTML = currentSources.map((src, index) => `<button type="button" data-index="${index}">${htmlEscape(src.label || `${index + 1}ª opção`)}</button>`).join('');
       $('playerSources').querySelectorAll('button').forEach(btn => {
-        btn.addEventListener('click', () => setVideoSource(currentSources[Number(btn.dataset.index)], Number(btn.dataset.index)));
+        btn.addEventListener('click', () => setVideoSource(currentSources[Number(btn.dataset.index)]));
       });
-      setVideoSource(currentSources[0], 0);
+      setVideoSource(currentSources[0]);
       try{ localStorage.setItem('gremory_continue_anime', JSON.stringify({ anime: currentAnime?.title, episode: ep?.title, at: new Date().toISOString() })); }catch{}
     }catch(e){
       $('playerStatus').textContent = 'Erro ao carregar player: ' + (e.message || 'falha');
@@ -737,15 +761,8 @@
       $('apkSearchInput').value = q;
       searchApk(q);
     }));
-    $('playerDownload')?.addEventListener('click', async () => {
-      if (!currentSource?.src && !currentSource?.playUrl) return alert('Escolha uma qualidade primeiro.');
-      const filename = (currentSource.filename || `${currentAnime?.title || 'anime'}-${currentEpisode?.title || 'episodio'}.mp4`).replace(/[\/:*?"<>|]+/g, '-');
-      try{
-        await downloadSourceInChunks(currentSource, filename);
-        recordActivity('baixou episódio', 3);
-      }catch(e){
-        setStatus('Erro ao baixar: ' + (e.message || 'falha'));
-      }
+    $('playerDownload')?.addEventListener('click', () => {
+      setStatus('Download de episódio está desativado por enquanto. Use o player para assistir.');
     });
     $('sendComment')?.addEventListener('click', () => {
       const text = $('commentText')?.value.trim();
