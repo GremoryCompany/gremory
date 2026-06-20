@@ -33,6 +33,19 @@
     return String(value ?? '').replace(/[&<>'"]/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
   }
 
+  function normalizeUrl(url){
+    let value = String(url || '').trim();
+    if (!value) return '';
+    if (value.startsWith('//')) value = 'https:' + value;
+    return value;
+  }
+
+  function mediaProxyUrl(url){
+    const clean = normalizeUrl(url);
+    if (!clean) return '';
+    return `${API_BASE()}/api/main?action=media_proxy&url=${encodeURIComponent(clean)}`;
+  }
+
   function getApiKey(){
     try{
       const authData = window.gremoryAuthGetUser?.();
@@ -90,7 +103,7 @@
     document.querySelectorAll('.stream-nav-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.streamScreen === name || (name === 'details' && btn.dataset.streamScreen === 'anime') || (name === 'player' && btn.dataset.streamScreen === 'anime'));
     });
-    if (name === 'ranking') renderRanking();
+    if (name === 'ranking') renderRanking('rankingList');
     if (name === 'home') loadHome();
   }
 
@@ -120,7 +133,8 @@
   }
 
   function coverHtml(src, title){
-    if (src) return `<img src="${htmlEscape(src)}" alt="${htmlEscape(title)}" loading="lazy" onerror="this.remove();">`;
+    const img = normalizeUrl(src);
+    if (img) return `<img src="${htmlEscape(img)}" alt="${htmlEscape(title)}" loading="lazy" onerror="this.remove();">`;
     return '<i class="fa-solid fa-clapperboard"></i>';
   }
 
@@ -138,7 +152,7 @@
       const list = Array.isArray(data.result) ? data.result : [];
       const q = key.replace(/dublado/g, '').trim();
       const selected = list.find(x => String(x.title || x.name || '').toLowerCase().includes(q)) || list[0] || { title: query, name: query, cover: '', link: '' };
-      return selected;
+      return { ...selected, cover: normalizeUrl(selected.cover), link: normalizeUrl(selected.link) };
     }).catch(() => ({ title: query, name: query, cover: '', link: '' }));
     cache.set(key, p);
     return p;
@@ -175,9 +189,13 @@
   }
 
   function loadHome(force = false){
-    if (homeLoaded && !force) return;
+    if (homeLoaded && !force) {
+      renderRanking('homeRankingList', 5);
+      return;
+    }
     homeLoaded = true;
     renderHomeRowsSkeleton();
+    renderRanking('homeRankingList', 5);
     hydrateHomeRows();
   }
 
@@ -306,13 +324,15 @@
   }
 
   function setVideoSource(source){
-    currentSource = source;
+    currentSource = source ? { ...source, src: normalizeUrl(source.src) } : source;
     const video = $('animeVideo');
-    if (video && source?.src){
-      video.src = source.src;
+    if (video && currentSource?.src){
+      video.src = mediaProxyUrl(currentSource.src);
       video.load();
+      const playPromise = video.play?.();
+      if (playPromise?.catch) playPromise.catch(() => {});
     }
-    document.querySelectorAll('#playerSources button').forEach(btn => btn.classList.toggle('active', btn.dataset.src === source?.src));
+    document.querySelectorAll('#playerSources button').forEach(btn => btn.classList.toggle('active', btn.dataset.src === currentSource?.src));
   }
 
   async function openEpisodePlayer(ep){
@@ -331,14 +351,17 @@
 
     try{
       const data = await post('anime_download', { url: ep.url });
-      currentSources = data.sources || data.result || [];
+      currentSources = (data.sources || data.result || []).map((src, index) => ({
+        label: src.label || src.quality || src.resolution || `${index + 1}ª opção`,
+        src: normalizeUrl(src.src || src.url || src.link || src.download)
+      })).filter(src => src.src);
       if (!currentSources.length) throw new Error('Sem links retornados');
       $('playerSources').innerHTML = currentSources.map((src, index) => `<button type="button" data-index="${index}" data-src="${htmlEscape(src.src)}">${htmlEscape(src.label || `${index + 1}ª opção`)}</button>`).join('');
       $('playerSources').querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', () => setVideoSource(currentSources[Number(btn.dataset.index)]));
       });
       setVideoSource(currentSources[0]);
-      $('playerStatus').textContent = 'Player carregado. Se o vídeo não iniciar por bloqueio do servidor, use o botão Baixar episódio.';
+      $('playerStatus').textContent = 'Player carregado. Se aparecer bloqueio do servidor, use outra qualidade ou o botão Baixar episódio.';
       try{ localStorage.setItem('gremory_continue_anime', JSON.stringify({ anime: currentAnime?.title, episode: ep?.title, at: new Date().toISOString() })); }catch{}
     }catch(e){
       $('playerStatus').textContent = 'Erro ao carregar player: ' + (e.message || 'falha');
@@ -407,8 +430,8 @@
     }
   }
 
-  async function renderRanking(){
-    const box = $('rankingList');
+  async function renderRanking(targetId = 'rankingList', limit = 30){
+    const box = $(targetId);
     if (!box) return;
     box.innerHTML = '<div class="stream-status">Carregando ranking...</div>';
     let list = [];
@@ -420,7 +443,7 @@
       try{ local = { ...local, ...(JSON.parse(localStorage.getItem('gremory_local_activity') || '{}')) }; }catch{}
       list = [local];
     }
-    list = list.filter(Boolean).sort((a,b) => Number(b.total || 0) - Number(a.total || 0)).slice(0, 30);
+    list = list.filter(Boolean).sort((a,b) => Number(b.total || 0) - Number(a.total || 0)).slice(0, limit);
     box.innerHTML = list.map((u, i) => `
       <div class="ranking-item">
         <div class="ranking-pos">#${i + 1}</div>
@@ -431,20 +454,16 @@
 
   function bind(){
     window.openGremoryStream = openStream;
-    $('animeBtn')?.addEventListener('click', () => openStream('home'));
-    $('apkBtn')?.addEventListener('click', () => openStream('apps'));
     $('homeAnimeBtn')?.addEventListener('click', () => openStream('home'));
-    $('homeApkBtn')?.addEventListener('click', () => openStream('apps'));
-    $('homeRankingBtn')?.addEventListener('click', () => openStream('ranking'));
     $('streamClose')?.addEventListener('click', closeStream);
     document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && $('gremoryStream')?.classList.contains('open')) closeStream(); });
 
     document.querySelectorAll('.stream-nav-btn').forEach(btn => btn.addEventListener('click', () => setScreen(btn.dataset.streamScreen || 'home')));
     $('heroStartAnime')?.addEventListener('click', () => setScreen('anime'));
-    $('heroOpenApk')?.addEventListener('click', () => setScreen('apps'));
     $('animeBackHome')?.addEventListener('click', () => setScreen('home'));
     $('playerBackDetails')?.addEventListener('click', () => setScreen('details'));
-    $('refreshRanking')?.addEventListener('click', renderRanking);
+    $('refreshRanking')?.addEventListener('click', () => renderRanking('rankingList'));
+    $('homeRankingRefresh')?.addEventListener('click', () => renderRanking('homeRankingList', 5));
 
     $('animeSearchForm')?.addEventListener('submit', (ev) => {
       ev.preventDefault();
@@ -472,8 +491,9 @@
     $('playerDownload')?.addEventListener('click', async () => {
       if (!currentSource?.src) return alert('Escolha uma qualidade primeiro.');
       const filename = `${currentAnime?.title || 'anime'}-${currentEpisode?.title || 'episodio'}.mp4`.replace(/[\\/:*?"<>|]+/g, '-');
-      await window.startDownload?.(currentSource.src, filename);
-      if (!window.startDownload) window.open(currentSource.src, '_blank');
+      const sourceUrl = normalizeUrl(currentSource.src);
+      await window.startDownload?.(sourceUrl, filename);
+      if (!window.startDownload) window.open(sourceUrl, '_blank');
       recordActivity('baixou episódio', 3);
     });
     $('sendComment')?.addEventListener('click', () => {
@@ -486,6 +506,7 @@
       renderComments();
       recordActivity('comentou', 3);
     });
+    loadHome();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);

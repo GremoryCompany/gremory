@@ -1131,8 +1131,6 @@ body.auth-locked .auth-gate-screen{ display:flex !important; }
 /* =========================
    Gremory Play • Anime/APK
    ========================= */
-.dock-left-4{ top: 196px; }
-.dock-left-5{ top: 254px; }
 .hero-actions{
   display:flex;
   align-items:center;
@@ -1642,8 +1640,6 @@ body.profile-theme-green .auth-account-panel{ box-shadow:0 0 40px rgba(30,255,15
   .anime-details-hero{ grid-template-columns:150px 1fr; }
 }
 @media (max-width: 620px){
-  .dock-left-4{ top: 186px; }
-  .dock-left-5{ top: 240px; }
   .stream-topbar{ padding:10px; gap:10px; }
   .stream-brand{ min-width:unset; }
   .stream-brand small{ display:none; }
@@ -1656,4 +1652,66 @@ body.profile-theme-green .auth-account-panel{ box-shadow:0 0 40px rgba(30,255,15
   .anime-details-hero{ grid-template-columns:1fr; }
   .anime-details-poster{ max-width:190px; }
   .profile-stats-grid{ grid-template-columns:1fr; }
+}
+
+
+/* Ajuste final: sem botões duplicados de Anime/APK no canto esquerdo */
+.stream-side-stack{
+  display:grid;
+  gap:14px;
+  align-content:start;
+}
+.stream-ranking-card{
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:24px;
+  padding:18px;
+  background:rgba(5,5,12,.72);
+  backdrop-filter:blur(14px);
+}
+.stream-ranking-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:12px;
+}
+.stream-ranking-head span{
+  display:block;
+  color:#ffbdf4;
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:1px;
+  font-weight:900;
+}
+.stream-ranking-head strong{
+  display:block;
+  margin-top:4px;
+  font-size:18px;
+}
+.stream-secondary.small{
+  width:38px;
+  height:38px;
+  padding:0;
+  border-radius:13px;
+}
+.ranking-list.compact{
+  max-width:none;
+  gap:8px;
+}
+.ranking-list.compact .ranking-item{
+  grid-template-columns:42px 1fr auto;
+  padding:10px;
+  border-radius:15px;
+}
+.ranking-list.compact .ranking-pos{
+  width:32px;
+  height:32px;
+  border-radius:11px;
+  font-size:12px;
+}
+.ranking-list.compact .ranking-points{
+  font-size:12px;
+}
+@media (max-width: 980px){
+  .stream-side-stack{ grid-template-columns:1fr; }
 }

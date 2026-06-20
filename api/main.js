@@ -43,6 +43,26 @@ async function streamAsAttachment(res, fileResp, filename){
   const { Readable } = require('stream');
   Readable.fromWeb(fileResp.body).pipe(res);
 }
+async function streamAsMedia(res, fileResp){
+  const contentType = fileResp.headers.get('content-type') || 'video/mp4';
+  const len = fileResp.headers.get('content-length');
+  const contentRange = fileResp.headers.get('content-range');
+  const acceptRanges = fileResp.headers.get('accept-ranges');
+  res.statusCode = fileResp.status || 200;
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (len) res.setHeader('Content-Length', len);
+  if (contentRange) res.setHeader('Content-Range', contentRange);
+  if (acceptRanges) res.setHeader('Accept-Ranges', acceptRanges);
+  const { Readable } = require('stream');
+  Readable.fromWeb(fileResp.body).pipe(res);
+}
+function cleanUrl(value){
+  let v = String(value || '').trim();
+  if (v.startsWith('//')) v = 'https:' + v;
+  return v;
+}
 async function fetchText(url, headers = {}){
   const r = await fetch(url, { headers, redirect: 'follow' });
   if (!r.ok) throw new Error('Falha ao buscar página');
@@ -89,11 +109,15 @@ function darkAnimeUrl(path, params = {}, key = ''){
 }
 function asArray(v){
   if (Array.isArray(v)) return v;
-  if (Array.isArray(v?.result)) return v.result;
-  if (Array.isArray(v?.resultado)) return v.resultado;
-  if (Array.isArray(v?.results)) return v.results;
-  if (Array.isArray(v?.data)) return v.data;
-  if (Array.isArray(v?.animes)) return v.animes;
+  if (!v || typeof v !== 'object') return [];
+  const keys = ['result','resultado','results','data','animes','items','list','sources','downloads','links'];
+  for (const key of keys){
+    if (Array.isArray(v[key])) return v[key];
+  }
+  for (const key of keys){
+    const nested = asArray(v[key]);
+    if (nested.length) return nested;
+  }
   return [];
 }
 function normalizeAnimeItem(item = {}){
@@ -101,8 +125,8 @@ function normalizeAnimeItem(item = {}){
     name: item.name || item.title || item.nome || 'Anime',
     title: item.title || item.name || item.nome || 'Anime',
     alt: item.alt || item.alternativeTitle || item.subtitle || '',
-    link: item.link || item.url || item.href || '',
-    cover: item.cover || item.image || item.img || item.thumbnail || item.poster || '',
+    link: cleanUrl(item.link || item.url || item.href || ''),
+    cover: cleanUrl(item.cover || item.image || item.img || item.thumbnail || item.poster || ''),
     rating: item.rating || item.score || item.nota || '',
     year: item.year || item.ano || '',
     status: item.status || '',
@@ -115,6 +139,7 @@ function normalizeAptoideApp(app = {}){
   const rating = stats.rating || {};
   let download = file.path || file.path_alt || file.url || app.download || '';
   if (download && !/^https?:\/\//i.test(download)) download = 'https:' + download;
+  download = cleanUrl(download);
   return {
     name: app.name || app.title || 'Aplicativo',
     package: app.package || app.package_name || '',
@@ -139,7 +164,7 @@ module.exports = async (req, res) => {
     const filename = qp(req, 'filename') || 'download';
     if (!url) return sendJson(res, 400, { erro: 'url obrigatória' });
     let target;
-    try { target = new URL(url); } catch { return sendJson(res, 400, { erro: 'url inválida' }); }
+    try { target = new URL(cleanUrl(url)); } catch { return sendJson(res, 400, { erro: 'url inválida' }); }
     if (!['https:', 'http:'].includes(target.protocol)) return sendJson(res, 400, { erro: 'protocolo inválido' });
     if (blockPrivateHost(target.hostname)) return sendJson(res, 400, { erro: 'host bloqueado' });
     try{
@@ -148,6 +173,28 @@ module.exports = async (req, res) => {
       return streamAsAttachment(res, r, filename);
     }catch{
       return sendJson(res, 500, { erro: 'erro no proxy' });
+    }
+  }
+
+  if (action === 'media_proxy') {
+    if (req.method !== 'GET') return sendJson(res, 405, { erro: 'Método inválido' });
+    const url = qp(req, 'url');
+    if (!url) return sendJson(res, 400, { erro: 'url obrigatória' });
+    let target;
+    try { target = new URL(cleanUrl(url)); } catch { return sendJson(res, 400, { erro: 'url inválida' }); }
+    if (!['https:', 'http:'].includes(target.protocol)) return sendJson(res, 400, { erro: 'protocolo inválido' });
+    if (blockPrivateHost(target.hostname)) return sendJson(res, 400, { erro: 'host bloqueado' });
+    try{
+      const headers = {
+        'user-agent': req.headers['user-agent'] || 'Mozilla/5.0',
+        'accept': req.headers.accept || '*/*'
+      };
+      if (req.headers.range) headers.range = req.headers.range;
+      const r = await fetch(target.toString(), { headers, redirect: 'follow' });
+      if (!r.ok || !r.body) return sendJson(res, 502, { erro: 'falha ao obter mídia' });
+      return streamAsMedia(res, r);
+    }catch{
+      return sendJson(res, 500, { erro: 'erro no proxy de mídia' });
     }
   }
 
@@ -313,7 +360,7 @@ module.exports = async (req, res) => {
       const episodesRaw = Array.isArray(obj?.episodes) ? obj.episodes : asArray(obj?.episodes || data?.episodes || data?.result?.episodes);
       const episodes = episodesRaw.map((ep, i) => ({
         title: ep.title || ep.name || ep.nome || `Episódio ${i + 1}`,
-        url: ep.url || ep.link || ep.href || ''
+        url: cleanUrl(ep.url || ep.link || ep.href || '')
       })).filter(ep => ep.url);
       if (!r.ok || !data) return sendJson(res, 502, { erro: 'Falha ao buscar episódios' });
       return sendJson(res, 200, {
@@ -348,8 +395,8 @@ module.exports = async (req, res) => {
       const r = await fetch(url.toString(), { headers: { 'accept': 'application/json' } });
       const data = await r.json().catch(()=>null);
       const sources = asArray(data).map((src, i) => ({
-        label: src.label || src.quality || src.resolution || `${i + 1}ª opção`,
-        src: src.src || src.url || src.link || src.download || ''
+        label: src.label || src.quality || src.resolution || src.tipo || `${i + 1}ª opção`,
+        src: cleanUrl(src.src || src.url || src.link || src.download || src.file || src.path || '')
       })).filter(x => x.src);
       if (!r.ok || !data || sources.length === 0) return sendJson(res, 502, { erro: 'Não encontrei links para esse episódio' });
       return sendJson(res, 200, { ok:true, result:sources, sources, raw:data });

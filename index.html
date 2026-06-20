@@ -37,15 +37,6 @@
     <i class="fa-solid fa-cart-shopping"></i>
   </button>
 
-  <!-- Top-left: anime streaming -->
-  <button class="dock-btn dock-left dock-left-4" id="animeBtn" aria-label="Abrir animes">
-    <i class="fa-solid fa-play"></i>
-  </button>
-
-  <!-- Top-left: APK downloads -->
-  <button class="dock-btn dock-left dock-left-5" id="apkBtn" aria-label="Baixar APK">
-    <i class="fa-brands fa-android"></i>
-  </button>
 
   <div class="updates-pop" id="updatesPop" aria-label="Lista de atualizações">
     <div class="updates-head">
@@ -80,7 +71,6 @@
           <button class="service" data-service="spotify"><i class="fa-brands fa-spotify"></i><span>Spotify</span></button>
           <button class="service" data-service="wiki"><i class="fa-brands fa-wikipedia-w"></i><span>Wikipedia</span></button>
           <button class="service" data-service="pinterest"><i class="fa-brands fa-pinterest"></i><span>Pinterest</span></button>
-          <button class="service service-anime-open" data-service="anime-open"><i class="fa-solid fa-clapperboard"></i><span>Assistir Anime</span></button>
           <button class="service service-apk-open" data-service="apk-open"><i class="fa-brands fa-android"></i><span>Baixar APK</span></button>
         </div>
       </div>
@@ -149,8 +139,6 @@
     <p class="subtitle">Portfólio • Automação • Bots • Sistemas premium</p>
     <div class="hero-actions">
       <button class="hero-btn primary" id="homeAnimeBtn" type="button"><i class="fa-solid fa-tv"></i> Assistir anime</button>
-      <button class="hero-btn" id="homeApkBtn" type="button"><i class="fa-brands fa-android"></i> Baixar APK</button>
-      <button class="hero-btn" id="homeRankingBtn" type="button"><i class="fa-solid fa-trophy"></i> Ranking</button>
     </div>
   </main>
 
@@ -275,15 +263,13 @@
           <span class="stream-logo"><i class="fa-solid fa-play"></i></span>
           <div>
             <strong>Gremory Play</strong>
-            <small>Animes • APK • Comunidade</small>
+            <small>Animes • Comunidade</small>
           </div>
         </div>
 
         <nav class="stream-nav" aria-label="Navegação do streaming">
           <button class="stream-nav-btn active" type="button" data-stream-screen="home">Início</button>
           <button class="stream-nav-btn" type="button" data-stream-screen="anime">Animes</button>
-          <button class="stream-nav-btn" type="button" data-stream-screen="apps">APK</button>
-          <button class="stream-nav-btn" type="button" data-stream-screen="ranking">Ranking</button>
         </nav>
 
         <div class="stream-search-wrap">
@@ -300,17 +286,28 @@
             <div class="stream-hero-copy">
               <div class="stream-kicker">Novo espaço da Gremory</div>
               <h2>Assista animes direto no site</h2>
-              <p>Layout inspirado em Prime Video/Netflix, com recomendações, busca, episódios, player, comentários, APKs e ranking de usuários ativos.</p>
+              <p>Layout inspirado em Prime Video/Netflix, com recomendações, busca, episódios, player no próprio site e comentários.</p>
               <div class="stream-hero-actions">
                 <button class="stream-primary" type="button" id="heroStartAnime"><i class="fa-solid fa-play"></i> Assistir agora</button>
-                <button class="stream-secondary" type="button" id="heroOpenApk"><i class="fa-brands fa-android"></i> Baixar APK</button>
               </div>
             </div>
-            <div class="stream-hero-card">
-              <span>🔥 Mais procurados</span>
-              <strong>Solo Leveling</strong>
-              <small>One Piece • Naruto • Dandadan • Jujutsu Kaisen</small>
-            </div>
+            <aside class="stream-side-stack" aria-label="Informações laterais">
+              <div class="stream-hero-card">
+                <span>🔥 Mais procurados</span>
+                <strong>Solo Leveling</strong>
+                <small>One Piece • Naruto • Dandadan • Jujutsu Kaisen</small>
+              </div>
+              <div class="stream-ranking-card">
+                <div class="stream-ranking-head">
+                  <div>
+                    <span>🏆 Ranking</span>
+                    <strong>Comunidade ativa</strong>
+                  </div>
+                  <button class="stream-secondary small" id="homeRankingRefresh" type="button"><i class="fa-solid fa-rotate"></i></button>
+                </div>
+                <div id="homeRankingList" class="ranking-list compact"></div>
+              </div>
+            </aside>
           </div>
 
           <div id="animeRows" class="stream-rows"></div>

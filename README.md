@@ -30,15 +30,16 @@ Se quiser integrar em outro projeto, copie:
 
 Esta versão inclui uma tela nova no estilo streaming:
 
-- botão superior esquerdo para **Assistir Anime**;
-- botão superior esquerdo para **Baixar APK**;
+- botão central para **Assistir Anime**;
+- **Baixar APK** fica apenas dentro do menu lateral de Downloads, junto com TikTok/Instagram/Spotify/Pinterest;
 - tela cheia `Gremory Play` com recomendações, busca, episódios, player e comentários;
-- ranking de atividade integrado ao Firebase quando o usuário está logado;
+- ranking de atividade em card lateral na tela inicial do Gremory Play, integrado ao Firebase quando o usuário está logado;
 - personalização extra no perfil: bio, anime favorito e tema;
 - rotas novas em `/api/main`:
   - `action=anime_search`
   - `action=anime_eps`
   - `action=anime_download`
+  - `action=media_proxy`
   - `action=apk_search`
   - `action=apk_download`
 

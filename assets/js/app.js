@@ -604,6 +604,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       if (s === "anime-open" || s === "apk-open") {
+        openPanel(downloadsPanel, false);
         if (typeof window.openGremoryStream === "function") {
           window.openGremoryStream(s === "apk-open" ? "apps" : "home");
         } else {
