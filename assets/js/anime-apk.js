@@ -12,19 +12,19 @@
     {
       id: 'popular',
       title: 'Mais pesquisados globalmente',
-      desc: 'Cards carregados pela mesma API de anime usada no bot.',
+      desc: '',
       items: ['Solo Leveling', 'One Piece', 'Naruto Shippuden', 'Boruto Naruto Next Generations Dublado', 'Jujutsu Kaisen', 'Dandadan', 'Kimetsu no Yaiba', 'Dragon Ball Daima']
     },
     {
       id: 'recommended',
       title: 'Recomendados para assistir',
-      desc: 'Sugestões boas para deixar fixas na tela inicial.',
+      desc: '',
       items: ['Attack on Titan', 'Black Clover', 'Tokyo Revengers', 'Chainsaw Man', 'Hunter x Hunter', 'Bleach', 'Boku no Hero Academia', 'Spy x Family']
     },
     {
       id: 'dubbed',
       title: 'Dublados e queridinhos',
-      desc: 'Busca priorizando versões dubladas quando a API retornar.',
+      desc: '',
       items: ['Naruto Dublado', 'Boruto Dublado', 'Dragon Ball Super Dublado', 'One Punch Man Dublado', 'Death Note Dublado', 'Nanatsu no Taizai Dublado', 'Blue Lock Dublado']
     }
   ];
@@ -163,7 +163,7 @@
     if (!box) return;
     box.innerHTML = rows.map(row => `
       <section class="stream-row" data-row="${htmlEscape(row.id)}">
-        <div class="stream-row-head"><div><h3>${htmlEscape(row.title)}</h3><p>${htmlEscape(row.desc)}</p></div></div>
+        <div class="stream-row-head"><div><h3>${htmlEscape(row.title)}</h3>${row.desc ? `<p>${htmlEscape(row.desc)}</p>` : ''}</div></div>
         <div class="stream-card-row">
           ${row.items.map(name => `<button class="anime-card" type="button" data-query="${htmlEscape(name)}">${cardTemplate(null, name)}</button>`).join('')}
         </div>
@@ -259,13 +259,17 @@
     renderDetailsShell(currentAnime);
     recordActivity('abriu anime', 1);
 
-    if (!currentAnime.link){
-      $('episodesStatus').textContent = 'Esse resultado não trouxe link de episódios.';
+    if (!currentAnime.link && !currentAnime.slug){
+      $('episodesStatus').textContent = 'Esse resultado não trouxe link/código de episódios.';
       return;
     }
 
     try{
-      const data = await post('anime_eps', { url: currentAnime.link });
+      const data = await post('anime_eps', {
+        url: currentAnime.link,
+        slug: currentAnime.slug,
+        provider: currentAnime.provider || currentAnime.source
+      });
       const details = data.anime || {};
       currentAnime = { ...currentAnime, ...details };
       renderDetailsShell(currentAnime, `${(details.episodes || []).length} episódio(s) encontrados.`);
@@ -293,7 +297,7 @@
   }
 
   function commentKey(){
-    const raw = currentEpisode?.url || currentAnime?.url || currentAnime?.link || 'global';
+    const raw = currentEpisode?.url || currentEpisode?.slug || currentAnime?.url || currentAnime?.link || currentAnime?.slug || 'global';
     let hash = 0;
     for (let i = 0; i < raw.length; i++) hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
     return 'gremory_comments_' + Math.abs(hash);
@@ -324,10 +328,17 @@
   }
 
   function setVideoSource(source){
-    currentSource = source ? { ...source, src: normalizeUrl(source.src) } : source;
+    currentSource = source ? {
+      ...source,
+      src: normalizeUrl(source.src),
+      playUrl: source.playUrl || mediaProxyUrl(source.src),
+      downloadUrl: source.downloadUrl || '',
+      filename: source.filename || ''
+    } : source;
     const video = $('animeVideo');
     if (video && currentSource?.src){
-      video.src = mediaProxyUrl(currentSource.src);
+      $('playerStatus').textContent = 'Carregando vídeo...';
+      video.src = currentSource.playUrl || mediaProxyUrl(currentSource.src);
       video.load();
       const playPromise = video.play?.();
       if (playPromise?.catch) playPromise.catch(() => {});
@@ -341,8 +352,8 @@
     currentSource = null;
     setScreen('player');
     $('playerTitle').textContent = ep?.title || 'Episódio';
-    $('playerDesc').textContent = currentAnime?.title ? `${currentAnime.title} • assista no próprio site` : 'Escolha uma qualidade para assistir.';
-    $('playerStatus').textContent = 'Buscando player/download...';
+    $('playerDesc').textContent = currentAnime?.title ? `${currentAnime.title}` : 'Escolha uma qualidade para assistir.';
+    $('playerStatus').textContent = 'Preparando episódio...';
     $('playerSources').innerHTML = '';
     $('animeVideo').removeAttribute('src');
     $('animeVideo').load();
@@ -350,10 +361,18 @@
     recordActivity('abriu episódio', 2);
 
     try{
-      const data = await post('anime_download', { url: ep.url });
+      const data = await post('anime_download', {
+        url: ep.url,
+        slug: ep.slug,
+        provider: ep.provider || ep.source || currentAnime?.provider || currentAnime?.source,
+        title: ep.title
+      });
       currentSources = (data.sources || data.result || []).map((src, index) => ({
         label: src.label || src.quality || src.resolution || `${index + 1}ª opção`,
-        src: normalizeUrl(src.src || src.url || src.link || src.download)
+        src: normalizeUrl(src.src || src.url || src.link || src.download),
+        playUrl: src.playUrl || '',
+        downloadUrl: src.downloadUrl || '',
+        filename: src.filename || ''
       })).filter(src => src.src);
       if (!currentSources.length) throw new Error('Sem links retornados');
       $('playerSources').innerHTML = currentSources.map((src, index) => `<button type="button" data-index="${index}" data-src="${htmlEscape(src.src)}">${htmlEscape(src.label || `${index + 1}ª opção`)}</button>`).join('');
@@ -361,7 +380,7 @@
         btn.addEventListener('click', () => setVideoSource(currentSources[Number(btn.dataset.index)]));
       });
       setVideoSource(currentSources[0]);
-      $('playerStatus').textContent = 'Player carregado. Se aparecer bloqueio do servidor, use outra qualidade ou o botão Baixar episódio.';
+      $('playerStatus').textContent = 'Pronto para assistir.';
       try{ localStorage.setItem('gremory_continue_anime', JSON.stringify({ anime: currentAnime?.title, episode: ep?.title, at: new Date().toISOString() })); }catch{}
     }catch(e){
       $('playerStatus').textContent = 'Erro ao carregar player: ' + (e.message || 'falha');
@@ -490,10 +509,12 @@
     }));
     $('playerDownload')?.addEventListener('click', async () => {
       if (!currentSource?.src) return alert('Escolha uma qualidade primeiro.');
-      const filename = `${currentAnime?.title || 'anime'}-${currentEpisode?.title || 'episodio'}.mp4`.replace(/[\\/:*?"<>|]+/g, '-');
-      const sourceUrl = normalizeUrl(currentSource.src);
-      await window.startDownload?.(sourceUrl, filename);
-      if (!window.startDownload) window.open(sourceUrl, '_blank');
+      const filename = (currentSource.filename || `${currentAnime?.title || 'anime'}-${currentEpisode?.title || 'episodio'}.mp4`).replace(/[\\/:*?"<>|]+/g, '-');
+      const downloadUrl = currentSource.downloadUrl || `${API_BASE()}/api/main?action=anime_file&url=${encodeURIComponent(normalizeUrl(currentSource.src))}&filename=${encodeURIComponent(filename)}`;
+      $('playerStatus').textContent = 'Preparando download...';
+      await window.startDownload?.(downloadUrl, filename);
+      if (!window.startDownload) window.open(downloadUrl, '_blank');
+      $('playerStatus').textContent = 'Download iniciado.';
       recordActivity('baixou episódio', 3);
     });
     $('sendComment')?.addEventListener('click', () => {
