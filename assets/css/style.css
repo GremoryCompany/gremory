@@ -1416,6 +1416,7 @@ body.profile-theme-green .auth-account-panel{ box-shadow:0 0 40px rgba(30,255,15
   scroll-snap-align:start;
 }
 .anime-card:hover{ transform:translateY(-5px) scale(1.01); border-color:rgba(216,130,255,.52); box-shadow:0 14px 35px rgba(0,0,0,.38),0 0 22px rgba(170,90,255,.25); }
+.anime-card.loading{ opacity:.75; pointer-events:none; }
 .anime-cover{
   height:220px;
   background:linear-gradient(135deg,rgba(123,60,255,.35),rgba(255,59,213,.22));

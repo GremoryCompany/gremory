@@ -53,6 +53,7 @@ async function streamAsMedia(res, fileResp){
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Content-Disposition', 'inline');
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges, Content-Type');
   res.setHeader('Accept-Ranges', acceptRanges || 'bytes');
   if (len) res.setHeader('Content-Length', len);
   if (contentRange) res.setHeader('Content-Range', contentRange);
@@ -210,13 +211,24 @@ function refererForProvider(provider, fileUrl = ''){
 function buildVideoHeaders(req, targetUrl, provider){
   const headers = {
     'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
-    'Accept': req.headers.accept || 'video/mp4,video/*,*/*',
+    'Accept': 'video/mp4,video/*;q=0.9,*/*;q=0.8',
     'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8'
   };
   const ref = refererForProvider(provider, targetUrl);
   if (ref) headers.Referer = ref;
   if (req.headers.range) headers.Range = req.headers.range;
   return headers;
+}
+function normalizeRangeHeader(rangeHeader){
+  const raw = String(rangeHeader || '').trim();
+  if (!/^bytes=\d*-\d*$/i.test(raw)) return '';
+  return raw;
+}
+function firstChunkRange(){
+  // Força o player a pedir só um pedaço inicial. Isso evita a Vercel tentar
+  // transmitir o episódio inteiro em uma única requisição e cortar o download.
+  const chunk = Number(process.env.ANIME_PROXY_CHUNK || 2 * 1024 * 1024);
+  return `bytes=0-${Math.max(512 * 1024, chunk) - 1}`;
 }
 async function getAnimeFireSearch(name, key){
   const url = darkAnimeUrl('/api/anime/p2h/animefire', { name }, key);
@@ -351,11 +363,12 @@ module.exports = async (req, res) => {
     if (blockPrivateHost(target.hostname)) return sendJson(res, 400, { erro: 'host bloqueado' });
     try{
       const headers = buildVideoHeaders(req, target.toString(), qp(req, 'provider'));
+      headers.Range = normalizeRangeHeader(req.headers.range) || normalizeRangeHeader(qp(req, 'range')) || firstChunkRange();
       const r = await fetch(target.toString(), { headers, redirect: 'follow' });
       if (!r.ok || !r.body) return sendJson(res, 502, { erro: 'falha ao obter mídia' });
       return streamAsMedia(res, r);
-    }catch{
-      return sendJson(res, 500, { erro: 'erro no proxy de mídia' });
+    }catch(e){
+      return sendJson(res, 500, { erro: 'erro no proxy de mídia', detalhe: e.message });
     }
   }
 
@@ -636,8 +649,8 @@ module.exports = async (req, res) => {
       });
       if (!r.ok || !r.body) return sendJson(res, 502, { erro: 'falha ao obter episódio' });
       return streamAsAttachment(res, r, filename);
-    }catch{
-      return sendJson(res, 500, { erro: 'erro ao baixar episódio' });
+    }catch(e){
+      return sendJson(res, 500, { erro: 'erro ao baixar episódio', detalhe: e.message });
     }
   }
 

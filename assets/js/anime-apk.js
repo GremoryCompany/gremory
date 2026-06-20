@@ -64,6 +64,78 @@
     a.remove();
   }
 
+  function blobDownload(blob, filename){
+    const url = URL.createObjectURL(blob);
+    try{
+      nativeDownload(url, filename);
+    }finally{
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
+    }
+  }
+
+  function parseContentRange(value){
+    const match = String(value || '').match(/bytes\s+(\d+)-(\d+)\/(\d+|\*)/i);
+    if (!match) return null;
+    return {
+      start: Number(match[1]),
+      end: Number(match[2]),
+      total: match[3] === '*' ? 0 : Number(match[3])
+    };
+  }
+
+  function setStatus(text){
+    const el = $('playerStatus');
+    if (el) el.textContent = text;
+  }
+
+  async function downloadSourceInChunks(source, filename){
+    const base = source?.playUrl || mediaProxyUrl(source?.src || source?.directUrl, source?.provider);
+    if (!base) throw new Error('Link do episódio vazio');
+
+    const chunkSize = 2 * 1024 * 1024;
+    const parts = [];
+    let start = 0;
+    let total = 0;
+    let safety = 0;
+
+    setStatus('Preparando download do episódio...');
+
+    while (true){
+      const end = start + chunkSize - 1;
+      const chunkUrl = `${base}${base.includes('?') ? '&' : '?'}range=${encodeURIComponent(`bytes=${start}-${end}`)}`;
+      const res = await fetch(chunkUrl);
+      if (!(res.ok || res.status === 206)) {
+        let msg = '';
+        try{ msg = (await res.json())?.erro || ''; }catch{}
+        throw new Error(msg || `falha no trecho ${start}`);
+      }
+
+      const blob = await res.blob();
+      if (!blob.size) break;
+      parts.push(blob);
+
+      const range = parseContentRange(res.headers.get('Content-Range'));
+      if (range?.total) total = range.total;
+      start += blob.size;
+      safety += 1;
+
+      if (total) {
+        const pct = Math.min(100, Math.floor((start / total) * 100));
+        setStatus(`Baixando episódio... ${pct}%`);
+      } else {
+        setStatus(`Baixando episódio... ${formatBytes(start)}`);
+      }
+
+      if (res.status !== 206 && !range) break;
+      if (total && start >= total) break;
+      if (safety > 2500) throw new Error('download muito grande');
+    }
+
+    const type = parts[0]?.type || 'video/mp4';
+    blobDownload(new Blob(parts, { type }), filename);
+    setStatus('Download concluído.');
+  }
+
   function getApiKey(){
     try{
       const authData = window.gremoryAuthGetUser?.();
@@ -232,12 +304,32 @@
 
   async function hydrateHomeRows(){
     const cards = Array.from(document.querySelectorAll('#animeRows .anime-card'));
-    for (const card of cards){
-      const query = card.dataset.query;
-      const anime = await resolveAnime(query);
-      card.innerHTML = cardTemplate(anime, query);
-      if (anime?.link) card.dataset.link = anime.link;
+    const pending = cards.filter(card => card.dataset.loaded !== '1');
+    let cursor = 0;
+
+    async function worker(){
+      while (cursor < pending.length){
+        const card = pending[cursor++];
+        const query = card.dataset.query;
+        try{
+          card.classList.add('loading');
+          const anime = await resolveAnime(query);
+          if (anime && (anime.cover || anime.link || anime.slug)){
+            card.innerHTML = cardTemplate(anime, query);
+            card.dataset.loaded = '1';
+            if (anime.link) card.dataset.link = anime.link;
+            if (anime.slug) card.dataset.slug = anime.slug;
+            if (anime.provider) card.dataset.provider = anime.provider;
+          }
+        }catch(e){
+          console.warn('Falha ao carregar card de anime:', query, e);
+        }finally{
+          card.classList.remove('loading');
+        }
+      }
     }
+
+    await Promise.all(Array.from({ length: Math.min(4, pending.length || 1) }, worker));
   }
 
   function loadHome(force = false){
@@ -393,14 +485,16 @@
     } : source;
 
     const video = $('animeVideo');
-    if (video && currentSource?.src){
+    if (video && (currentSource?.playUrl || currentSource?.src)){
       const token = ++currentPlayToken;
       const urls = [];
       const pushUrl = (value) => {
         const clean = normalizeUrl(value);
         if (clean && !urls.includes(clean)) urls.push(clean);
       };
-      pushUrl(currentSource.playUrl);
+
+      // Primeiro tenta pelo proxy com suporte a Range/chunks. O link direto fica só como plano B.
+      pushUrl(currentSource.playUrl || mediaProxyUrl(currentSource.src || currentSource.directUrl, currentSource.provider));
       pushUrl(currentSource.directUrl || currentSource.src);
 
       let attempt = 0;
@@ -408,25 +502,29 @@
         if (token !== currentPlayToken) return;
         const url = urls[attempt];
         if (!url) {
-          $('playerStatus').textContent = 'Não consegui transmitir esse link. Tente baixar o episódio ou escolha outra qualidade.';
+          setStatus('Não consegui transmitir esse episódio. Use o botão de baixar ou escolha outra qualidade.');
           return;
         }
-        $('playerStatus').textContent = attempt === 0 ? 'Carregando vídeo...' : 'Tentando player alternativo...';
+        setStatus(attempt === 0 ? 'Carregando vídeo...' : 'Tentando link alternativo...');
         video.pause();
+        video.onerror = null;
+        video.oncanplay = null;
+        video.onloadedmetadata = null;
         video.removeAttribute('src');
         video.src = url;
         video.load();
-        const playPromise = video.play?.();
-        if (playPromise?.catch) playPromise.catch(() => {});
-      };
 
-      video.onerror = () => {
-        if (token !== currentPlayToken) return;
-        attempt += 1;
-        useAttempt();
-      };
-      video.oncanplay = () => {
-        if (token === currentPlayToken) $('playerStatus').textContent = 'Pronto para assistir.';
+        video.onerror = () => {
+          if (token !== currentPlayToken) return;
+          attempt += 1;
+          useAttempt();
+        };
+        video.onloadedmetadata = () => {
+          if (token === currentPlayToken) setStatus('Vídeo carregado. Aperte play para assistir.');
+        };
+        video.oncanplay = () => {
+          if (token === currentPlayToken) setStatus('Pronto para assistir.');
+        };
       };
 
       useAttempt();
@@ -470,7 +568,6 @@
         btn.addEventListener('click', () => setVideoSource(currentSources[Number(btn.dataset.index)]));
       });
       setVideoSource(currentSources[0]);
-      $('playerStatus').textContent = 'Pronto para assistir.';
       try{ localStorage.setItem('gremory_continue_anime', JSON.stringify({ anime: currentAnime?.title, episode: ep?.title, at: new Date().toISOString() })); }catch{}
     }catch(e){
       $('playerStatus').textContent = 'Erro ao carregar player: ' + (e.message || 'falha');
@@ -597,16 +694,13 @@
       searchApk(q);
     }));
     $('playerDownload')?.addEventListener('click', async () => {
-      if (!currentSource?.src && !currentSource?.downloadUrl) return alert('Escolha uma qualidade primeiro.');
+      if (!currentSource?.src && !currentSource?.playUrl) return alert('Escolha uma qualidade primeiro.');
       const filename = (currentSource.filename || `${currentAnime?.title || 'anime'}-${currentEpisode?.title || 'episodio'}.mp4`).replace(/[\/:*?"<>|]+/g, '-');
-      const downloadUrl = currentSource.downloadUrl || animeFileUrl(currentSource.src, filename, currentSource.provider);
       try{
-        $('playerStatus').textContent = 'Iniciando download...';
-        nativeDownload(downloadUrl, filename);
-        $('playerStatus').textContent = 'Download iniciado.';
+        await downloadSourceInChunks(currentSource, filename);
         recordActivity('baixou episódio', 3);
       }catch(e){
-        $('playerStatus').textContent = 'Erro ao iniciar download: ' + (e.message || 'falha');
+        setStatus('Erro ao baixar: ' + (e.message || 'falha'));
       }
     });
     $('sendComment')?.addEventListener('click', () => {
