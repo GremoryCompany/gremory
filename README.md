@@ -62,3 +62,14 @@ APIKEY=sua_apikey
 ```
 
 Se nenhuma variável estiver configurada, o site ainda tenta usar a ApiKey salva no perfil do usuário logado.
+
+## Atualização AnimeFire Plus
+
+A aba de anime agora usa a lógica do projeto AnFireAPI-Anime-Player como fonte principal para assistir episódios:
+
+- Home dos animes: AniList para capas e informações.
+- Busca/listagem: AnimeFire Plus primeiro, Dark Stars AnimeFire/Nexus como fallback.
+- Player: suporta iframe do Blogger quando o AnimeFire Plus retorna fonte GoogleVideo e vídeo direto quando retornar MP4/WebM.
+- Download de episódio foi deixado desativado por enquanto para priorizar o player.
+
+Depois de subir na Vercel, faça redeploy e limpe o cache do navegador com Ctrl + F5.

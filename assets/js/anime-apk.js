@@ -7,6 +7,7 @@
   let currentEpisode = null;
   let currentSources = [];
   let currentSource = null;
+  let currentSourceIndex = -1;
   let currentPlayToken = 0;
 
   const rows = [
@@ -158,6 +159,14 @@
     return data;
   }
 
+  async function get(action, params = {}){
+    const qs = new URLSearchParams({ action, ...params });
+    const res = await fetch(`${API_BASE()}/api/main?${qs.toString()}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.erro || 'Falha na requisição');
+    return data;
+  }
+
   function userName(){
     try{
       const data = window.gremoryAuthGetUser?.();
@@ -214,14 +223,7 @@
     app.classList.remove('open');
     app.setAttribute('aria-hidden', 'true');
     document.body.style.overflow = '';
-    const video = $('animeVideo');
-    if (video) {
-      video.pause();
-      video.onerror = null;
-      video.oncanplay = null;
-      video.removeAttribute('src');
-      video.load();
-    }
+    try{ resetPlayers(); }catch{}
   }
 
   function coverHtml(src, title){
@@ -236,6 +238,25 @@
     return `<div class="anime-cover">${coverHtml(item?.cover, title)}</div><div class="anime-card-info"><div class="anime-card-title">${htmlEscape(title)}</div><div class="anime-card-meta">${htmlEscape(meta)}</div></div>`;
   }
 
+  function normalAnime(item = {}, fallback = ''){
+    const title = item.title || item.name || item.nome || item.query || fallback || 'Anime';
+    return {
+      ...item,
+      title,
+      name: item.name || title,
+      query: item.query || title,
+      cover: normalizeUrl(item.cover || item.image || item.img || item.poster || ''),
+      link: normalizeUrl(item.link || item.url || ''),
+      slug: item.slug || item.code || '',
+      provider: item.provider || item.source || '',
+      rating: item.rating || item.score || '',
+      year: item.year || item.seasonYear || '',
+      status: item.status || '',
+      audio: item.audio || '',
+      synopsis: item.synopsis || item.description || item.alt || ''
+    };
+  }
+
   async function resolveAnime(query){
     const key = String(query || '').toLowerCase().trim();
     if (!key) return null;
@@ -243,37 +264,21 @@
 
     const p = post('anime_search', { query })
       .then(data => {
-        const list = Array.isArray(data.result) ? data.result : [];
-        const q = key.replace(/dublado/g, '').replace(/legendado/g, '').trim();
+        const list = (Array.isArray(data.result) ? data.result : []).map(x => normalAnime(x, query));
+        const q = key.replace(/dublado|legendado|todos os episodios|todos os episódios/g, '').trim();
         const selected =
-          list.find(x => normalizeUrl(x.cover) && String(x.title || x.name || '').toLowerCase().includes(q)) ||
-          list.find(x => String(x.title || x.name || '').toLowerCase().includes(q)) ||
-          list.find(x => normalizeUrl(x.cover) && (x.link || x.slug)) ||
+          list.find(x => x.provider === 'anfire_plus' && (x.link || x.slug) && String(x.title || '').toLowerCase().includes(q)) ||
+          list.find(x => x.provider === 'anfire_plus' && (x.link || x.slug)) ||
+          list.find(x => (x.link || x.slug) && String(x.title || '').toLowerCase().includes(q)) ||
           list.find(x => x.link || x.slug) ||
+          list.find(x => x.cover) ||
           null;
-
         if (!selected) throw new Error('sem resultado');
-
-        const picked = {
-          ...selected,
-          cover: normalizeUrl(selected.cover),
-          link: normalizeUrl(selected.link),
-          slug: selected.slug || '',
-          provider: selected.provider || selected.source || ''
-        };
-        if (!picked.cover && (picked.link || picked.slug)) {
-          return post('anime_eps', { url: picked.link, slug: picked.slug, provider: picked.provider })
-            .then(detailsData => {
-              const d = detailsData.anime || {};
-              return { ...picked, cover: normalizeUrl(d.cover || picked.cover), rating: picked.rating || d.score || d.rating || '', audio: picked.audio || d.audio || '', year: picked.year || d.year || '' };
-            })
-            .catch(() => picked);
-        }
-        return picked;
+        return selected;
       })
       .catch(() => {
         cache.delete(key);
-        return { title: query, name: query, cover: '', link: '', slug: '' };
+        return { title: query, name: query, query, cover: '', link: '', slug: '', provider: '' };
       });
 
     cache.set(key, p);
@@ -292,62 +297,59 @@
           ${row.items.map(name => `<button class="anime-card" type="button" data-query="${htmlEscape(name)}">${cardTemplate(null, name)}</button>`).join('')}
         </div>
       </section>`).join('');
+    bindHomeCards();
+  }
 
-    box.querySelectorAll('.anime-card').forEach(card => {
+  function bindHomeCards(){
+    document.querySelectorAll('#animeRows .anime-card').forEach(card => {
+      if (card.dataset.bound === '1') return;
+      card.dataset.bound = '1';
       card.addEventListener('click', async () => {
-        const query = card.dataset.query;
-        const anime = await resolveAnime(query);
+        const query = card.dataset.query || card.dataset.title || card.textContent.trim();
+        const anime = card.dataset.payload ? normalAnime(JSON.parse(card.dataset.payload), query) : await resolveAnime(query);
         openAnimeDetails(anime, query);
       });
     });
   }
 
-  async function hydrateHomeRows(){
-    const cards = Array.from(document.querySelectorAll('#animeRows .anime-card'));
-    const pending = cards.filter(card => card.dataset.loaded !== '1');
-    let cursor = 0;
-
-    async function worker(){
-      while (cursor < pending.length){
-        const card = pending[cursor++];
-        const query = card.dataset.query;
-        try{
-          card.classList.add('loading');
-          const anime = await resolveAnime(query);
-          if (anime && (anime.cover || anime.link || anime.slug)){
-            card.innerHTML = cardTemplate(anime, query);
-            card.dataset.loaded = '1';
-            if (anime.link) card.dataset.link = anime.link;
-            if (anime.slug) card.dataset.slug = anime.slug;
-            if (anime.provider) card.dataset.provider = anime.provider;
-          }
-        }catch(e){
-          console.warn('Falha ao carregar card de anime:', query, e);
-        }finally{
-          card.classList.remove('loading');
-        }
-      }
+  function renderHomeRowsFromApi(apiRows){
+    const box = $('animeRows');
+    if (!box) return;
+    if (!Array.isArray(apiRows) || !apiRows.length){
+      renderHomeRowsSkeleton();
+      return;
     }
-
-    await Promise.all(Array.from({ length: Math.min(4, pending.length || 1) }, worker));
+    box.innerHTML = apiRows.map(row => {
+      const items = (row.items || []).map(x => normalAnime(x));
+      return `
+        <section class="stream-row" data-row="${htmlEscape(row.id || row.title || 'row')}">
+          <div class="stream-row-head"><div><h3>${htmlEscape(row.title || 'Animes')}</h3></div></div>
+          <div class="stream-card-row">
+            ${items.map(item => `<button class="anime-card" type="button" data-query="${htmlEscape(item.query || item.title)}" data-payload="${htmlEscape(JSON.stringify(item))}">${cardTemplate(item)}</button>`).join('')}
+          </div>
+        </section>`;
+    }).join('');
+    bindHomeCards();
   }
 
-  function loadHome(force = false){
-    const hasCards = document.querySelectorAll('#animeRows .anime-card').length > 0;
-    if (!homeLoaded || force || !hasCards) {
-      homeLoaded = true;
+  async function loadHome(force = false){
+    renderRanking('homeRankingList', 5);
+    if (homeLoaded && !force && document.querySelectorAll('#animeRows .anime-card').length) return;
+    homeLoaded = true;
+    const box = $('animeRows');
+    if (box) box.innerHTML = '<div class="stream-status">Carregando animes...</div>';
+    try{
+      const data = await get('anime_home');
+      renderHomeRowsFromApi(data.rows || []);
+    }catch(e){
       renderHomeRowsSkeleton();
     }
-    renderRanking('homeRankingList', 5);
-    hydrateHomeRows();
-    // Repete depois de um instante para pegar a ApiKey/perfil caso o Firebase ainda esteja carregando.
-    setTimeout(hydrateHomeRows, 1200);
-    setTimeout(hydrateHomeRows, 3200);
   }
 
-  function renderSearchResults(list){
+  function renderSearchResults(list, query = ''){
     const box = $('animeSearchResults');
     if (!box) return;
+    list = (list || []).map(x => normalAnime(x, query));
     if (!list.length){
       box.innerHTML = '<div class="stream-status">Nenhum anime encontrado.</div>';
       return;
@@ -357,7 +359,7 @@
         ${cardTemplate(anime)}
       </button>`).join('');
     box.querySelectorAll('.anime-card').forEach(card => {
-      card.addEventListener('click', () => openAnimeDetails(list[Number(card.dataset.index)]));
+      card.addEventListener('click', () => openAnimeDetails(list[Number(card.dataset.index)], query));
     });
   }
 
@@ -367,7 +369,7 @@
     try{
       const data = await post('anime_search', { query });
       const list = Array.isArray(data.result) ? data.result : [];
-      renderSearchResults(list);
+      renderSearchResults(list, query);
       if (status) status.textContent = list.length ? `${list.length} resultado(s) encontrado(s).` : 'Nada encontrado.';
       recordActivity('pesquisou anime', 2);
     }catch(e){
@@ -399,24 +401,26 @@
   }
 
   async function openAnimeDetails(anime, fallbackQuery){
-    if (!anime || (!anime.link && fallbackQuery)) anime = await resolveAnime(fallbackQuery);
+    anime = normalAnime(anime || {}, fallbackQuery);
+    if ((!anime.link && !anime.slug) && (fallbackQuery || anime.title || anime.query)) {
+      const resolved = await resolveAnime(fallbackQuery || anime.query || anime.title);
+      anime = { ...anime, ...normalAnime(resolved || {}, fallbackQuery || anime.title) };
+    }
     currentAnime = anime || { title: fallbackQuery || 'Anime' };
     setScreen('details');
     renderDetailsShell(currentAnime);
     recordActivity('abriu anime', 1);
 
-    if (!currentAnime.link && !currentAnime.slug){
-      $('episodesStatus').textContent = 'Esse resultado não trouxe link/código de episódios.';
-      return;
-    }
-
     try{
       const data = await post('anime_eps', {
         url: currentAnime.link,
         slug: currentAnime.slug,
-        provider: currentAnime.provider || currentAnime.source
+        provider: currentAnime.provider || currentAnime.source,
+        title: currentAnime.title || currentAnime.name || fallbackQuery,
+        query: fallbackQuery || currentAnime.query || currentAnime.title
       });
-      const details = data.anime || {};
+      const details = normalAnime(data.anime || {}, currentAnime.title);
+      details.episodes = data.anime?.episodes || [];
       currentAnime = { ...currentAnime, ...details };
       renderDetailsShell(currentAnime, `${(details.episodes || []).length} episódio(s) encontrados.`);
       renderEpisodes(details.episodes || []);
@@ -473,63 +477,103 @@
       </div>`).join('');
   }
 
-  function setVideoSource(source){
+  function ensurePlayerFrame(){
+    let frame = $('animeIframe');
+    const main = document.querySelector('.player-main');
+    if (!frame && main) {
+      frame = document.createElement('iframe');
+      frame.id = 'animeIframe';
+      frame.className = 'anime-iframe';
+      frame.setAttribute('allowfullscreen', 'true');
+      frame.setAttribute('allow', 'autoplay; fullscreen; picture-in-picture');
+      const video = $('animeVideo');
+      if (video) main.insertBefore(frame, video.nextSibling);
+      else main.prepend(frame);
+    }
+    return frame;
+  }
+
+  function resetPlayers(){
+    const video = $('animeVideo');
+    const frame = ensurePlayerFrame();
+    if (video) {
+      video.pause();
+      video.onerror = null;
+      video.oncanplay = null;
+      video.onloadedmetadata = null;
+      video.removeAttribute('src');
+      video.load();
+      video.style.display = 'block';
+    }
+    if (frame) {
+      frame.removeAttribute('src');
+      frame.style.display = 'none';
+    }
+  }
+
+  function setVideoSource(source, index = -1){
+    currentSourceIndex = index;
     currentSource = source ? {
       ...source,
-      src: normalizeUrl(source.src || source.directUrl),
-      directUrl: normalizeUrl(source.directUrl || source.src),
-      playUrl: source.playUrl || mediaProxyUrl(source.src || source.directUrl, source.provider),
-      downloadUrl: source.downloadUrl || '',
-      filename: source.filename || '',
+      type: source.type || source.playType || '',
+      src: normalizeUrl(source.src || source.url || source.directUrl),
+      directUrl: normalizeUrl(source.directUrl || source.src || source.url),
+      playUrl: normalizeUrl(source.playUrl || source.url || source.src),
+      proxyUrl: normalizeUrl(source.proxyUrl || ''),
       provider: source.provider || ''
     } : source;
 
     const video = $('animeVideo');
-    if (video && (currentSource?.playUrl || currentSource?.src)){
-      const token = ++currentPlayToken;
+    const frame = ensurePlayerFrame();
+    resetPlayers();
+
+    if (!currentSource?.playUrl && !currentSource?.src) {
+      setStatus('Essa qualidade não retornou player. Tente outra opção.');
+      return;
+    }
+
+    const token = ++currentPlayToken;
+    const type = String(currentSource.type || '').toLowerCase();
+    const mainUrl = currentSource.playUrl || currentSource.src;
+
+    if (type === 'iframe' || /blogger\.com|\/embed\//i.test(mainUrl)) {
+      if (video) video.style.display = 'none';
+      if (frame) {
+        frame.style.display = 'block';
+        frame.src = mainUrl;
+        setStatus('Player carregado. Aperte play dentro do vídeo.');
+      }
+    } else if (video) {
       const urls = [];
       const pushUrl = (value) => {
         const clean = normalizeUrl(value);
         if (clean && !urls.includes(clean)) urls.push(clean);
       };
-
-      // Primeiro tenta pelo proxy com suporte a Range/chunks. O link direto fica só como plano B.
-      pushUrl(currentSource.playUrl || mediaProxyUrl(currentSource.src || currentSource.directUrl, currentSource.provider));
-      pushUrl(currentSource.directUrl || currentSource.src);
+      // Agora tenta direto primeiro. Proxy fica só como reserva.
+      pushUrl(mainUrl);
+      pushUrl(currentSource.directUrl);
+      pushUrl(currentSource.proxyUrl || mediaProxyUrl(currentSource.src || currentSource.directUrl, currentSource.provider));
 
       let attempt = 0;
       const useAttempt = () => {
         if (token !== currentPlayToken) return;
         const url = urls[attempt];
         if (!url) {
-          setStatus('Não consegui transmitir esse episódio. Use o botão de baixar ou escolha outra qualidade.');
+          setStatus('Não consegui abrir esse player. Tente outra qualidade ou outro episódio.');
           return;
         }
-        setStatus(attempt === 0 ? 'Carregando vídeo...' : 'Tentando link alternativo...');
-        video.pause();
-        video.onerror = null;
-        video.oncanplay = null;
-        video.onloadedmetadata = null;
-        video.removeAttribute('src');
+        setStatus(attempt === 0 ? 'Carregando vídeo...' : 'Tentando alternativa...');
+        video.style.display = 'block';
+        if (frame) frame.style.display = 'none';
+        video.onerror = () => { if (token === currentPlayToken){ attempt += 1; useAttempt(); } };
+        video.onloadedmetadata = () => { if (token === currentPlayToken) setStatus('Vídeo carregado. Aperte play para assistir.'); };
+        video.oncanplay = () => { if (token === currentPlayToken) setStatus('Pronto para assistir.'); };
         video.src = url;
         video.load();
-
-        video.onerror = () => {
-          if (token !== currentPlayToken) return;
-          attempt += 1;
-          useAttempt();
-        };
-        video.onloadedmetadata = () => {
-          if (token === currentPlayToken) setStatus('Vídeo carregado. Aperte play para assistir.');
-        };
-        video.oncanplay = () => {
-          if (token === currentPlayToken) setStatus('Pronto para assistir.');
-        };
       };
-
       useAttempt();
     }
-    document.querySelectorAll('#playerSources button').forEach(btn => btn.classList.toggle('active', btn.dataset.src === currentSource?.src));
+    document.querySelectorAll('#playerSources button').forEach(btn => btn.classList.toggle('active', Number(btn.dataset.index) === currentSourceIndex));
   }
 
   async function openEpisodePlayer(ep){
@@ -541,33 +585,33 @@
     $('playerDesc').textContent = currentAnime?.title ? `${currentAnime.title}` : 'Escolha uma qualidade para assistir.';
     $('playerStatus').textContent = 'Preparando episódio...';
     $('playerSources').innerHTML = '';
-    $('animeVideo').removeAttribute('src');
-    $('animeVideo').load();
+    resetPlayers();
     renderComments();
     recordActivity('abriu episódio', 2);
 
     try{
-      const data = await post('anime_download', {
+      const data = await post('anime_stream', {
         url: ep.url,
         slug: ep.slug,
+        episode: ep.episode,
         provider: ep.provider || ep.source || currentAnime?.provider || currentAnime?.source,
         title: ep.title
       });
       currentSources = (data.sources || data.result || []).map((src, index) => ({
         label: src.label || src.quality || src.resolution || `${index + 1}ª opção`,
-        src: normalizeUrl(src.src || src.url || src.link || src.download || src.directUrl),
-        directUrl: normalizeUrl(src.directUrl || src.src || src.url || src.link || src.download),
-        playUrl: src.playUrl || '',
-        downloadUrl: src.downloadUrl || '',
-        filename: src.filename || '',
+        type: src.type || src.playType || '',
+        src: normalizeUrl(src.src || src.url || src.link || src.directUrl),
+        directUrl: normalizeUrl(src.directUrl || src.src || src.url || src.link),
+        playUrl: normalizeUrl(src.playUrl || src.src || src.url || src.link),
+        proxyUrl: normalizeUrl(src.proxyUrl || ''),
         provider: src.provider || data.provider || ''
       })).filter(src => src.src || src.playUrl);
-      if (!currentSources.length) throw new Error('Sem links retornados');
-      $('playerSources').innerHTML = currentSources.map((src, index) => `<button type="button" data-index="${index}" data-src="${htmlEscape(src.src)}">${htmlEscape(src.label || `${index + 1}ª opção`)}</button>`).join('');
+      if (!currentSources.length) throw new Error('Sem player retornado');
+      $('playerSources').innerHTML = currentSources.map((src, index) => `<button type="button" data-index="${index}">${htmlEscape(src.label || `${index + 1}ª opção`)}</button>`).join('');
       $('playerSources').querySelectorAll('button').forEach(btn => {
-        btn.addEventListener('click', () => setVideoSource(currentSources[Number(btn.dataset.index)]));
+        btn.addEventListener('click', () => setVideoSource(currentSources[Number(btn.dataset.index)], Number(btn.dataset.index)));
       });
-      setVideoSource(currentSources[0]);
+      setVideoSource(currentSources[0], 0);
       try{ localStorage.setItem('gremory_continue_anime', JSON.stringify({ anime: currentAnime?.title, episode: ep?.title, at: new Date().toISOString() })); }catch{}
     }catch(e){
       $('playerStatus').textContent = 'Erro ao carregar player: ' + (e.message || 'falha');
