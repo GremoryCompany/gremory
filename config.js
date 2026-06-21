@@ -1,5 +1,5 @@
 // Config do FRONT (edite aqui se quiser manter em JS)
-window.API_BASE = "https://darkstarsapi.online/";
+window.API_BASE = "";
 window.GREMORY_CONFIG = window.GREMORY_CONFIG || {};
 window.GREMORY_CONFIG.darkstarsApiKey = window.GREMORY_CONFIG.darkstarsApiKey || "gremory";
 window.DARKSTARS_API_KEY = window.GREMORY_CONFIG.darkstarsApiKey;
