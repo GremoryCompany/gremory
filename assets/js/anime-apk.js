@@ -267,8 +267,8 @@
         const list = (Array.isArray(data.result) ? data.result : []).map(x => normalAnime(x, query));
         const q = key.replace(/dublado|legendado|todos os episodios|todos os episódios/g, '').trim();
         const selected =
-          list.find(x => x.provider === 'anfire_plus' && (x.link || x.slug) && String(x.title || '').toLowerCase().includes(q)) ||
-          list.find(x => x.provider === 'anfire_plus' && (x.link || x.slug)) ||
+          list.find(x => x.provider === 'anfire' && (x.link || x.slug) && String(x.title || '').toLowerCase().includes(q)) ||
+          list.find(x => x.provider === 'anfire' && (x.link || x.slug)) ||
           list.find(x => (x.link || x.slug) && String(x.title || '').toLowerCase().includes(q)) ||
           list.find(x => x.link || x.slug) ||
           list.find(x => x.cover) ||
@@ -510,6 +510,8 @@
       frame.removeAttribute('src');
       frame.style.display = 'none';
     }
+    const external = document.getElementById('animeExternalPlayer');
+    if (external) external.remove();
   }
 
   function setVideoSource(source){
@@ -537,7 +539,20 @@
     const type = String(currentSource.type || '').toLowerCase();
     const mainUrl = currentSource.playUrl || currentSource.src;
 
-    if (type === 'iframe' || /blogger\.com|\/embed\//i.test(mainUrl)) {
+    if (type === 'external') {
+      if (video) video.style.display = 'none';
+      if (frame) frame.style.display = 'none';
+      const main = document.querySelector('.player-main');
+      const link = document.createElement('a');
+      link.id = 'animeExternalPlayer';
+      link.className = 'stream-primary full anime-external-player';
+      link.href = mainUrl;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.innerHTML = '<i class="fa-solid fa-up-right-from-square"></i> Abrir player original';
+      main?.insertBefore(link, $('playerStatus'));
+      setStatus('Não consegui embutir esse episódio no player. Use o botão acima para abrir a página original.');
+    } else if (type === 'iframe' || /blogger\.com|\/embed\//i.test(mainUrl)) {
       if (video) video.style.display = 'none';
       if (frame) {
         frame.style.display = 'block';
@@ -638,7 +653,7 @@
       setVideoSource(currentSources[0]);
       try{ localStorage.setItem('gremory_continue_anime', JSON.stringify({ anime: currentAnime?.title, episode: ep?.title, at: new Date().toISOString() })); }catch{}
     }catch(e){
-      $('playerStatus').textContent = 'Erro ao carregar player: ' + (e.message || 'falha');
+      $('playerStatus').textContent = 'Erro ao carregar player: ' + (e.message || 'falha') + '. Tente outro episódio ou outra opção da lista.';
     }
   }
 

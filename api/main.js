@@ -325,7 +325,7 @@ function absoluteUrl(href, base = 'https://animefire.io'){
 function formatUrl(url){
   return decodeHtml(String(url || '')).replace(/\\\//g, '/').replace(/\\/g, '/').trim();
 }
-const ANFIRE_BASES = String(process.env.ANFIRE_BASES || process.env.ANIMEFIRE_BASE || 'https://animefire.io,https://animefire.plus')
+const ANFIRE_BASES = String(process.env.ANFIRE_BASES || process.env.ANIMEFIRE_BASE || 'https://animefire.plus,https://animefire.io')
   .split(',')
   .map(x => x.trim().replace(/\/+$/, ''))
   .filter(Boolean);
@@ -656,6 +656,293 @@ async function anilistSearch(name, limit = 10){
   const data = await anilistGraphql(q, { search:name, perPage:limit });
   return (data?.Page?.media || []).map(mapAnilistMedia);
 }
+
+
+// ===== GREMORY PLAY ANIME — AnimeFire direto + AniList metadata =====
+// Dark Stars/Nexus ficam fora do fluxo principal de anime. A home e a busca
+// usam catálogo com slugs reais/previstos do AnimeFire e AniList só para capa,
+// sinopse e nota. O player tenta iframe Blogger primeiro, depois vídeo/proxy.
+const GREMORY_ANFIRE_CATALOG = [
+  { title:'Solo Leveling', query:'Solo Leveling', slug:'ore-dake-level-up-na-ken-todos-os-episodios', altSlugs:['ore-dake-level-up-na-ken'], audio:'Legendado PT-BR' },
+  { title:'One Piece', query:'One Piece', slug:'one-piece-todos-os-episodios', altSlugs:['one-piece'], audio:'Legendado PT-BR' },
+  { title:'Naruto Shippuden', query:'Naruto Shippuden', slug:'naruto-shippuuden-todos-os-episodios', altSlugs:['naruto-shippuden-todos-os-episodios','naruto-shippuuden','naruto-shippuden'], audio:'Legendado PT-BR' },
+  { title:'Boruto Naruto Next Generations Dublado', query:'Boruto Naruto Next Generations', slug:'boruto-naruto-next-generations-dublado-todos-os-episodios', altSlugs:['boruto-naruto-next-generations-todos-os-episodios','boruto-naruto-next-generations-dublado','boruto-naruto-next-generations'], audio:'Dublado' },
+  { title:'Jujutsu Kaisen', query:'Jujutsu Kaisen', slug:'jujutsu-kaisen-tv-todos-os-episodios', altSlugs:['jujutsu-kaisen-todos-os-episodios','jujutsu-kaisen-tv','jujutsu-kaisen'], audio:'Legendado PT-BR' },
+  { title:'Dandadan', query:'Dandadan', slug:'dandadan-todos-os-episodios', altSlugs:['dandadan'], audio:'Legendado PT-BR' },
+  { title:'Kimetsu no Yaiba', query:'Demon Slayer Kimetsu no Yaiba', slug:'kimetsu-no-yaiba-todos-os-episodios', altSlugs:['kimetsu-no-yaiba'], audio:'Legendado PT-BR' },
+  { title:'Dragon Ball Daima', query:'Dragon Ball Daima', slug:'dragon-ball-daima-todos-os-episodios', altSlugs:['dragon-ball-daima'], audio:'Legendado PT-BR' },
+  { title:'Spy x Family', query:'Spy x Family', slug:'spy-x-family-todos-os-episodios', altSlugs:['spy-family-todos-os-episodios','spy-x-family','spy-family'], audio:'Legendado PT-BR' },
+  { title:'Attack on Titan', query:'Attack on Titan', slug:'shingeki-no-kyojin-todos-os-episodios', altSlugs:['shingeki-no-kyojin','attack-on-titan'], audio:'Legendado PT-BR' },
+  { title:'Chainsaw Man', query:'Chainsaw Man', slug:'chainsaw-man-todos-os-episodios', altSlugs:['chainsaw-man'], audio:'Legendado PT-BR' },
+  { title:'Black Clover', query:'Black Clover', slug:'black-clover-todos-os-episodios', altSlugs:['black-clover'], audio:'Legendado PT-BR' },
+  { title:'Hunter x Hunter', query:'Hunter x Hunter', slug:'hunter-x-hunter-2011-todos-os-episodios', altSlugs:['hunter-x-hunter-todos-os-episodios','hunter-x-hunter-2011','hunter-x-hunter'], audio:'Legendado PT-BR' },
+  { title:'Bleach', query:'Bleach', slug:'bleach-todos-os-episodios', altSlugs:['bleach'], audio:'Legendado PT-BR' },
+  { title:'Boku no Hero Academia', query:'My Hero Academia', slug:'boku-no-hero-academia-todos-os-episodios', altSlugs:['boku-no-hero-academia','my-hero-academia'], audio:'Legendado PT-BR' },
+  { title:'Death Note Dublado', query:'Death Note', slug:'death-note-dublado-todos-os-episodios', altSlugs:['death-note-todos-os-episodios','death-note-dublado','death-note'], audio:'Dublado' },
+  { title:'One Punch Man Dublado', query:'One Punch Man', slug:'one-punch-man-dublado-todos-os-episodios', altSlugs:['one-punch-man-todos-os-episodios','one-punch-man-dublado','one-punch-man'], audio:'Dublado' },
+  { title:'Naruto Dublado', query:'Naruto', slug:'naruto-dublado-todos-os-episodios', altSlugs:['naruto-todos-os-episodios','naruto-dublado','naruto'], audio:'Dublado' },
+  { title:'Dragon Ball Super Dublado', query:'Dragon Ball Super', slug:'dragon-ball-super-dublado-todos-os-episodios', altSlugs:['dragon-ball-super-todos-os-episodios','dragon-ball-super-dublado','dragon-ball-super'], audio:'Dublado' },
+  { title:'One Piece Dublado', query:'One Piece', slug:'one-piece-dublado-todos-os-episodios', altSlugs:['one-piece-dublado','one-piece-todos-os-episodios'], audio:'Dublado' },
+  { title:'Tokidoki Bosotto Russia-go de Dereru Tonari no Alya-san', query:'Tokidoki Bosotto Russia go de Dereru Tonari no Alya san', slug:'tokidoki-bosotto-russia-go-de-dereru-tonari-no-alya-san-todos-os-episodios', altSlugs:['tokidoki-bosotto-russia-go-de-dereru-tonari-no-alya-san'], audio:'Legendado PT-BR' }
+];
+
+function anfireCatalogItem(item, base){
+  const slug = String(item.slug || '').trim();
+  return {
+    provider:'anfire', source:'anfire', title:item.title, name:item.title, query:item.query || item.title,
+    slug, altSlugs:item.altSlugs || [], link: anfireMakeUrl(base || ANFIRE_BASES[0] || 'https://animefire.plus', `/animes/${slug}`),
+    cover:item.cover || '', rating:item.rating || '', year:item.year || '', status:item.status || '', audio:item.audio || audioFromSlug(slug), synopsis:item.synopsis || ''
+  };
+}
+function audioFromSlug(slug){
+  return /dublado/i.test(String(slug || '')) ? 'Dublado' : 'Legendado PT-BR';
+}
+function textKey(value){
+  return slugifyAnime(String(value || '').replace(/\b(tv|season|temporada|dublado|legendado|todos os episodios|todos os episódios)\b/gi, ''));
+}
+function catalogMatches(name){
+  const q = textKey(name);
+  if (!q) return [];
+  const tokens = q.split('-').filter(Boolean);
+  return GREMORY_ANFIRE_CATALOG
+    .map(item => {
+      const keys = [item.title, item.query, item.slug, ...(item.altSlugs || [])].map(textKey);
+      let score = 0;
+      for (const k of keys){
+        if (!k) continue;
+        if (k === q) score = Math.max(score, 100);
+        if (k.includes(q) || q.includes(k)) score = Math.max(score, 80);
+        const hit = tokens.filter(t => k.includes(t)).length;
+        if (hit) score = Math.max(score, hit * 12);
+      }
+      return { item, score };
+    })
+    .filter(x => x.score >= 12)
+    .sort((a,b) => b.score - a.score)
+    .map(x => x.item);
+}
+function anfireCandidateSlugs(name){
+  const raw = String(name || '').trim();
+  const key = slugifyAnime(raw.replace(/\b(dublado|legendado|todos os episodios|todos os episódios)\b/gi, ''));
+  const matched = catalogMatches(raw).flatMap(x => [x.slug, ...(x.altSlugs || [])]);
+  const list = [
+    ...matched,
+    key,
+    `${key}-todos-os-episodios`,
+    `${key}-dublado-todos-os-episodios`,
+    `${key}-dublado`
+  ];
+  return [...new Set(list.filter(Boolean))];
+}
+async function enrichAnimeWithAnilist(item){
+  const base = { ...item };
+  if (base.cover && base.synopsis && base.rating) return base;
+  try{
+    const found = await anilistSearch(base.query || base.title || base.name, 1);
+    const ani = found?.[0] || {};
+    return {
+      ...base,
+      cover: base.cover || ani.cover || '',
+      rating: base.rating || ani.rating || '',
+      year: base.year || ani.year || '',
+      status: base.status || ani.status || '',
+      synopsis: base.synopsis || ani.synopsis || '',
+      anilistId: ani.anilistId || base.anilistId || ''
+    };
+  }catch{
+    return base;
+  }
+}
+async function enrichAnimeList(items, limit = 12){
+  const slice = items.slice(0, limit);
+  return await Promise.all(slice.map(enrichAnimeWithAnilist));
+}
+function curatedRow(id, title, titles){
+  const base = ANFIRE_BASES[0] || 'https://animefire.plus';
+  const selected = titles.map(t => GREMORY_ANFIRE_CATALOG.find(x => x.title === t) || GREMORY_ANFIRE_CATALOG.find(x => textKey(x.title) === textKey(t))).filter(Boolean);
+  return { id, title, items:selected.map(x => anfireCatalogItem(x, base)) };
+}
+async function anilistHomeRows(){
+  const rows = [
+    curatedRow('legendado-ptbr', 'Legendados em português', ['Solo Leveling','One Piece','Jujutsu Kaisen','Dandadan','Kimetsu no Yaiba','Dragon Ball Daima','Spy x Family','Chainsaw Man']),
+    curatedRow('dublados', 'Dublados em português', ['Naruto Dublado','Boruto Naruto Next Generations Dublado','Dragon Ball Super Dublado','One Piece Dublado','Death Note Dublado','One Punch Man Dublado']),
+    curatedRow('populares', 'Mais pesquisados globalmente', ['Naruto Shippuden','Attack on Titan','Black Clover','Hunter x Hunter','Bleach','Boku no Hero Academia','Tokidoki Bosotto Russia-go de Dereru Tonari no Alya-san'])
+  ];
+  for (const row of rows){
+    row.items = await enrichAnimeList(row.items, 10);
+  }
+  return rows;
+}
+async function getAnfireUpdated(limit = 24){
+  // Em vez de depender só do HTML do /animes-atualizados, entrega uma fileira
+  // com slugs reais para o clique sempre ir para a rota de episódios.
+  const row = curatedRow('gremory-play', 'Escolhidos para você', ['Solo Leveling','One Piece','Naruto Shippuden','Dandadan','Jujutsu Kaisen','Kimetsu no Yaiba','Spy x Family','Dragon Ball Daima']);
+  return await enrichAnimeList(row.items, limit || 12);
+}
+async function getAnfireSearch(name){
+  const results = [];
+  const base = ANFIRE_BASES[0] || 'https://animefire.plus';
+
+  for (const item of catalogMatches(name)) results.push(anfireCatalogItem(item, base));
+
+  for (const b of ANFIRE_BASES){
+    try{
+      const html = await fetchAnfireText(anfireMakeUrl(b, `/pesquisar/${encodeURIComponent(name)}`));
+      results.push(...extractAnfireCards(html, 40, b).map(x => ({ ...x, provider:'anfire', source:'anfire', query:name, audio:x.audio || audioFromSlug(x.slug || x.link) })));
+    }catch{}
+  }
+
+  if (results.length < 3) {
+    for (const slug of anfireCandidateSlugs(name).slice(0, 12)){
+      results.push({ provider:'anfire', source:'anfire', title:anfirePrettyTitleFromSlug(slug), name:anfirePrettyTitleFromSlug(slug), query:name, slug, link:anfireMakeUrl(base, `/animes/${slug}`), cover:'', audio:audioFromSlug(slug) });
+    }
+  }
+
+  const clean = uniqueBy(results, x => x.slug || x.link || x.title).slice(0, 30);
+  return await enrichAnimeList(clean, 20);
+}
+function episodeTitleFrom(slug, episode){
+  return `${anfirePrettyTitleFromSlug(slug)} - Episódio ${episode}`;
+}
+function buildFallbackEpisodes(slug, count = 12, base = ANFIRE_BASES[0] || 'https://animefire.plus'){
+  const max = Math.max(1, Math.min(Number(count || 12) || 12, 80));
+  return Array.from({length:max}, (_, i) => {
+    const episode = i + 1;
+    return { provider:'anfire', source:'anfire', title:`Episódio ${episode}`, url:anfireMakeUrl(base, `/animes/${slug}/${episode}`), slug, episode };
+  });
+}
+async function fetchAnfireEpisodeJsonAny(slug, episode){
+  const errors = [];
+  for (const base of ANFIRE_BASES){
+    const url = anfireMakeUrl(base, `/video/${encodeURIComponent(slug)}/${episode}`);
+    try{
+      const data = await fetchAnfireJson(url);
+      const arr = Array.isArray(data?.data) ? data.data : [];
+      if (arr.length) return { base, data, url };
+      if (data?.response && String(data.response.status) === '500') errors.push(`${base}: offline`);
+    }catch(e){ errors.push(`${base}: ${e.message}`); }
+  }
+  const err = new Error(errors.join(' | ') || 'sem resposta');
+  err.noSources = true;
+  throw err;
+}
+async function probeAnfireEpisodes(animeSlug, maxEpisodes = 80, base = ANFIRE_BASES[0] || 'https://animefire.plus'){
+  const found = [];
+  let misses = 0;
+  for (let episode = 1; episode <= maxEpisodes; episode++){
+    try{
+      const got = await fetchAnfireEpisodeJsonAny(animeSlug, episode);
+      found.push({ provider:'anfire', source:'anfire', title:`Episódio ${episode}`, url:anfireMakeUrl(got.base || base, `/animes/${animeSlug}/${episode}`), slug:animeSlug, episode });
+      misses = 0;
+    }catch{
+      misses += 1;
+      if (episode === 1) break;
+      if (misses >= 5) break;
+    }
+  }
+  return found;
+}
+async function getAnfireDetails(linkOrSlug, opts = {}){
+  let link = cleanUrl(linkOrSlug || '');
+  let slug = anfireSlugFromLink(link).slug || extractSlug(link);
+  const base = /^https?:\/\//i.test(link) ? anfireBaseFrom(link) : (ANFIRE_BASES[0] || 'https://animefire.plus');
+  if (!slug) slug = anfireCandidateSlugs(linkOrSlug)[0] || '';
+  if (!/^https?:\/\//i.test(link)) link = anfireMakeUrl(base, `/animes/${slug}`);
+
+  let title = anfirePrettyTitleFromSlug(slug);
+  let cover = '', synopsis = '', score = '', info = '', alt = '';
+  let pageBase = base;
+
+  for (const b of [base, ...ANFIRE_BASES].filter((v,i,a)=>v && a.indexOf(v)===i)){
+    const testLink = anfireMakeUrl(b, `/animes/${slug}`);
+    try{
+      const html = await fetchAnfireText(testLink);
+      pageBase = b;
+      const firstEp = extractFirst(html, [
+        /<div[^>]+class=["'][^"']*div_video_list[^"']*["'][\s\S]*?<a[^>]+href=["']([^"']+)["']/i,
+        /<a[^>]+href=["']([^"']*\/animes\/[^"']+\/\d+[^"']*)["']/i
+      ]);
+      if (firstEp) slug = anfireSlugFromLink(absoluteUrl(firstEp, pageBase)).slug || slug;
+      title = stripTags(extractFirst(html, [/<h1[^>]+class=["'][^"']*quicksand400[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i, /<h1[^>]*>([\s\S]*?)<\/h1>/i, /<title[^>]*>([\s\S]*?)<\/title>/i])).replace(/\s*-\s*AnimeFire.*$/i, '').trim() || title;
+      alt = stripTags(extractFirst(html, [/<h6[^>]+class=["'][^"']*text-gray[^"']*["'][^>]*>([\s\S]*?)<\/h6>/i]));
+      cover = absoluteUrl(extractFirst(html, [/<div[^>]+class=["'][^"']*sub_animepage_img[^"']*["'][\s\S]*?<img[^>]+data-src=["']([^"']+)["']/i, /<div[^>]+class=["'][^"']*sub_animepage_img[^"']*["'][\s\S]*?<img[^>]+src=["']([^"']+)["']/i, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i]), pageBase);
+      synopsis = stripTags(extractFirst(html, [/<div[^>]+class=["'][^"']*divSinopse[^"']*["'][\s\S]*?<span[^>]+class=["'][^"']*spanAnimeInfo[^"']*["'][^>]*>([\s\S]*?)<\/span>/i, /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i]));
+      score = stripTags(extractFirst(html, [/<h4[^>]+id=["']anime_score["'][^>]*>([\s\S]*?)<\/h4>/i]));
+      info = stripTags((html.match(/<div[^>]+class=["'][^"']*animeInfo[^"']*["'][\s\S]*?<\/div>/i) || [''])[0]);
+      link = testLink;
+      break;
+    }catch{}
+  }
+
+  let episodes = [];
+  if (!opts.light && slug) {
+    // O caminho mais confiável para o player é o /video/slug/episodio; por isso
+    // a lista vem primeiro dessa rota e só depois usa fallback gerado.
+    episodes = await probeAnfireEpisodes(slug, Number(process.env.ANFIRE_MAX_EPISODES || 80) || 80, pageBase).catch(() => []);
+    if (!episodes.length) {
+      const catalog = GREMORY_ANFIRE_CATALOG.find(x => x.slug === slug || (x.altSlugs || []).includes(slug));
+      let aniCount = 12;
+      try{
+        const ani = await anilistSearch(catalog?.query || title, 1);
+        aniCount = Number(ani?.[0]?.episodes || 12) || 12;
+        cover = cover || ani?.[0]?.cover || '';
+        synopsis = synopsis || ani?.[0]?.synopsis || '';
+        score = score || ani?.[0]?.rating || '';
+      }catch{}
+      episodes = buildFallbackEpisodes(slug, aniCount, pageBase);
+    }
+  }
+  return { provider:'anfire', source:'anfire', title:title || alt || anfirePrettyTitleFromSlug(slug), name:title || alt || anfirePrettyTitleFromSlug(slug), subtitle:alt, link, url:link, slug, cover, score, rating:score, synopsis, info, audio:audioFromSlug(slug), episodes };
+}
+async function findBloggerIframe(base, slug, episode){
+  for (const b of [base, ...ANFIRE_BASES].filter((v,i,a)=>v && a.indexOf(v)===i)){
+    try{
+      const pageHtml = await fetchAnfireText(anfireMakeUrl(b, `/animes/${slug}/${episode}`));
+      const iframeUrl = absoluteUrl(extractFirst(pageHtml, [
+        /<iframe[^>]+src=["']([^"']*blogger\.com[^"']+)["']/i,
+        /data-src=["']([^"']*blogger\.com[^"']+)["']/i,
+        /<iframe[^>]+src=["']([^"']+)["']/i
+      ]), b);
+      if (iframeUrl) return iframeUrl;
+    }catch{}
+  }
+  return '';
+}
+async function getAnfireSources(ep){
+  const parsed = anfireSlugFromLink(ep.url || ep.link || '');
+  const slug = ep.slug || parsed.slug;
+  const episode = Number(ep.episode || parsed.episode || extractSlug(ep.url || ep.link));
+  if (!slug || !episode) throw new Error('episódio sem slug/número');
+
+  const base = anfireBaseFrom(ep.url || ep.link || '');
+  const sources = [];
+
+  const iframeUrl = await findBloggerIframe(base, slug, episode);
+  if (iframeUrl) {
+    sources.push({ provider:'anfire', label:'Player', type:'iframe', playType:'iframe', src:iframeUrl, url:iframeUrl, directUrl:'', status:'ONLINE' });
+  }
+
+  let got = null;
+  try{ got = await fetchAnfireEpisodeJsonAny(slug, episode); }catch(e){ got = null; }
+  const rawSources = Array.isArray(got?.data?.data) ? got.data.data : [];
+  rawSources.forEach((item, i) => {
+    const direct = formatUrl(cleanUrl(item.src || item.url || item.link || ''));
+    if (!direct) return;
+    const label = item.label || item.resolution || item.quality || `${i + 1}ª opção`;
+    const lower = direct.toLowerCase();
+    const type = lower.includes('.m3u8') ? 'hls' : (/blogger\.com|\/embed\//i.test(lower) ? 'iframe' : 'video');
+    // Se o AnimeFire entregou googlevideo e existe iframe Blogger, manter o iframe como principal.
+    if (iframeUrl && lower.includes('googlevideo.com')) return;
+    sources.push({ provider:'anfire', label, type, playType:type, src:direct, url:direct, directUrl:direct, status:'ONLINE' });
+  });
+
+  if (!sources.length) {
+    const episodeUrl = anfireMakeUrl(base, `/animes/${slug}/${episode}`);
+    sources.push({ provider:'anfire', label:'Abrir página do episódio', type:'external', playType:'external', src:episodeUrl, url:episodeUrl, directUrl:episodeUrl, status:'EXTERNAL' });
+  }
+  return { provider:'anfire', sources, raw:got?.data || null };
+}
+
 function animeProxyUrl(req, action, fileUrl, filename, provider){
   const base = new URL(req.url, 'http://localhost');
   const u = new URL('/api/main', base.origin);
