@@ -302,6 +302,39 @@ async function getNexusSources(slugOrUrl, key){
   return { provider: 'nexus', sources, raw: data };
 }
 
+async function darkHomeRows(key){
+  const rows = [
+    { id:'popular', title:'Mais pesquisados globalmente', names:['Solo Leveling','One Piece','Naruto Shippuden','Boruto Naruto Next Generations Dublado','Jujutsu Kaisen','Dandadan','Kimetsu no Yaiba','Dragon Ball Daima'] },
+    { id:'recommended', title:'Recomendados para assistir', names:['Attack on Titan','Black Clover','Tokyo Revengers','Chainsaw Man','Hunter x Hunter','Bleach','Boku no Hero Academia','Spy x Family'] },
+    { id:'dubbed', title:'Dublados em português', names:['Naruto Dublado','Boruto Dublado','Dragon Ball Super Dublado','One Punch Man Dublado','Death Note Dublado','Nanatsu no Taizai Dublado','Blue Lock Dublado'] }
+  ];
+  async function resolveName(name){
+    try{
+      const a = await getAnimeFireSearch(name, key);
+      if (a && a[0]) return { ...a[0], query:name };
+    }catch{}
+    try{
+      const n = await getNexusSearch(name, key);
+      if (n && n[0]) return { ...n[0], query:name };
+    }catch{}
+    return { provider:'animefire', source:'animefire', title:name, name, query:name, cover:'', link:'', slug:'' };
+  }
+  const out = [];
+  for (const row of rows){
+    const items = await Promise.all(row.names.map(resolveName));
+    out.push({ id:row.id, title:row.title, items });
+  }
+  return out;
+}
+
+function rankDarkSources(sources){
+  return sources.slice().sort((a,b) => {
+    const qa = String(a.label || '').match(/(1080|720|480|360)/)?.[1] || '0';
+    const qb = String(b.label || '').match(/(1080|720|480|360)/)?.[1] || '0';
+    return Number(qb) - Number(qa);
+  });
+}
+
 function decodeHtml(value){
   return String(value || '')
     .replace(/&amp;/g, '&')
@@ -952,6 +985,141 @@ function animeProxyUrl(req, action, fileUrl, filename, provider){
   if (provider) u.searchParams.set('provider', provider);
   return u.pathname + u.search;
 }
+
+function animeSearchName(value){
+  return stripTags(String(value || ''))
+    .replace(/\s*-\s*(Todos os Episódios|Todos os episodios|Filme).*$/i, '')
+    .replace(/\((Dublado|Legendado)\)/ig, ' $1')
+    .replace(/\b(Todos os Episódios|Todos os episodios)\b/ig, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function animeTitleScore(item, query){
+  const q = slugifyAnime(animeSearchName(query));
+  const t = slugifyAnime(`${item.title || ''} ${item.name || ''} ${item.alt || ''}`);
+  if (!q || !t) return 0;
+  let score = 0;
+  if (t === q) score += 120;
+  if (t.includes(q) || q.includes(t)) score += 80;
+  const tokens = q.split('-').filter(Boolean);
+  score += tokens.filter(tok => t.includes(tok)).length * 12;
+  const wantsDub = /\bdublado\b/i.test(query);
+  const isDub = /\bdublado\b/i.test(`${item.title || ''} ${item.name || ''} ${item.link || ''}`);
+  if (wantsDub && isDub) score += 45;
+  if (wantsDub && !isDub) score -= 25;
+  if (!wantsDub && isDub) score -= 5;
+  if (/filme|movie/i.test(query) && /filme|movie/i.test(`${item.title || ''} ${item.name || ''}`)) score += 20;
+  return score;
+}
+function pickAnimeFireResult(list, query){
+  const arr = (list || []).filter(x => x && x.link);
+  if (!arr.length) return null;
+  return arr.slice().sort((a,b) => animeTitleScore(b, query) - animeTitleScore(a, query))[0];
+}
+async function anilistInfoSafe(name){
+  try{
+    const list = await anilistSearch(animeSearchName(name), 1);
+    return list && list[0] ? list[0] : null;
+  }catch{ return null; }
+}
+async function enrichItemWithAniList(item, query){
+  const ani = await anilistInfoSafe(query || item?.title || item?.name);
+  if (!ani) return item;
+  return {
+    ...item,
+    anilist:item.anilist || ani,
+    cover:item.cover || ani.cover || '',
+    rating:item.rating || item.score || ani.rating || '',
+    year:item.year || ani.year || '',
+    status:item.status || ani.status || '',
+    synopsis:item.synopsis || ''
+  };
+}
+function animePlayUrl(req, epUrl, quality, provider, key){
+  const base = new URL(req.url, 'http://localhost');
+  const u = new URL('/api/main', base.origin);
+  u.searchParams.set('action', 'anime_play');
+  u.searchParams.set('url', epUrl);
+  if (quality) u.searchParams.set('quality', quality);
+  if (provider) u.searchParams.set('provider', provider);
+  if (key) u.searchParams.set('apikey', key);
+  return u.pathname + u.search;
+}
+function chooseSourceByQuality(sources, quality){
+  const q = String(quality || '').toLowerCase();
+  const ranked = rankDarkSources(sources || []);
+  if (!q) return ranked[0] || null;
+  return ranked.find(x => String(x.label || '').toLowerCase() === q)
+    || ranked.find(x => String(x.label || '').toLowerCase().includes(q))
+    || ranked[0] || null;
+}
+async function resolveDarkAnimeDetails(input, key){
+  const query = animeSearchName(input.query || input.title || input.name || '');
+  const provider = String(input.provider || input.source || '').toLowerCase();
+  const animeUrl = input.url || input.link || '';
+  const errors = [];
+
+  if (provider === 'animefire' && animeUrl) {
+    try{ return await getAnimeFireEpisodes(animeUrl, key); }
+    catch(e){ errors.push(`AnimeFire direto: ${e.message}`); }
+  }
+
+  if (animeUrl && /animefire\.io\/animes\//i.test(animeUrl)) {
+    try{ return await getAnimeFireEpisodes(animeUrl, key); }
+    catch(e){ errors.push(`AnimeFire URL: ${e.message}`); }
+  }
+
+  if (query) {
+    try{
+      const found = await getAnimeFireSearch(query, key);
+      const picked = pickAnimeFireResult(found, query);
+      if (picked?.link) {
+        const details = await getAnimeFireEpisodes(picked.link, key);
+        return { ...details, searchPicked:picked };
+      }
+    }catch(e){ errors.push(`Busca AnimeFire: ${e.message}`); }
+  }
+
+  if (provider === 'nexus' || input.slug || query) {
+    try{
+      let target = input.slug || input.code || input.id || '';
+      if (!target && query) {
+        const found = await getNexusSearch(query, key);
+        target = found[0]?.slug || found[0]?.link || '';
+      }
+      if (target) return await getNexusEpisodes(target, key);
+    }catch(e){ errors.push(`Nexus: ${e.message}`); }
+  }
+
+  const err = new Error(errors.join(' | ') || 'não encontrei episódios');
+  err.details = errors;
+  throw err;
+}
+async function buildAniListHomeWithDarkRow(key){
+  let rows = [];
+  try{
+    rows = await anilistHomeRows();
+    rows = rows.map(row => ({
+      ...row,
+      items:(row.items || []).map(item => ({ ...item, provider:'anilist', source:'anilist', query:item.query || item.title || item.name, synopsis:'' }))
+    }));
+  }catch{}
+
+  const dubbedNames = ['Boruto Naruto Next Generations Dublado','Naruto Dublado','Dragon Ball Super Dublado','One Punch Man Dublado','Death Note Dublado','Black Clover Dublado','One Piece Dublado'];
+  const dubbed = [];
+  await Promise.all(dubbedNames.map(async (name) => {
+    try{
+      const found = await getAnimeFireSearch(name, key);
+      const picked = pickAnimeFireResult(found, name);
+      if (picked) dubbed.push({ ...picked, query:name, audio:picked.audio || 'Dublado' });
+    }catch{}
+  }));
+  if (dubbed.length) rows.push({ id:'dubbed', title:'Dublados em português', items:uniqueBy(dubbed, x => x.link || x.title).slice(0, 10) });
+
+  if (!rows.length) rows = await darkHomeRows(key);
+  return rows;
+}
+
 function normalizeAptoideApp(app = {}){
   const file = app.file || {};
   const stats = app.stats || {};
@@ -1146,18 +1314,10 @@ module.exports = async (req, res) => {
 
   if (action === 'anime_home') {
     if (req.method !== 'GET' && req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
+    const key = pickDarkKey({ apikey: qp(req, 'apikey') });
     try{
-      const rows = [];
-      try{
-        const latest = await getAnfireUpdated(24);
-        if (latest.length) rows.push({ id:'anfire-updated', title:'Atualizados no AnimeFire', items: latest });
-      }catch{}
-      try{
-        const aniRows = await anilistHomeRows();
-        rows.push(...aniRows);
-      }catch{}
-      if (!rows.length) throw new Error('nenhuma fonte retornou animes');
-      return sendJson(res, 200, { ok:true, rows });
+      const rows = await buildAniListHomeWithDarkRow(key);
+      return sendJson(res, 200, { ok:true, rows, provider:'anilist_darkstars' });
     }catch(e){
       return sendJson(res, 500, { erro:'Erro ao carregar início dos animes', detalhe:e.message });
     }
@@ -1166,17 +1326,20 @@ module.exports = async (req, res) => {
   if (action === 'anime_search' || action === 'animesearch') {
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
     const body = await readJsonBody(req);
-    const name = body.name || body.query || body.q;
+    const key = pickDarkKey(body);
+    const name = animeSearchName(body.name || body.query || body.q || '');
     if (!name) return sendJson(res, 400, { erro: 'Nome do anime obrigatório' });
     const errors = [];
     try{
-      const [anfireList, aniList] = await Promise.all([
-        getAnfireSearch(name).catch(e => { errors.push(`AnimeFire: ${e.message}`); return []; }),
+      const [fire, nexus, ani] = await Promise.all([
+        getAnimeFireSearch(name, key).catch(e => { errors.push(`AnimeFire: ${e.message}`); return []; }),
+        getNexusSearch(name, key).catch(e => { errors.push(`Nexus: ${e.message}`); return []; }),
         anilistSearch(name, 8).catch(e => { errors.push(`AniList: ${e.message}`); return []; })
       ]);
-      const result = uniqueBy([...anfireList, ...aniList], x => x.link || x.slug || x.title).slice(0, 50);
-      if (!result.length) return sendJson(res, 502, { erro: errors.length ? `Nenhum anime encontrado. ${errors.join(' | ')}` : 'Nenhum anime encontrado', providers:{ anfire:0, anilist:0 } });
-      return sendJson(res, 200, { ok:true, result, providers:{ anfire:anfireList.length, anilist:aniList.length }, warning: errors.join(' | ') });
+      const rankedFire = fire.slice().sort((a,b) => animeTitleScore(b, name) - animeTitleScore(a, name));
+      const result = uniqueBy([...rankedFire, ...nexus, ...ani], x => `${x.provider}:${x.link || x.slug || x.anilistId || x.title}`).slice(0, 60);
+      if (!result.length) return sendJson(res, 502, { erro: errors.length ? `Nenhum anime encontrado. ${errors.join(' | ')}` : 'Nenhum anime encontrado' });
+      return sendJson(res, 200, { ok:true, result, providers:{ animefire:fire.length, nexus:nexus.length, anilist:ani.length }, warning: errors.join(' | ') });
     }catch(e){
       return sendJson(res, 500, { erro: 'Erro ao pesquisar anime', detalhe:e.message });
     }
@@ -1185,60 +1348,123 @@ module.exports = async (req, res) => {
   if (action === 'anime_eps' || action === 'animeeps') {
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
     const body = await readJsonBody(req);
-    const animeUrl = body.url || body.link;
-    const slug = body.slug || body.code || body.id || extractSlug(animeUrl);
-    const title = body.title || body.name || body.query || '';
-    if (!animeUrl && !slug && !title) return sendJson(res, 400, { erro: 'URL/código/nome do anime obrigatório' });
+    const key = pickDarkKey(body);
+    const title = animeSearchName(body.title || body.name || body.query || '');
+    if (!body.url && !body.link && !body.slug && !title) return sendJson(res, 400, { erro: 'URL/código/nome do anime obrigatório' });
     const errors = [];
     try{
-      let target = animeUrl || slug;
-      if (!target && title) {
-        const found = await getAnfireSearch(title);
-        target = found.find(x => x.link)?.link || found[0]?.link || found[0]?.slug || '';
+      let details = null;
+      try{ details = await resolveDarkAnimeDetails(body, key); }
+      catch(e){ errors.push(e.message); }
+
+      if (!details || !details.episodes?.length) {
+        const ani = await anilistInfoSafe(title || body.query || body.name);
+        if (ani) {
+          return sendJson(res, 200, {
+            ok:true,
+            provider:'anilist',
+            fallback:true,
+            warning:errors.join(' | '),
+            anime:{ ...ani, provider:'anilist', source:'anilist', episodes:[], synopsis:ani.synopsis || '', fallbackMessage:'Encontrei informações no AniList, mas a Dark Stars não retornou episódios para assistir.' }
+          });
+        }
       }
-      if (!target) throw new Error('não achei esse anime no AnimeFire');
-      const details = await getAnfireDetails(target);
-      if (!details.episodes.length) throw new Error('AnimeFire não retornou episódios para esse anime');
-      return sendJson(res, 200, { ok:true, anime: details, provider: details.provider, warning: errors.join(' | ') });
+      if (!details || !details.episodes?.length) return sendJson(res, 502, { erro:'Não consegui listar episódios desse anime', detalhes:errors });
+
+      const ani = await anilistInfoSafe(title || details.title || details.name);
+      const anime = {
+        ...details,
+        title: details.title || ani?.title || title || 'Anime',
+        name: details.name || details.title || ani?.title || title || 'Anime',
+        cover: details.cover || ani?.cover || '',
+        rating: details.score || details.rating || ani?.rating || '',
+        year: details.year || ani?.year || '',
+        status: details.status || ani?.status || '',
+        // Prioridade para a sinopse em português que vem do animefireEp.
+        synopsis: details.synopsis || ani?.synopsis || '',
+        anilist: ani || null
+      };
+      return sendJson(res, 200, { ok:true, anime, provider:anime.provider || details.provider, warning:errors.join(' | ') });
     }catch(e){
-      return sendJson(res, 502, { erro: 'Não consegui listar episódios desse anime', detalhe:e.message, detalhes: errors });
+      return sendJson(res, 502, { erro:'Não consegui listar episódios desse anime', detalhe:e.message, detalhes:errors });
     }
   }
 
   if (action === 'anime_stream' || action === 'anime_download' || action === 'animedownload') {
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
     const body = await readJsonBody(req);
+    const key = pickDarkKey(body);
+    const provider = String(body.provider || body.source || '').toLowerCase();
     const epUrl = body.url || body.link;
-    const epPayload = {
-      url: epUrl,
-      link: epUrl,
-      slug: body.slug || body.code || body.id || anfireSlugFromLink(epUrl || '').slug,
-      episode: body.episode || anfireSlugFromLink(epUrl || '').episode,
-      title: body.title || 'Episódio'
-    };
+    const slug = body.slug || body.code || body.id || extractSlug(epUrl);
+    if (!epUrl && !slug) return sendJson(res, 400, { erro:'URL/código do episódio obrigatório' });
+    const errors = [];
     try{
-      const data = await getAnfireSources(epPayload);
-      if (!data.sources.length) return sendJson(res, 502, { erro: 'Não encontrei player para esse episódio' });
-      const sources = data.sources.map((src, i) => {
-        const srcProvider = src.provider || data.provider || 'anfire';
-        const type = src.type || src.playType || (/blogger\.com|iframe/i.test(src.src || src.url || '') ? 'iframe' : 'video');
+      let data = null;
+      if (provider === 'nexus' && slug) {
+        try{ data = await getNexusSources(slug, key); }
+        catch(e){ errors.push(`Nexus: ${e.message}`); }
+      }
+      if ((!data || !data.sources?.length) && epUrl) {
+        try{ data = await getAnimeFireSources(epUrl, key); }
+        catch(e){ errors.push(`AnimeFire: ${e.message}`); }
+      }
+      if ((!data || !data.sources?.length) && slug) {
+        try{ data = await getNexusSources(slug, key); }
+        catch(e){ errors.push(`Nexus fallback: ${e.message}`); }
+      }
+      if (!data || !data.sources?.length) return sendJson(res, 502, { erro:'Não encontrei player para esse episódio', detalhes:errors });
+
+      const sources = rankDarkSources(data.sources).map((src, i) => {
+        const srcProvider = src.provider || data.provider || provider || 'animefire';
         const direct = cleanUrl(src.src || src.url || src.link || src.download || src.directUrl || '');
+        const label = src.label || src.quality || src.resolution || `${i + 1}ª opção`;
+        const extType = /\.m3u8(\?|$)/i.test(direct) ? 'hls' : (/iframe|embed|blogger\.com/i.test(direct) ? 'iframe' : 'video');
+        const shouldUsePlayRoute = srcProvider === 'animefire' && epUrl && extType === 'video';
+        const play = shouldUsePlayRoute ? animePlayUrl(req, epUrl, label, srcProvider, key) : direct;
         return {
-          ...src,
-          provider: srcProvider,
-          type,
-          playType:type,
-          label: `${src.label || `${i + 1}ª opção`}`,
-          src: direct,
-          url: direct,
-          directUrl: src.directUrl || direct,
-          playUrl: direct,
-          proxyUrl: type === 'video' ? animeProxyUrl(req, 'media_proxy', direct, '', srcProvider) : ''
+          provider:srcProvider,
+          type:extType,
+          playType:extType,
+          label,
+          src:play,
+          url:play,
+          directUrl:direct,
+          playUrl:play,
+          proxyUrl: '',
+          originalUrl:direct
         };
-      }).filter(x => x.src);
-      return sendJson(res, 200, { ok:true, result:sources, sources, provider:data.provider });
+      }).filter(x => x.src || x.playUrl);
+      return sendJson(res, 200, { ok:true, result:sources, sources, provider:data.provider, player:sources[0] || null, warning:errors.join(' | ') });
     }catch(e){
-      return sendJson(res, 502, { erro: 'Não encontrei player para esse episódio', detalhe:e.message });
+      return sendJson(res, 502, { erro:'Não encontrei player para esse episódio', detalhe:e.message, detalhes:errors });
+    }
+  }
+
+  if (action === 'anime_play') {
+    if (req.method !== 'GET') return sendJson(res, 405, { erro: 'Método inválido' });
+    const key = pickDarkKey({ apikey: qp(req, 'apikey') });
+    const epUrl = qp(req, 'url');
+    const quality = qp(req, 'quality') || '';
+    const provider = String(qp(req, 'provider') || 'animefire').toLowerCase();
+    if (!epUrl) return sendJson(res, 400, { erro:'url do episódio obrigatória' });
+    try{
+      let data = null;
+      if (provider === 'nexus') data = await getNexusSources(epUrl, key);
+      else data = await getAnimeFireSources(epUrl, key);
+      const picked = chooseSourceByQuality(data.sources || [], quality);
+      if (!picked?.src) return sendJson(res, 404, { erro:'fonte não encontrada' });
+      let target;
+      try{ target = new URL(cleanUrl(picked.src)); }catch{ return sendJson(res, 400, { erro:'link de vídeo inválido' }); }
+      if (!['https:', 'http:'].includes(target.protocol)) return sendJson(res, 400, { erro:'protocolo inválido' });
+      if (blockPrivateHost(target.hostname)) return sendJson(res, 400, { erro:'host bloqueado' });
+      const headers = buildVideoHeaders(req, target.toString(), data.provider || provider || 'animefire');
+      headers.Range = normalizeRangeHeader(req.headers.range) || normalizeRangeHeader(qp(req, 'range')) || firstChunkRange();
+      const r = await fetch(target.toString(), { headers, redirect:'follow' });
+      if (!r.ok || !r.body) return sendJson(res, 502, { erro:'falha ao obter mídia' });
+      return streamAsMedia(res, r);
+    }catch(e){
+      return sendJson(res, 502, { erro:'erro ao preparar player', detalhe:e.message });
     }
   }
 

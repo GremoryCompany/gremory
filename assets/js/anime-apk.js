@@ -9,6 +9,7 @@
   let currentSource = null;
   let currentPlayToken = 0;
   let currentHls = null;
+  let configLoadedPromise = null;
 
   const rows = [
     {
@@ -137,12 +138,29 @@
     setStatus('Download concluído.');
   }
 
+  async function loadSiteConfig(){
+    if (configLoadedPromise) return configLoadedPromise;
+    configLoadedPromise = (async () => {
+      try{
+        const res = await fetch('/config.json?v=20260621-darkstars-final', { cache:'no-store' });
+        if (!res.ok) return null;
+        const cfg = await res.json();
+        window.GREMORY_CONFIG = { ...(window.GREMORY_CONFIG || {}), ...(cfg || {}) };
+        if (cfg?.apiBase !== undefined) window.API_BASE = cfg.apiBase || '';
+        if (cfg?.darkstarsApiKey && !window.DARKSTARS_API_KEY) window.DARKSTARS_API_KEY = cfg.darkstarsApiKey;
+        return cfg;
+      }catch{ return null; }
+    })();
+    return configLoadedPromise;
+  }
+
   function getApiKey(){
     try{
       const authData = window.gremoryAuthGetUser?.();
-      const k = authData?.dbData?.apiKey || $('profileApiKey')?.value || localStorage.getItem('gremory_dark_apikey') || '';
+      const cfg = window.GREMORY_CONFIG || {};
+      const k = cfg.darkstarsApiKey || window.DARKSTARS_API_KEY || authData?.dbData?.apiKey || $('profileApiKey')?.value || localStorage.getItem('gremory_dark_apikey') || 'gremory';
       return String(k || '').trim();
-    }catch{ return ''; }
+    }catch{ return 'gremory'; }
   }
 
   async function post(action, body = {}){
@@ -160,7 +178,10 @@
   }
 
   async function get(action, params = {}){
-    const qs = new URLSearchParams({ action, ...params });
+    const apiKey = getApiKey();
+    const finalParams = { ...params };
+    if (apiKey && !finalParams.apikey) finalParams.apikey = apiKey;
+    const qs = new URLSearchParams({ action, ...finalParams });
     const res = await fetch(`${API_BASE()}/api/main?${qs.toString()}`);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.erro || 'Falha na requisição');
@@ -267,10 +288,11 @@
         const list = (Array.isArray(data.result) ? data.result : []).map(x => normalAnime(x, query));
         const q = key.replace(/dublado|legendado|todos os episodios|todos os episódios/g, '').trim();
         const selected =
-          list.find(x => x.provider === 'anfire' && (x.link || x.slug) && String(x.title || '').toLowerCase().includes(q)) ||
-          list.find(x => x.provider === 'anfire' && (x.link || x.slug)) ||
-          list.find(x => (x.link || x.slug) && String(x.title || '').toLowerCase().includes(q)) ||
+          list.find(x => x.provider === 'animefire' && (x.link || x.slug) && String(x.title || x.name || '').toLowerCase().includes(q)) ||
+          list.find(x => x.provider === 'animefire' && (x.link || x.slug)) ||
+          list.find(x => (x.link || x.slug) && String(x.title || x.name || '').toLowerCase().includes(q)) ||
           list.find(x => x.link || x.slug) ||
+          list.find(x => x.provider === 'anilist') ||
           list.find(x => x.cover) ||
           null;
         if (!selected) throw new Error('sem resultado');
@@ -391,7 +413,7 @@
             ${anime?.year ? `<span>${htmlEscape(anime.year)}</span>` : ''}
             ${anime?.status ? `<span>${htmlEscape(anime.status)}</span>` : ''}
           </div>
-          <p class="anime-synopsis">${htmlEscape(anime?.synopsis || anime?.alt || 'Escolha um episódio para assistir no player do site.')}</p>
+          <p class="anime-synopsis">${htmlEscape(anime?.synopsis || (anime?.provider === 'anilist' ? 'Buscando episódios e sinopse em português...' : 'Escolha um episódio para assistir no player do site.'))}</p>
         </div>
       </div>
       <div class="episodes-wrap">
@@ -639,8 +661,8 @@
       currentSources = (data.sources || data.result || []).map((src, index) => ({
         label: src.label || src.quality || src.resolution || `${index + 1}ª opção`,
         type: src.type || src.playType || '',
-        src: normalizeUrl(src.src || src.url || src.link || src.directUrl),
-        directUrl: normalizeUrl(src.directUrl || src.src || src.url || src.link),
+        src: normalizeUrl(src.playUrl || src.src || src.url || src.link || src.directUrl),
+        directUrl: normalizeUrl(src.directUrl || src.originalUrl || src.src || src.url || src.link),
         playUrl: normalizeUrl(src.playUrl || src.src || src.url || src.link),
         proxyUrl: normalizeUrl(src.proxyUrl || ''),
         provider: src.provider || data.provider || ''
@@ -789,7 +811,7 @@
       renderComments();
       recordActivity('comentou', 3);
     });
-    loadHome();
+    loadSiteConfig().finally(() => loadHome(true));
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);

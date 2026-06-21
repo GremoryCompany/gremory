@@ -1,14 +1,14 @@
-// Config do FRONT (Vercel)
-// Este projeto agora baixa direto no site (sem enviar no WhatsApp).
-// Como as rotas /api rodam no mesmo domínio da Vercel, deixe vazio.
+// Config do FRONT (edite aqui se quiser manter em JS)
+window.API_BASE = "";
+window.GREMORY_CONFIG = window.GREMORY_CONFIG || {};
+window.GREMORY_CONFIG.darkstarsApiKey = window.GREMORY_CONFIG.darkstarsApiKey || "gremory";
+window.DARKSTARS_API_KEY = window.GREMORY_CONFIG.darkstarsApiKey;
 
-window.API_BASE = ""; // ex: "" (mesmo domínio)
+// Também existe /config.json. Se ele existir, o anime-apk.js lê e pode sobrescrever esta key.
 
-// Atualizações (aparecem no sininho). Você pode editar aqui,
-// e também pode adicionar pelo próprio site (fica salvo no navegador).
 window.UPDATES_DEFAULT = [
   { date: "2026-02-28", text: "✅ Novo: Relógio no canto superior direito." },
   { date: "2026-02-28", text: "✅ Pinterest agora baixa direto." },
   { date: "2026-03-01", text: "🛒 local de compra adicionado" },
-   { date: "2026-03-27", text: "✅ perfil ajustado" }
+  { date: "2026-03-27", text: "✅ perfil ajustado" }
 ];
