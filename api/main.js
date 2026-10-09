@@ -1,3 +1,23 @@
+const crypto = require('crypto');
+
+function proxySignature(url, filename){
+  const secret = process.env.GREMORY_PROXY_SECRET || '';
+  if (!secret) return '';
+  return crypto.createHmac('sha256', secret).update(String(url) + '\n' + String(filename)).digest('hex').slice(0, 32);
+}
+function signedProxyPath(url, filename){
+  const sig = proxySignature(url, filename);
+  const base = `/api/main?action=proxy&url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+  return sig ? `${base}&sig=${encodeURIComponent(sig)}` : base;
+}
+function timingSafeEqualString(a, b){
+  try{
+    const aa = Buffer.from(String(a || ''));
+    const bb = Buffer.from(String(b || ''));
+    return aa.length === bb.length && crypto.timingSafeEqual(aa, bb);
+  }catch{ return false; }
+}
+
 function sendJson(res, status, obj){
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -1150,6 +1170,12 @@ module.exports = async (req, res) => {
     const url = qp(req, 'url');
     const filename = qp(req, 'filename') || 'download';
     if (!url) return sendJson(res, 400, { erro: 'url obrigatória' });
+    const proxySecret = process.env.GREMORY_PROXY_SECRET || '';
+    if (proxySecret) {
+      const supplied = qp(req, 'sig') || '';
+      const expected = proxySignature(url, filename);
+      if (!timingSafeEqualString(supplied, expected)) return sendJson(res, 403, { erro: 'link de download inválido ou expirado' });
+    }
     let target;
     try { target = new URL(cleanUrl(url)); } catch { return sendJson(res, 400, { erro: 'url inválida' }); }
     if (!['https:', 'http:'].includes(target.protocol)) return sendJson(res, 400, { erro: 'protocolo inválido' });
@@ -1211,7 +1237,7 @@ module.exports = async (req, res) => {
       if (!r.ok || !mediaUrl) return sendJson(res, 502, { erro: 'Falha ao gerar download do Instagram' });
       const ext = /(\.jpg|\.jpeg|\.png|\.webp)(\?|$)/i.test(String(mediaUrl)) ? 'jpg' : 'mp4';
       const filename = `instagram-${Date.now()}.${ext}`;
-      const prox = `/api/main?action=proxy&url=${encodeURIComponent(mediaUrl)}&filename=${encodeURIComponent(filename)}`;
+      const prox = signedProxyPath(mediaUrl, filename);
       return sendJson(res, 200, { ok:true, downloadUrl: prox, filename });
     }catch{
       return sendJson(res, 500, { erro: 'Falha ao gerar download do Instagram' });
@@ -1237,7 +1263,7 @@ module.exports = async (req, res) => {
       const data = await r.json().catch(()=>null);
       if (!r.ok || !data || !data.success || !data.data?.downloadLink) return sendJson(res, 502, { erro: 'Falha ao baixar Spotify' });
       const title = safeFilename(data.data.title || 'musica');
-      const prox = `/api/main?action=proxy&url=${encodeURIComponent(data.data.downloadLink)}&filename=${encodeURIComponent(title + '.mp3')}`;
+      const prox = signedProxyPath(data.data.downloadLink, title + '.mp3');
       return sendJson(res, 200, {
         ok:true,
         downloadUrl: prox,
@@ -1274,7 +1300,7 @@ module.exports = async (req, res) => {
       const isVideo = /(\.mp4|\.m3u8)(\?|$)/i.test(mediaUrl) || /og:video/i.test(html);
       if (isVideo) ext = 'mp4';
       const filename = `pinterest-${Date.now()}.${ext}`;
-      const prox = `/api/main?action=proxy&url=${encodeURIComponent(mediaUrl)}&filename=${encodeURIComponent(filename)}`;
+      const prox = signedProxyPath(mediaUrl, filename);
       return sendJson(res, 200, { ok:true, downloadUrl: prox, filename });
     }catch{
       return sendJson(res, 500, { erro: 'Falha ao baixar Pinterest' });
@@ -1301,7 +1327,7 @@ module.exports = async (req, res) => {
       const data = await r.json().catch(()=>null);
       if (!r.ok || !data || data.code !== 0 || !data.data?.play) return sendJson(res, 502, { erro: 'Não foi possível baixar esse TikTok' });
       const title = safeFilename(data.data.title || 'tiktok-video');
-      const prox = `/api/main?action=proxy&url=${encodeURIComponent(data.data.play)}&filename=${encodeURIComponent(title + '.mp4')}`;
+      const prox = signedProxyPath(data.data.play, title + '.mp4');
       return sendJson(res, 200, {
         ok:true,
         downloadUrl: prox,
@@ -1500,7 +1526,7 @@ module.exports = async (req, res) => {
     if (blockPrivateHost(target.hostname)) return sendJson(res, 400, { erro: 'host bloqueado' });
     const ext = /\.xapk(\?|$)/i.test(fileUrl) ? '.xapk' : '.apk';
     const filename = `${name}${ext}`;
-    const prox = `/api/main?action=proxy&url=${encodeURIComponent(fileUrl)}&filename=${encodeURIComponent(filename)}`;
+    const prox = signedProxyPath(fileUrl, filename);
     return sendJson(res, 200, { ok:true, downloadUrl: prox, filename });
   }
 

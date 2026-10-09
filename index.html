@@ -1,1078 +1,339 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b10">
+  <meta name="color-scheme" content="dark">
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/style.css?v=20260621-darkstars-final-v1" />
-  <link rel="stylesheet" href="/assets/css/gremory-core.css?v=20261009-core-v1" />
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261009-v2">
 </head>
 <body>
-  <div class="bg"></div>
-  <div class="overlay"></div>
+  <div class="app-shell" id="appShell">
+    <aside class="sidebar" aria-label="Navegação principal">
+      <button class="brand" data-route="home" aria-label="Gremory">
+        <span class="brand-mark">G</span>
+        <span class="brand-copy"><strong>Gremory</strong><small>Company</small></span>
+      </button>
 
-  <nav class="gremory-desktop-nav" aria-label="Navegação Gremory">
-    <button class="gremory-nav-brand" type="button" data-gremory-go="home" aria-label="Ir para o início">G</button>
-    <button type="button" data-gremory-go="home" title="Início"><i class="fa-solid fa-house"></i><span>Início</span></button>
-    <button type="button" data-gremory-go="pokemon" title="Pokémon"><i class="fa-solid fa-dragon"></i><span>Pokémon</span></button>
-    <button type="button" data-gremory-go="downloads" title="Downloads"><i class="fa-solid fa-download"></i><span>Downloads</span></button>
-    <button type="button" data-gremory-go="rpg" title="RPG"><i class="fa-solid fa-dice-d20"></i><span>RPG</span></button>
-    <button type="button" data-gremory-go="watch" title="Salas"><i class="fa-solid fa-tv"></i><span>Salas</span></button>
-    <button type="button" data-gremory-go="shop" title="Premium"><i class="fa-solid fa-crown"></i><span>Premium</span></button>
-    <button type="button" data-gremory-go="profile" title="Perfil"><i class="fa-solid fa-user"></i><span>Perfil</span></button>
-  </nav>
+      <nav class="side-nav">
+        <button class="nav-item active" data-route="home"><span>⌂</span><b>Início</b></button>
+        <button class="nav-item" data-route="pokemon"><span>◉</span><b>Pokémon</b></button>
+        <button class="nav-item" data-route="downloads"><span>↓</span><b>Downloads</b></button>
+        <button class="nav-item" data-route="rpg"><span>⚄</span><b>RPG</b></button>
+        <button class="nav-item" data-route="premium"><span>♛</span><b>Premium</b></button>
+      </nav>
 
-  <!-- Top-right: clock -->
-  <div class="clock" id="clock" aria-label="Relógio">
-    <i class="fa-regular fa-clock"></i>
-    <div class="clock-text">
-      <div id="clockTime">--:--:--</div>
-      <div id="clockDate" class="clock-date">--/--/----</div>
-    </div>
-  </div>
-
-  <!-- Top-left: downloads -->
-  <button class="dock-btn dock-left" id="downloadsBtn" aria-label="Abrir downloads">
-    <i class="fa-solid fa-bars"></i>
-  </button>
-
-  <!-- Top-left: updates -->
-  <button class="dock-btn dock-left dock-left-2" id="updatesBtn" aria-label="Atualizações">
-    <i class="fa-solid fa-bell"></i>
-    <span class="badge" id="updatesBadge" hidden></span>
-  </button>
-
-  <!-- Top-left: shop (bots/premium) -->
-  <button class="dock-btn dock-left dock-left-3" id="shopBtn" aria-label="Abrir loja">
-    <i class="fa-solid fa-cart-shopping"></i>
-  </button>
-
-
-  <div class="updates-pop" id="updatesPop" aria-label="Lista de atualizações">
-    <div class="updates-head">
-      <div class="updates-title">Atualizações</div>
-      <div class="updates-actions">
-        <button class="icon-btn" id="closeUpdates" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
+      <div class="account-mini" aria-label="Resumo da conta">
+        <img id="sideAvatar" src="/assets/img/profile.jpg" alt="">
+        <span><strong id="sideName">Conta</strong><small id="sideStatus">Entrar</small></span>
       </div>
-    </div>
-    <div class="updates-body" id="updatesList"></div>
-    <div class="updates-foot">Atualizações oficiais da Gremory. O sistema global pelo bot entra na próxima integração.</div>
-  </div>
+    </aside>
 
-  <aside class="panel panel-left" id="downloadsPanel" aria-label="Painel de downloads">
-    <div class="panel-head">
-      <div class="panel-title">Downloads</div>
-      <button class="icon-btn" id="closeDownloads" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-    </div>
-
-    <div class="panel-body">
-      <!-- Tabs -->
-      <div class="tabbar" role="tablist" aria-label="Abas">
-        <button class="tab active" id="tabDownloads" role="tab" aria-selected="true">Downloads</button>
-        <button class="tab" id="tabImagens" role="tab" aria-selected="false">Imagens</button>
-      </div>
-
-      <!-- Tab: Downloads -->
-      <div class="tabpane active" id="paneDownloads" role="tabpanel">
-        <div class="grid">
-          <button class="service" data-service="tiktok"><i class="fa-brands fa-tiktok"></i><span>TikTok</span></button>
-          <button class="service" data-service="instagram"><i class="fa-brands fa-instagram"></i><span>Instagram</span></button>
-          <button class="service" data-service="spotify"><i class="fa-brands fa-spotify"></i><span>Spotify</span></button>
-          <button class="service" data-service="wiki"><i class="fa-brands fa-wikipedia-w"></i><span>Wikipedia</span></button>
-          <button class="service" data-service="pinterest"><i class="fa-brands fa-pinterest"></i><span>Pinterest</span></button>
-          <button class="service" data-service="anime"><i class="fa-solid fa-clapperboard"></i><span>Anime</span></button>
-          <button class="service service-apk-open" data-service="apk"><i class="fa-brands fa-android"></i><span>Baixar APK</span></button>
-        </div>
-      </div>
-
-      <!-- Tab: Imagens -->
-      <div class="tabpane" id="paneImagens" role="tabpanel" aria-label="Opções de imagens">
-        <div class="grid">
-          <button class="service" data-service="shinobu"><i class="fa-solid fa-image"></i><span>shinobu</span></button>
-          <button class="service" data-service="megumin"><i class="fa-solid fa-image"></i><span>megumin</span></button>
-          <button class="service" data-service="bully"><i class="fa-solid fa-image"></i><span>bully</span></button>
-          <button class="service" data-service="cuddle"><i class="fa-solid fa-image"></i><span>cuddle</span></button>
-          <button class="service" data-service="cry"><i class="fa-solid fa-image"></i><span>cry</span></button>
-          <button class="service" data-service="hug"><i class="fa-solid fa-image"></i><span>hug</span></button>
-          <button class="service" data-service="awoo"><i class="fa-solid fa-image"></i><span>awoo</span></button>
-          <button class="service" data-service="kiss"><i class="fa-solid fa-image"></i><span>kiss</span></button>
-          <button class="service" data-service="lick"><i class="fa-solid fa-image"></i><span>lick</span></button>
-          <button class="service" data-service="pat"><i class="fa-solid fa-image"></i><span>pat</span></button>
-          <button class="service" data-service="smug"><i class="fa-solid fa-image"></i><span>smug</span></button>
-          <button class="service" data-service="bonk"><i class="fa-solid fa-image"></i><span>bonk</span></button>
-          <button class="service" data-service="yeet"><i class="fa-solid fa-image"></i><span>yeet</span></button>
-          <button class="service" data-service="blush"><i class="fa-solid fa-image"></i><span>blush</span></button>
-          <button class="service" data-service="smile"><i class="fa-solid fa-image"></i><span>smile</span></button>
-          <button class="service" data-service="wave"><i class="fa-solid fa-image"></i><span>wave</span></button>
-          <button class="service" data-service="highfive"><i class="fa-solid fa-image"></i><span>highfive</span></button>
-          <button class="service" data-service="handhold"><i class="fa-solid fa-image"></i><span>handhold</span></button>
-          <button class="service" data-service="nom"><i class="fa-solid fa-image"></i><span>nom</span></button>
-          <button class="service" data-service="bite"><i class="fa-solid fa-image"></i><span>bite</span></button>
-          <button class="service" data-service="glomp"><i class="fa-solid fa-image"></i><span>glomp</span></button>
-          <button class="service" data-service="slap"><i class="fa-solid fa-image"></i><span>slap</span></button>
-          <button class="service" data-service="kill"><i class="fa-solid fa-image"></i><span>kill</span></button>
-          <button class="service" data-service="kick"><i class="fa-solid fa-image"></i><span>kick</span></button>
-          <button class="service" data-service="happy"><i class="fa-solid fa-image"></i><span>happy</span></button>
-          <button class="service" data-service="wink"><i class="fa-solid fa-image"></i><span>wink</span></button>
-          <button class="service" data-service="poke"><i class="fa-solid fa-image"></i><span>poke</span></button>
-          <button class="service" data-service="dance"><i class="fa-solid fa-image"></i><span>dance</span></button>
-          <button class="service" data-service="cringe"><i class="fa-solid fa-image"></i><span>cringe</span></button>
-        </div>
-        <div class="hint">
-          <div class="hint-title">Como funciona</div>
-          <div class="hint-text">Clique em uma opção para carregar uma imagem. Use “Reiniciar” para buscar outra e “Baixar” para salvar.</div>
-        </div>
-      </div>
-
-      <div class="hint">
-        <div class="hint-title">Próximo passo</div>
-        <div class="hint-text">O site esta em desevolvimento, sugestões são bem vindas.</div>
-      </div>
-    </div>
-  </aside>
-
-  <!-- Center profile -->
-  <main class="center">
-    <div class="profile-ring">
-      <img class="profile" src="/assets/img/profile.jpg" alt="Foto de perfil" />
-    </div>
-
-    <div class="brand-kicker">Charlotte • Pokémon • Comunidade • Gremory Web</div>
-    <h1 class="rgb-title">Gremory Company</h1>
-
-    <div class="social">
-      <a class="social-btn" id="linkWhats" href="#" target="_blank" rel="noreferrer" aria-label="WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>
-      <a class="social-btn" id="linkDiscord" href="#" target="_blank" rel="noreferrer" aria-label="Discord"><i class="fa-brands fa-discord"></i></a>
-      <a class="social-btn" id="linkInsta" href="#" target="_blank" rel="noreferrer" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
-      <a class="social-btn" id="linkYoutube" href="#" target="_blank" rel="noreferrer" aria-label="YouTube"><i class="fa-brands fa-youtube"></i></a>
-    </div>
-
-    <p class="subtitle">Um hub para Charlotte, Pokémon, comunidade, watch party, RPG e experiências premium — pensado para mobile e PC.</p>
-
-    <div class="hero-actions">
-      <button class="hero-btn primary" id="hubOpenProfile">Minha conta</button>
-      <button class="hero-btn ghost" id="hubOpenDownloads">Downloads</button>
-      <button class="hero-btn ghost" id="hubOpenPokemon">Pokédex</button>
-    </div>
-  </main>
-
-
-  <section class="gremory-hub" id="gremoryHub" aria-label="Ecossistema Gremory">
-    <div class="hub-shell">
-      <div class="hub-intro">
+    <div class="main-shell">
+      <header class="topbar">
         <div>
-          <div class="hub-eyebrow">ECOSSISTEMA GREMORY</div>
-          <h2>Seu bot, seu site e sua comunidade no mesmo lugar.</h2>
-          <p>Essa primeira versão já prepara a base visual do projeto: conta Gremory, módulos principais, área Pokémon, watch party, RPG, loja e suporte — tudo com identidade única e foco em uma experiência melhor no celular e no PC.</p>
+          <div class="eyebrow" id="pageEyebrow">GREMORY</div>
+          <h1 id="pageTitle">Início</h1>
         </div>
-        <div class="hub-intro-side">
-          <div class="hub-status-card">
-            <div class="hub-status-title">Status da plataforma</div>
-            <ul class="hub-status-list">
-              <li><span class="state online"></span> Site base com tema Gremory</li>
-              <li><span class="state online"></span> Conta / perfil / autenticação</li>
-              <li><span class="state building"></span> Pokémon Web em evolução</li>
-              <li><span class="state building"></span> Watch party e RPG</li>
-            </ul>
-          </div>
+        <div class="top-actions">
+          <button class="avatar-button" id="topAccountBtn" type="button" aria-label="Abrir conta">
+            <img id="topAvatar" src="/assets/img/profile.jpg" alt="">
+          </button>
         </div>
-      </div>
+      </header>
 
-      <div class="hub-grid">
-        <article class="hub-card card-primary">
-          <div class="hub-card-icon"><i class="fa-solid fa-bolt"></i></div>
-          <h3>Charlotte Hub</h3>
-          <p>Entre, veja seu perfil, gerencie links rápidos, acompanhe seu progresso e futuramente sincronize tudo com o WhatsApp.</p>
-          <div class="hub-card-actions">
-            <button class="hero-btn primary" id="hubOpenProfile2">Abrir perfil</button>
-          </div>
-        </article>
-
-        <article class="hub-card">
-          <div class="hub-card-icon"><i class="fa-solid fa-download"></i></div>
-          <h3>Downloads</h3>
-          <p>Atalhos rápidos para TikTok, Instagram, Pinterest, Spotify, Wikipedia, anime e downloads futuros com envio ao WhatsApp.</p>
-          <div class="hub-card-actions">
-            <button class="hero-btn ghost" id="hubOpenDownloads2">Abrir downloads</button>
-          </div>
-        </article>
-
-        <article class="hub-card">
-          <div class="hub-card-icon"><i class="fa-solid fa-dragon"></i></div>
-          <h3>Pokémon</h3>
-          <p>Prepare o terreno para Pokédex, equipe, mochila, batalhas e sincronização entre o site e a Charlotte.</p>
-          <div class="hub-card-actions">
-            <button class="hero-btn ghost" id="hubOpenPokemon2">Abrir Pokédex</button>
-            <button class="hero-btn subtle" id="hubOpenPokemonRoadmap">Ver roadmap</button>
-          </div>
-        </article>
-
-        <article class="hub-card">
-          <div class="hub-card-icon"><i class="fa-solid fa-tv"></i></div>
-          <h3>Watch Party</h3>
-          <p>Salas privadas para ver YouTube com amigos, com base pronta para convites, presença e sincronização.</p>
-          <div class="hub-card-actions">
-            <button class="hero-btn ghost" id="hubOpenWatch">Saiba mais</button>
-          </div>
-        </article>
-
-        <article class="hub-card">
-          <div class="hub-card-icon"><i class="fa-solid fa-dice-d20"></i></div>
-          <h3>RPG Gremory</h3>
-          <p>Módulo pensado para fichas, mesas, mapas, dados, chat, voz e compartilhamento de tela em fases futuras.</p>
-          <div class="hub-card-actions">
-            <button class="hero-btn ghost" id="hubOpenRpg">Saiba mais</button>
-          </div>
-        </article>
-
-        <article class="hub-card">
-          <div class="hub-card-icon"><i class="fa-solid fa-crown"></i></div>
-          <h3>Loja & Premium</h3>
-          <p>A loja continua disponível aqui como ponte para o Premium, planos e futuras integrações automáticas com o bot.</p>
-          <div class="hub-card-actions">
-            <button class="hero-btn ghost" id="hubOpenShop2">Abrir loja</button>
-          </div>
-        </article>
-      </div>
-
-      <section class="pokemon-portal" id="pokemonPortal" aria-label="Pokémon Gremory">
-        <div class="pokemon-portal-head">
-          <div>
-            <div class="hub-eyebrow">POKÉMON GREMORY</div>
-            <h2>Uma área própria para sua jornada.</h2>
-            <p>Sem copiar o bot inteiro: aqui ficam as partes que realmente ficam melhores numa tela — Pokédex, equipe, batalha, exploração e progresso.</p>
-          </div>
-          <button class="hero-btn primary" id="pokemonPortalPokedex" type="button">Abrir Pokédex</button>
-        </div>
-
-        <div class="pokemon-portal-grid">
-          <article class="pokemon-feature active">
-            <div class="pokemon-feature-icon">⚡</div>
-            <div>
-              <span class="pokemon-feature-label">AGORA</span>
-              <h3>Pokédex</h3>
-              <p>Pesquisa por gerações com sprites animados e acesso rápido pelo site.</p>
+      <main class="content" id="content">
+        <section class="view active" data-view="home">
+          <div class="hero-panel">
+            <div class="hero-copy">
+              <span class="tag">GREMORY HUB</span>
+              <h2>Charlotte, Pokémon, RPG e downloads.</h2>
+              <p id="homeGreeting">Entre na sua conta para continuar.</p>
+              <div class="hero-actions">
+                <button class="btn primary" data-route="pokemon">Pokémon</button>
+                <button class="btn" data-route="rpg">Abrir RPG</button>
+              </div>
             </div>
+            <div class="crest" aria-hidden="true">
+              <span class="crest-wing left"></span><span class="crest-core">G</span><span class="crest-wing right"></span>
+            </div>
+          </div>
+
+          <div class="quick-grid">
+            <button class="quick-card" data-route="pokemon"><span class="quick-icon">◉</span><strong>Pokémon</strong><small>Pokédex e equipe</small></button>
+            <button class="quick-card" data-route="rpg"><span class="quick-icon">⚄</span><strong>RPG</strong><small>Mesas e personagens</small></button>
+            <button class="quick-card" data-route="downloads"><span class="quick-icon">↓</span><strong>Downloads</strong><small>Ferramentas rápidas</small></button>
+            <button class="quick-card" data-route="premium"><span class="quick-icon">♛</span><strong>Premium</strong><small>Planos Gremory</small></button>
+          </div>
+
+          <div class="dashboard-grid">
+            <article class="panel compact-panel">
+              <div class="panel-head"><h3>Sua conta</h3><button class="text-button" id="homeProfileBtn">Abrir</button></div>
+              <div class="stats-row">
+                <div><span>Status</span><strong id="homePlan">Visitante</strong></div>
+                <div><span>Nível</span><strong id="homeLevel">—</strong></div>
+                <div><span>Rupias</span><strong id="homeBalance">—</strong></div>
+              </div>
+            </article>
+            <article class="panel compact-panel">
+              <div class="panel-head"><h3>RPG recente</h3><button class="text-button" data-route="rpg">Ver mesas</button></div>
+              <div class="empty-inline" id="homeRpgRecent">Nenhuma mesa aberta.</div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" data-view="pokemon">
+          <div class="section-head">
+            <div><span class="tag">POKÉMON</span><h2>Centro Pokémon</h2></div>
+            <div class="section-actions"><button class="btn" id="randomPokemonBtn">Explorar</button></div>
+          </div>
+
+          <div class="pokemon-layout">
+            <article class="panel pokemon-search-panel">
+              <div class="panel-head"><h3>Pokédex</h3><span class="muted">Buscar por nome ou número</span></div>
+              <form class="search-row" id="pokemonSearchForm">
+                <input id="pokemonSearchInput" autocomplete="off" placeholder="Ex: pikachu ou 25">
+                <button class="btn primary" type="submit">Buscar</button>
+              </form>
+              <div class="pokemon-result" id="pokemonResult">
+                <div class="empty-state small">Procure um Pokémon.</div>
+              </div>
+            </article>
+
+            <article class="panel team-panel">
+              <div class="panel-head"><h3>Minha equipe</h3><span class="pill" id="teamCount">0/6</span></div>
+              <div class="team-grid" id="pokemonTeam"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" data-view="downloads">
+          <div class="section-head">
+            <div><span class="tag">DOWNLOADS</span><h2>Baixar mídia</h2></div>
+          </div>
+
+          <article class="panel download-panel">
+            <div class="service-tabs" id="downloadServices">
+              <button class="service-tab active" data-service="tiktok">TikTok</button>
+              <button class="service-tab" data-service="instagram">Instagram</button>
+              <button class="service-tab" data-service="pinterest">Pinterest</button>
+              <button class="service-tab" data-service="spotify">Spotify</button>
+            </div>
+            <form class="download-form" id="downloadForm">
+              <label id="downloadLabel" for="downloadInput">Link do TikTok</label>
+              <div class="search-row">
+                <input id="downloadInput" type="url" inputmode="url" placeholder="Cole o link aqui" required>
+                <button class="btn primary" id="downloadSubmit" type="submit">Preparar</button>
+              </div>
+            </form>
+            <div class="download-result" id="downloadResult"></div>
           </article>
-          <article class="pokemon-feature">
-            <div class="pokemon-feature-icon">🎒</div>
-            <div>
-              <span class="pokemon-feature-label">PRÓXIMA ETAPA</span>
-              <h3>Minha equipe</h3>
-              <p>Equipe e mochila usando os mesmos dados da Charlotte depois do vínculo da conta.</p>
-            </div>
-          </article>
-          <article class="pokemon-feature">
-            <div class="pokemon-feature-icon">⚔️</div>
-            <div>
-              <span class="pokemon-feature-label">PRÓXIMA ETAPA</span>
-              <h3>Batalhas</h3>
-              <p>Interface animada para escolher golpes, acompanhar HP e batalhar contra outros usuários.</p>
-            </div>
-          </article>
-          <article class="pokemon-feature">
-            <div class="pokemon-feature-icon">🗺️</div>
-            <div>
-              <span class="pokemon-feature-label">PRÓXIMA ETAPA</span>
-              <h3>Explorar</h3>
-              <p>Exploração web sincronizada com capturas, conquistas e inventário do bot.</p>
-            </div>
-          </article>
-        </div>
-      </section>
+        </section>
 
-      <div class="hub-columns">
-        <section class="hub-panel hub-roadmap" id="hubRoadmap">
-          <div class="hub-panel-head">
-            <h3>Roadmap imediato</h3>
-            <span class="hub-badge">FASE 1</span>
+        <section class="view" data-view="rpg">
+          <div class="section-head">
+            <div><span class="tag">RPG GREMORY</span><h2>Mesas</h2></div>
+            <div class="section-actions"><button class="btn primary" id="createRoomOpen">Criar mesa</button></div>
           </div>
-          <div class="roadmap-list">
-            <div class="roadmap-item">
-              <strong>Base visual Gremory</strong>
-              <span>Layout novo, responsivo e com identidade própria.</span>
+
+          <div class="rpg-lobby" id="rpgLobby">
+            <article class="panel join-panel">
+              <div class="panel-head"><h3>Entrar por convite</h3></div>
+              <form id="joinRoomForm" class="join-form">
+                <input id="joinRoomCode" maxlength="8" autocomplete="off" placeholder="Código da mesa">
+                <button class="btn" type="submit">Entrar</button>
+              </form>
+            </article>
+            <article class="panel rooms-panel">
+              <div class="panel-head"><h3>Minhas mesas</h3><button class="text-button" id="refreshRoomsBtn">Atualizar</button></div>
+              <div id="myRooms" class="room-list"><div class="empty-state small">Faça login para ver suas mesas.</div></div>
+            </article>
+          </div>
+
+          <div class="table-shell" id="rpgTable" hidden>
+            <div class="table-topbar">
+              <div>
+                <button class="back-button" id="leaveTableView" type="button">← Mesas</button>
+                <h2 id="tableRoomName">Mesa</h2>
+                <div class="room-meta"><span id="tableSystem">Livre</span><span>•</span><button id="copyInviteBtn" class="inline-copy" type="button">Convite <b id="tableCode">------</b></button></div>
+              </div>
+              <div class="table-top-actions">
+                <button class="btn" id="characterBtn">Personagem</button>
+                <button class="btn danger-ghost" id="exitRoomBtn">Sair</button>
+              </div>
             </div>
-            <div class="roadmap-item">
-              <strong>Conta unificada</strong>
-              <span>Preparação para ligar site, Charlotte e Pokémon.</span>
-            </div>
-            <div class="roadmap-item">
-              <strong>Pokémon Web</strong>
-              <span>Telas dedicadas para equipe, batalhas e progresso.</span>
-            </div>
-            <div class="roadmap-item">
-              <strong>Salas sociais</strong>
-              <span>Convites, watch party, chat e experiências privadas.</span>
+
+            <div class="table-grid">
+              <aside class="table-column players-column panel">
+                <div class="panel-head"><h3>Grupo</h3><span class="pill" id="memberCount">0</span></div>
+                <div class="member-list" id="memberList"></div>
+
+                <div class="divider"></div>
+                <div class="panel-head"><h3>Iniciativa</h3><button class="text-button" id="rollInitiativeBtn">Rolar</button></div>
+                <div class="initiative-list" id="initiativeList"></div>
+              </aside>
+
+              <section class="table-center panel">
+                <div class="scene-toolbar">
+                  <span class="tag">CENA</span>
+                  <button class="text-button" id="editSceneBtn">Editar</button>
+                </div>
+                <div class="scene-card" id="sceneCard">
+                  <div class="scene-placeholder" id="scenePlaceholder">
+                    <span>✦</span>
+                    <strong id="sceneTitle">A aventura começa aqui</strong>
+                    <small id="sceneDescription">O mestre pode mudar a cena.</small>
+                  </div>
+                  <img id="sceneImage" alt="Cena da mesa" hidden>
+                </div>
+
+                <div class="dice-dock">
+                  <div class="dice-buttons" id="diceButtons">
+                    <button data-die="4">d4</button><button data-die="6">d6</button><button data-die="8">d8</button><button data-die="10">d10</button><button data-die="12">d12</button><button data-die="20">d20</button><button data-die="100">d100</button>
+                  </div>
+                  <form id="customRollForm" class="custom-roll"><input id="customRollInput" placeholder="2d6+3"><button type="submit">Rolar</button></form>
+                </div>
+
+                <div class="roll-log" id="rollLog"></div>
+              </section>
+
+              <aside class="table-column chat-column panel">
+                <div class="table-tabs">
+                  <button class="table-tab active" data-table-tab="chat">Chat</button>
+                  <button class="table-tab" data-table-tab="rules">Regras</button>
+                </div>
+
+                <div class="table-tab-pane active" data-table-pane="chat">
+                  <div class="chat-list" id="chatList"></div>
+                  <form id="chatForm" class="chat-form"><input id="chatInput" maxlength="500" autocomplete="off" placeholder="Mensagem"><button type="submit">Enviar</button></form>
+                </div>
+
+                <div class="table-tab-pane" data-table-pane="rules">
+                  <textarea id="roomRules" maxlength="4000" placeholder="Regras, lembretes, links..." readonly></textarea>
+                  <button class="btn" id="saveRulesBtn" hidden>Salvar regras</button>
+                </div>
+              </aside>
             </div>
           </div>
         </section>
 
-        <section class="hub-panel hub-highlights">
-          <div class="hub-panel-head">
-            <h3>Diferenciais Gremory</h3>
-            <span class="hub-badge alt">CORE</span>
-          </div>
-          <div class="highlight-grid">
-            <div class="highlight-card">
-              <i class="fa-solid fa-mobile-screen-button"></i>
-              <strong>Mobile primeiro</strong>
-              <span>Experiência boa no celular sem perder o visual no PC.</span>
-            </div>
-            <div class="highlight-card">
-              <i class="fa-solid fa-shield-halved"></i>
-              <strong>Mais seguro</strong>
-              <span>Base pronta para separar o que o cliente vê do que o servidor decide.</span>
-            </div>
-            <div class="highlight-card">
-              <i class="fa-solid fa-link"></i>
-              <strong>Ligação com o bot</strong>
-              <span>Downloads, notificações e Pokémon podem conversar com a Charlotte.</span>
-            </div>
-            <div class="highlight-card">
-              <i class="fa-solid fa-wand-magic-sparkles"></i>
-              <strong>Escalável</strong>
-              <span>Pronto para receber RPG, social, suporte e mais serviços.</span>
-            </div>
+        <section class="view" data-view="premium">
+          <div class="section-head"><div><span class="tag">GREMORY PREMIUM</span><h2>Planos</h2></div></div>
+          <div class="plans-grid">
+            <article class="plan-card"><small>1 DIA</small><strong>R$ 2</strong><span>Teste rápido</span><button class="btn" data-buy-plan="1d">Comprar</button></article>
+            <article class="plan-card"><small>7 DIAS</small><strong>R$ 5</strong><span>Uma semana</span><button class="btn" data-buy-plan="7d">Comprar</button></article>
+            <article class="plan-card featured"><small>15 DIAS</small><strong>R$ 8</strong><span>Mais escolhido</span><button class="btn primary" data-buy-plan="15d">Comprar</button></article>
+            <article class="plan-card"><small>30 DIAS</small><strong>R$ 12</strong><span>Um mês</span><button class="btn" data-buy-plan="30d">Comprar</button></article>
           </div>
         </section>
-      </div>
+      </main>
     </div>
-  </section>
 
-  <div class="feature-modal" id="featureModal" aria-hidden="true">
-    <div class="feature-modal-backdrop" id="featureModalBackdrop"></div>
-    <div class="feature-modal-box" role="dialog" aria-modal="true" aria-labelledby="featureModalTitle">
-      <button class="feature-close" id="featureModalClose" type="button" aria-label="Fechar">×</button>
-      <div class="feature-kicker" id="featureModalKicker">Gremory</div>
-      <h3 id="featureModalTitle">Módulo em evolução</h3>
-      <p id="featureModalText">Essa área está sendo preparada para as próximas versões do ecossistema Gremory.</p>
-      <div class="feature-modal-actions">
-        <button class="hero-btn primary" id="featureModalPrimary">Entendi</button>
-      </div>
-    </div>
+    <nav class="mobile-nav" aria-label="Navegação mobile">
+      <button class="active" data-route="home"><span>⌂</span><small>Início</small></button>
+      <button data-route="pokemon"><span>◉</span><small>Pokémon</small></button>
+      <button data-route="rpg"><span>⚄</span><small>RPG</small></button>
+      <button data-route="downloads"><span>↓</span><small>Baixar</small></button>
+      <button id="mobileAccountBtn"><span>●</span><small>Conta</small></button>
+    </nav>
   </div>
 
-  <!-- Bottom-right: support -->
-  <button class="dock-btn dock-right" id="supportBtn" aria-label="Abrir suporte">
-    <i class="fa-solid fa-headset"></i>
-  </button>
-
-  <aside class="panel panel-right" id="supportPanel" aria-label="Painel de suporte">
-    <div class="panel-head">
-      <div class="panel-title">Suporte</div>
-      <button class="icon-btn" id="closeSupport" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-    </div>
-    <div class="panel-body">
-      <div class="support-card">
-        <div class="support-row">
-          <i class="fa-brands fa-whatsapp"></i>
-          <div class="support-info">
-            <div class="support-label">WhatsApp</div>
-            <div class="support-value" id="supportWhatsValue">Defina seu número</div>
-          </div>
-          <button class="mini-btn" id="supportWhatsOpen">Abrir</button>
-        </div>
-
-        <div class="support-row">
-          <i class="fa-solid fa-envelope"></i>
-          <div class="support-info">
-            <div class="support-label">E-mail</div>
-            <div class="support-value" id="supportEmailValue">Defina seu e-mail</div>
-          </div>
-          <button class="mini-btn" id="supportEmailCopy">Copiar</button>
-        </div>
-      </div>
-
-      <div class="hint">
-        <div class="hint-title">Dica</div>
-        <div class="hint-text">Quer deixar “produto”? A gente adiciona planos premium, checkout e entrega automática no bot.</div>
-      </div>
-    </div>
-  </aside>
-
-  
-  <!-- Modal (download no site) -->
-  <div class="modal" id="modal" aria-hidden="true">
+  <div class="modal open locked" id="authModal" aria-hidden="false">
     <div class="modal-backdrop"></div>
-    <div class="modal-box" id="modalBox" role="dialog" aria-modal="true">
-      <div class="modal-head">
-        <div class="modal-title"><span id="modalService"></span></div>
-        <button class="icon-btn" id="modalClose" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-      </div>
+    <div class="auth-card modal-card">
+      <button class="modal-close" id="authCloseBtn" type="button" aria-label="Fechar">×</button>
+      <div class="auth-brand"><span>G</span><div><strong>Gremory</strong><small>Conta</small></div></div>
+      <div class="auth-tabs"><button class="active" data-auth-tab="login">Entrar</button><button data-auth-tab="register">Criar conta</button></div>
 
-      <div class="modal-body">
-        <div class="modal-hint" id="modalHint"></div><label class="modal-label" id="modalInputLabel"></label>
-        <input class="modal-input" id="modalInput" placeholder="" />
-
-        <div class="modal-status" id="modalStatus"></div>
-      </div>
-
-      <div class="modal-actions">
-        <button class="btn ghost" id="modalCancel">Cancelar</button>
-        <button class="btn primary" id="modalSend">Baixar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Image Modal (popup no centro) -->
-  <div class="modal" id="imgModal" aria-hidden="true">
-    <div class="modal-backdrop" id="imgBackdrop"></div>
-    <div class="modal-box wiki-box" role="dialog" aria-modal="true" aria-label="Imagem">
-      <div class="modal-head">
-        <div class="modal-title" id="imgTitle">Imagem</div>
-        <button class="icon-btn" id="imgClose" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-      <div class="wiki-body">
-        <img id="imgPreview" class="wiki-img" alt="Imagem" />
-        <div class="wiki-text">
-          <div id="imgDesc" class="wiki-brief"></div>
-          <button class="btn primary" id="imgReload" style="margin-top:12px">Reiniciar</button>
-          <button class="btn ghost" id="imgDownload" type="button" style="margin-top:12px; display:inline-flex; align-items:center; gap:8px;"><i class="fa-solid fa-download"></i>Baixar</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Shop Modal (tela por cima: bots & premium) -->
-  <div class="modal" id="shopModal" aria-hidden="true">
-    <div class="modal-backdrop" id="shopBackdrop"></div>
-    <div class="modal-box shop-box" id="shopBox" role="dialog" aria-modal="true" aria-label="Loja">
-      <div class="modal-head">
-        <div class="modal-title">Loja • Bots & Premium</div>
-        <button class="icon-btn" id="shopClose" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-
-      <div class="shop-body">
-        <section class="shop-section" aria-label="Opções de bots">
-          <div class="shop-section-title">Opções de bots (venda)</div>
-          <div class="shop-grid" id="botsGrid"></div>
-        </section>
-
-        <section class="shop-section" aria-label="Premium Charlotte">
-          <div class="shop-section-title">Premium • Charlotte</div>
-
-          <div class="charlotte">
-            <img class="charlotte-img" src="https://i.imgur.com/urasCCv.jpeg" alt="Charlotte" loading="lazy" />
-
-            <div class="charlotte-right">
-              <div class="shop-grid" id="premiumGrid"></div>
-              <div class="shop-note">Pagamento via Pix e liberação após confirmação. Clique em “Comprar” para mandar a mensagem pronta no WhatsApp.</div>
-            </div>
-          </div>
-        </section>
-      </div>
-    </div>
-  </div>
-
-  <section class="gremory-no-feed-note" aria-label="Sobre o Gremory Hub">
-    <div>
-      <i class="fa-solid fa-shield-dragon"></i>
-      <div><strong>Gremory é um hub, não uma rede social.</strong><span>Perfil, Pokémon, RPG, salas, downloads, Premium e suporte em uma conta só.</span></div>
-    </div>
-  </section>
-
-  <nav class="gremory-mobile-nav" aria-label="Navegação mobile">
-    <button type="button" data-gremory-go="home"><i class="fa-solid fa-house"></i><span>Início</span></button>
-    <button type="button" data-gremory-go="pokemon"><i class="fa-solid fa-dragon"></i><span>Pokémon</span></button>
-    <button type="button" data-gremory-go="downloads"><i class="fa-solid fa-download"></i><span>Baixar</span></button>
-    <button type="button" data-gremory-go="watch"><i class="fa-solid fa-tv"></i><span>Salas</span></button>
-    <button type="button" data-gremory-go="profile"><i class="fa-solid fa-user"></i><span>Perfil</span></button>
-  </nav>
-
-  <footer class="footer">Direitos reservados a Gremory Company</footer>
-
-  <!-- Wiki Result Modal (popup no centro) -->
-  <div class="modal" id="wikiModal" aria-hidden="true">
-    <div class="modal-backdrop" id="wikiBackdrop"></div>
-    <div class="modal-box wiki-box" role="dialog" aria-modal="true" aria-label="Resultado da Wikipédia">
-      <div class="modal-head">
-        <div class="modal-title" id="wikiTitle">Wikipedia</div>
-        <button class="icon-btn" id="wikiClose" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-      <div class="wiki-body">
-        <img id="wikiImg" class="wiki-img" alt="Imagem do artigo" />
-        <div class="wiki-text">
-          <div id="wikiBrief" class="wiki-brief"></div>
-          <div id="wikiResumo" class="wiki-resumo"></div>
-          <a id="wikiLink" class="wiki-link" href="#" target="_blank" rel="noreferrer">Abrir na Wikipédia</a>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script src="/config.js"></script>
-  <script src="/assets/js/app.js?v=20260621-downloads-anime-v1"></script>
-
-<h3 class="download-history-title">📁 Histórico de downloads</h3>
-
-<button id="authBtn" class="auth-fab" type="button" aria-label="Minha conta">Minha conta</button>
-
-<div class="auth-modal auth-gate open" id="authModal" aria-hidden="false">
-  <div class="auth-backdrop" id="authBackdrop"></div>
-
-  <div class="auth-gate-screen" id="authGateScreen">
-    <div class="auth-gate-card">
-      <div class="auth-gate-title" id="authGateTitle">Login</div>
-
-      <form id="loginForm" class="auth-gate-form active">
-        <input id="loginEmail" type="email" placeholder="Email" required>
-        <input id="loginPassword" type="password" placeholder="Senha" required>
-        <label class="auth-remember"><input id="loginRemember" type="checkbox"> <span>Manter conectado neste aparelho</span></label>
-        <button type="submit" class="auth-gate-submit">Entrar</button>
-        <div class="auth-gate-switch">Ainda não tem uma conta? <button type="button" class="auth-gate-link" id="showRegisterLink">Criar</button></div>
+      <form class="auth-form active" id="loginForm" data-auth-form="login">
+        <label>E-mail<input id="loginEmail" type="email" autocomplete="email" required></label>
+        <label>Senha<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+        <label class="check-row"><input id="loginRemember" type="checkbox"><span>Manter conectado</span></label>
+        <button class="btn primary full" type="submit">Entrar</button>
+        <button class="link-btn" id="resetPasswordBtn" type="button">Esqueci minha senha</button>
       </form>
 
-      <form id="registerForm" class="auth-gate-form">
-        <input id="registerName" type="text" placeholder="Nome" required>
-        <input id="registerEmail" type="email" placeholder="Email" required>
-        <input id="registerPassword" type="password" placeholder="Senha" required>
-        <input id="registerPassword2" type="password" placeholder="Confirmar senha" required>
-        <label class="auth-remember"><input id="registerRemember" type="checkbox"> <span>Manter conectado neste aparelho</span></label>
-        <button type="submit" class="auth-gate-submit">Criar conta</button>
-        <div class="auth-gate-switch">Já tem uma conta? <button type="button" class="auth-gate-link" id="showLoginLink">Login</button></div>
+      <form class="auth-form" id="registerForm" data-auth-form="register">
+        <label>Nome<input id="registerName" maxlength="40" autocomplete="name" required></label>
+        <label>E-mail<input id="registerEmail" type="email" autocomplete="email" required></label>
+        <label>Senha<input id="registerPassword" type="password" minlength="6" autocomplete="new-password" required></label>
+        <label>Confirmar senha<input id="registerPassword2" type="password" minlength="6" autocomplete="new-password" required></label>
+        <label class="check-row"><input id="registerRemember" type="checkbox"><span>Manter conectado</span></label>
+        <button class="btn primary full" type="submit">Criar conta</button>
       </form>
-
-      <button type="button" class="auth-gate-link auth-reset-link" id="resetPasswordBtn">Esqueci minha senha</button>
-      <div class="auth-status" id="authStatus"></div>
+      <div class="form-status" id="authStatus"></div>
     </div>
   </div>
 
-  <div class="auth-account-view" id="authAccountView" hidden>
-    <div class="auth-account-shell">
-      <div class="auth-account-bg"></div>
-      <div class="auth-account-overlay"></div>
-
-      <div class="auth-account-panel">
-        <button class="auth-close" id="authClose" type="button" aria-label="Fechar">×</button>
-        <h1 class="auth-brand">Gremory Company</h1>
-
-        <div class="profile-wrapper">
-          <div class="profile-left">
-            <div class="profile-avatar-wrap">
-              <img id="authUserAvatar" class="profile-avatar" alt="Foto do usuário">
-              <div class="profile-avatar-gif"></div>
-            </div>
-            <h2 id="authUserName">Usuário</h2>
-          </div>
-
-          <div class="profile-right">
-            <h2>Meu perfil</h2>
-
-            <div class="profile-meta profile-meta-top">
-              <div class="profile-meta-item">
-                <span>Email</span>
-                <strong id="authUserEmail">email@email.com</strong>
-              </div>
-              <div class="profile-meta-item">
-                <span>Status</span>
-                <strong id="authUserPremium">Padrão</strong>
-              </div>
-              <div class="profile-meta-item">
-                <span>Nível</span>
-                <strong id="authUserLevel">0</strong>
-              </div>
-              <div class="profile-meta-item">
-                <span>Saldo</span>
-                <strong id="authUserSaldo">0</strong>
-              </div>
-              <div class="profile-meta-item">
-                <span>Criado em</span>
-                <strong id="authUserCreatedAt">--/--/----</strong>
-              </div>
-              <div class="profile-meta-item">
-                <span>UID</span>
-                <strong id="authUserUid">-</strong>
-              </div>
-            </div>
-
-            <div class="profile-grid">
-              <div class="profile-field full">
-                <label for="profileDisplayName">Nome</label>
-                <input id="profileDisplayName" type="text" placeholder="Seu nome">
-              </div>
-
-              <div class="profile-field">
-                <label for="profilePhotoUrl">Foto URL</label>
-                <input id="profilePhotoUrl" type="text" placeholder="https://...">
-              </div>
-
-              <div class="profile-field">
-                <label for="profileWallpaper">Wallpaper URL</label>
-                <input id="profileWallpaper" type="text" placeholder="https://...">
-              </div>
-
-              <div class="profile-field">
-                <label for="profileWebsite">Website</label>
-                <input id="profileWebsite" type="text" placeholder="https://...">
-              </div>
-
-              <div class="profile-field">
-                <label for="profileYoutube">YouTube</label>
-                <input id="profileYoutube" type="text" placeholder="https://youtube.com/...">
-              </div>
-
-              <div class="profile-field">
-                <label for="profileInstagram">Instagram</label>
-                <input id="profileInstagram" type="text" placeholder="https://instagram.com/... ou @usuario">
-              </div>
-
-              <div class="profile-field">
-                <label for="profileWhatsapp">WhatsApp</label>
-                <input id="profileWhatsapp" type="text" placeholder="5511999999999">
-              </div>
-
-              <div class="profile-field full">
-                <label for="profileBio">Bio / recado</label>
-                <input id="profileBio" type="text" placeholder="Ex: dono da Gremory, fã de anime e automações">
-              </div>
-
-              <div class="profile-field">
-                <label for="profileFavoriteAnime">Anime favorito</label>
-                <input id="profileFavoriteAnime" type="text" placeholder="Ex: Solo Leveling">
-              </div>
-
-              <div class="profile-field">
-                <label for="profileTheme">Tema do perfil</label>
-                <select id="profileTheme" class="profile-select">
-                  <option value="purple">Roxo Gremory</option>
-                  <option value="blue">Azul Neon</option>
-                  <option value="red">Vermelho Anime</option>
-                  <option value="green">Verde Gamer</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="profile-links-card profile-stats-card">
-              <div class="profile-links-title">Atividade no site</div>
-              <div class="profile-stats-grid">
-                <div><span>Pontos</span><strong id="profileActivityPoints">0</strong></div>
-                <div><span>Última ação</span><strong id="profileLastAction">-</strong></div>
-                <div><span>Anime favorito</span><strong id="profileFavoriteAnimeView">-</strong></div>
-              </div>
-            </div>
-
-            <div class="profile-links-card">
-              <div class="profile-links-title">Links rápidos</div>
-              <div class="profile-links">
-                <a id="profileOpenInstagram" class="profile-link-btn" href="#" target="_blank" rel="noreferrer">Instagram</a>
-                <a id="profileOpenYoutube" class="profile-link-btn" href="#" target="_blank" rel="noreferrer">YouTube</a>
-                <a id="profileOpenWhatsapp" class="profile-link-btn" href="#" target="_blank" rel="noreferrer">WhatsApp</a>
-                <a id="profileOpenWebsite" class="profile-link-btn" href="#" target="_blank" rel="noreferrer">Website</a>
-              </div>
-            </div>
-
-            <div class="profile-actions">
-              <button type="button" class="profile-save-btn" id="saveProfileBtn">Salvar Alterações</button>
-              <button type="button" class="profile-logout-btn" id="logoutBtn">Sair</button>
-            </div>
-          </div>
-        </div>
+  <div class="drawer" id="accountDrawer" aria-hidden="true">
+    <button class="drawer-backdrop" id="accountDrawerBackdrop" aria-label="Fechar"></button>
+    <aside class="drawer-card">
+      <div class="drawer-head"><div><span class="tag">CONTA</span><h2>Meu perfil</h2></div><button class="modal-close static" id="accountDrawerClose">×</button></div>
+      <div class="profile-summary">
+        <img id="profileAvatarPreview" src="/assets/img/profile.jpg" alt="">
+        <div><strong id="profileNameView">Usuário</strong><span id="profilePlanView">Padrão</span></div>
       </div>
+      <form id="profileForm" class="profile-form">
+        <label>Nome<input id="profileName" maxlength="40"></label>
+        <label>Foto (URL)<input id="profileAvatar" type="url" placeholder="https://..."></label>
+        <label>Bio<textarea id="profileBio" maxlength="180" rows="3" placeholder="Seu recado"></textarea></label>
+        <label>Anime favorito<input id="profileFavoriteAnime" maxlength="80"></label>
+        <div class="profile-stats"><div><span>Nível</span><strong id="profileLevel">0</strong></div><div><span>Rupias</span><strong id="profileBalance">0</strong></div></div>
+        <button class="btn primary full" type="submit">Salvar</button>
+        <button class="btn full danger-ghost" id="logoutBtn" type="button">Sair</button>
+      </form>
+    </aside>
+  </div>
+
+  <div class="modal" id="createRoomModal" aria-hidden="true">
+    <button class="modal-backdrop" data-close-modal="createRoomModal"></button>
+    <div class="modal-card">
+      <button class="modal-close" data-close-modal="createRoomModal">×</button>
+      <span class="tag">NOVA MESA</span><h2>Criar RPG</h2>
+      <form id="createRoomForm" class="stack-form">
+        <label>Nome da mesa<input id="roomNameInput" maxlength="60" placeholder="Ex: Ecos de Ravenfall" required></label>
+        <label>Sistema<select id="roomSystemInput"><option>Livre</option><option>D&D 5e</option><option>Tormenta 20</option><option>Ordem Paranormal</option><option>Call of Cthulhu</option><option>Outro</option></select></label>
+        <label>Privacidade<select id="roomPrivacyInput"><option value="invite">Somente convite</option></select></label>
+        <button class="btn primary full" type="submit">Criar mesa</button>
+      </form>
     </div>
   </div>
-</div>
 
-<script type="module" src="/assets/js/firebase-auth.js?v=20260621-darkstars-final-v1"></script>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
-<script src="/assets/js/gremory-core.js?v=20261009-core-v1"></script>
-
-
-<!-- GREMORY POKEDEX ADDON: START -->
-<style>
-  .gremory-pokedex-btn {
-    position: fixed;
-    left: 50%;
-    bottom: 28px;
-    transform: translateX(-50%);
-    z-index: 99999;
-    width: 174px;
-    height: 72px;
-    border: 1px solid rgba(170, 105, 255, 0.92);
-    border-radius: 999px;
-    background: rgba(13, 14, 31, 0.96);
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    cursor: pointer;
-    font-weight: 800;
-    font-size: 15px;
-    letter-spacing: .3px;
-    box-shadow:
-      0 0 18px rgba(146, 70, 255, 0.90),
-      0 0 36px rgba(120, 45, 255, 0.55),
-      inset 0 0 18px rgba(130, 80, 255, 0.18);
-    transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
-  }
-
-  .gremory-pokedex-btn:hover {
-    transform: translateX(-50%) scale(1.05);
-    border-color: rgba(212, 170, 255, 1);
-    box-shadow:
-      0 0 24px rgba(176, 105, 255, 1),
-      0 0 48px rgba(145, 70, 255, 0.80),
-      inset 0 0 20px rgba(160, 100, 255, 0.25);
-  }
-
-  .gremory-pokedex-btn img {
-    width: 50px;
-    height: 50px;
-    object-fit: contain;
-    pointer-events: none;
-  }
-
-  .gremory-pokedex-btn span {
-    pointer-events: none;
-    color: #fff;
-    text-shadow: 0 0 10px rgba(190, 130, 255, .7);
-  }
-
-  .gremory-pokedex-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 99998;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 22px;
-    background: rgba(0, 0, 0, .68);
-    backdrop-filter: blur(7px);
-  }
-
-  .gremory-pokedex-overlay.open {
-    display: flex;
-  }
-
-  .gremory-pokedex-box {
-    width: min(900px, 94vw);
-    max-height: 84vh;
-    overflow: hidden;
-    border-radius: 24px;
-    color: #fff;
-    background: rgba(13, 14, 31, .97);
-    border: 1px solid rgba(170, 105, 255, .55);
-    box-shadow:
-      0 0 28px rgba(146, 70, 255, .60),
-      0 0 70px rgba(120, 45, 255, .38),
-      inset 0 0 24px rgba(130, 80, 255, .10);
-    transform: scale(.94);
-    opacity: 0;
-    animation: gremoryPokedexPop .18s ease forwards;
-  }
-
-  @keyframes gremoryPokedexPop {
-    to { transform: scale(1); opacity: 1; }
-  }
-
-  .gremory-pokedex-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 20px 22px 12px;
-  }
-
-  .gremory-pokedex-title {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .gremory-pokedex-title img {
-    width: 46px;
-    height: 46px;
-    object-fit: contain;
-  }
-
-  .gremory-pokedex-title h2 {
-    margin: 0;
-    font-size: 26px;
-    line-height: 1.1;
-  }
-
-  .gremory-pokedex-title p {
-    margin: 4px 0 0;
-    color: rgba(255, 255, 255, .66);
-    font-size: 13px;
-  }
-
-  .gremory-pokedex-close {
-    width: 40px;
-    height: 40px;
-    border: 0;
-    border-radius: 50%;
-    cursor: pointer;
-    color: #fff;
-    font-size: 28px;
-    line-height: 40px;
-    background: rgba(255, 255, 255, .10);
-    transition: .18s ease;
-  }
-
-  .gremory-pokedex-close:hover {
-    background: rgba(255, 65, 105, .85);
-  }
-
-  .gremory-pokedex-tabs {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    padding: 0 22px 14px;
-  }
-
-  .gremory-pokedex-tab {
-    border: 1px solid rgba(170, 105, 255, .22);
-    border-radius: 14px;
-    cursor: pointer;
-    padding: 10px 14px;
-    color: #fff;
-    background: rgba(255,255,255,.09);
-    font-weight: 800;
-    transition: .18s ease;
-  }
-
-  .gremory-pokedex-tab:hover,
-  .gremory-pokedex-tab.active {
-    background: linear-gradient(135deg, #743cff, #d64cff);
-    box-shadow: 0 0 16px rgba(180, 80, 255, .55);
-  }
-
-  .gremory-pokedex-search-wrap {
-    padding: 0 22px 15px;
-  }
-
-  .gremory-pokedex-search {
-    width: 100%;
-    box-sizing: border-box;
-    border-radius: 15px;
-    border: 1px solid rgba(170, 105, 255, .35);
-    padding: 12px 14px;
-    outline: none;
-    color: #fff;
-    background: rgba(255,255,255,.08);
-  }
-
-  .gremory-pokedex-search::placeholder {
-    color: rgba(255,255,255,.45);
-  }
-
-  .gremory-pokedex-grid {
-    padding: 0 22px 22px;
-    max-height: 54vh;
-    overflow-y: auto;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(125px, 1fr));
-    gap: 14px;
-  }
-
-  .gremory-pokedex-card {
-    border: 1px solid rgba(170, 105, 255, .22);
-    border-radius: 18px;
-    padding: 12px 8px;
-    text-align: center;
-    background: rgba(255,255,255,.07);
-    transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
-  }
-
-  .gremory-pokedex-card:hover {
-    transform: translateY(-4px);
-    background: rgba(130, 70, 255, .24);
-    box-shadow: 0 0 18px rgba(180, 80, 255, .36);
-  }
-
-  .gremory-pokedex-card img {
-    width: 78px;
-    height: 78px;
-    object-fit: contain;
-    display: block;
-    margin: 0 auto 8px;
-  }
-
-  .gremory-pokedex-num {
-    font-size: 12px;
-    color: rgba(255,255,255,.58);
-  }
-
-  .gremory-pokedex-name {
-    margin-top: 4px;
-    font-size: 14px;
-    font-weight: 800;
-    text-transform: capitalize;
-    word-break: break-word;
-  }
-
-  @media (max-width: 560px) {
-    .gremory-pokedex-btn {
-      width: 74px;
-      height: 74px;
-      gap: 0;
-    }
-    .gremory-pokedex-btn span {
-      display: none;
-    }
-    .gremory-pokedex-grid {
-      grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
-    }
-  }
-</style>
-
-<button id="gremoryOpenPokedex" class="gremory-pokedex-btn" type="button" title="Abrir Pokédex" aria-label="Abrir Pokédex">
-  <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/92.gif" alt="Gastly">
-  <span>Pokédex</span>
-</button>
-
-<div id="gremoryPokedexOverlay" class="gremory-pokedex-overlay" aria-hidden="true">
-  <div class="gremory-pokedex-box" role="dialog" aria-modal="true" aria-label="Pokédex">
-    <div class="gremory-pokedex-head">
-      <div class="gremory-pokedex-title">
-        <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/92.gif" alt="Gastly">
-        <div>
-          <h2>Pokédex</h2>
-          <p>Escolha uma geração ou pesquise pelo nome/número.</p>
-        </div>
-      </div>
-      <button id="gremoryClosePokedex" class="gremory-pokedex-close" type="button" aria-label="Fechar">×</button>
+  <div class="modal" id="characterModal" aria-hidden="true">
+    <button class="modal-backdrop" data-close-modal="characterModal"></button>
+    <div class="modal-card wide">
+      <button class="modal-close" data-close-modal="characterModal">×</button>
+      <span class="tag">PERSONAGEM</span><h2>Ficha rápida</h2>
+      <form id="characterForm" class="character-form">
+        <label>Nome<input id="charName" maxlength="50" required></label>
+        <label>Classe / arquétipo<input id="charClass" maxlength="50"></label>
+        <label>Nível<input id="charLevel" type="number" min="1" max="99" value="1"></label>
+        <label>HP atual<input id="charHp" type="number" min="0" value="10"></label>
+        <label>HP máximo<input id="charMaxHp" type="number" min="1" value="10"></label>
+        <label>Defesa<input id="charDefense" type="number" min="0" value="10"></label>
+        <label class="full-span">Notas<textarea id="charNotes" rows="4" maxlength="1000"></textarea></label>
+        <button class="btn primary full-span" type="submit">Salvar personagem</button>
+      </form>
     </div>
-
-    <div class="gremory-pokedex-tabs" aria-label="Gerações da Pokédex">
-      <button class="gremory-pokedex-tab active" type="button" data-gen="1">1ª Geração</button>
-      <button class="gremory-pokedex-tab" type="button" data-gen="2">2ª Geração</button>
-      <button class="gremory-pokedex-tab" type="button" data-gen="3">3ª Geração</button>
-    </div>
-
-    <div class="gremory-pokedex-search-wrap">
-      <input id="gremoryPokedexSearch" class="gremory-pokedex-search" type="text" placeholder="Pesquisar Pokémon...">
-    </div>
-
-    <div id="gremoryPokedexGrid" class="gremory-pokedex-grid"></div>
   </div>
-</div>
 
-<script>
-(function () {
-  const GENS = {
-    1: { start: 1, end: 151 },
-    2: { start: 152, end: 251 },
-    3: { start: 252, end: 386 }
-  };
+  <div class="modal" id="sceneModal" aria-hidden="true">
+    <button class="modal-backdrop" data-close-modal="sceneModal"></button>
+    <div class="modal-card">
+      <button class="modal-close" data-close-modal="sceneModal">×</button>
+      <span class="tag">CENA</span><h2>Editar cena</h2>
+      <form id="sceneForm" class="stack-form">
+        <label>Título<input id="sceneTitleInput" maxlength="80"></label>
+        <label>Descrição<textarea id="sceneDescriptionInput" rows="3" maxlength="300"></textarea></label>
+        <label>Imagem (URL)<input id="sceneImageInput" type="url" placeholder="https://..."></label>
+        <button class="btn primary full" type="submit">Salvar cena</button>
+      </form>
+    </div>
+  </div>
 
-  const names = {};
-  let currentGen = 1;
+  <div class="toast-root" id="toastRoot" aria-live="polite"></div>
 
-  const animatedBase = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated';
-  const fallbackBase = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon';
-
-  function prettyName(name, id) {
-    if (!name) return 'Pokémon #' + id;
-    return String(name).replace(/-/g, ' ');
-  }
-
-  function makeCard(id) {
-    const name = prettyName(names[id], id);
-    const card = document.createElement('button');
-    card.type = 'button';
-    card.className = 'gremory-pokedex-card';
-    card.dataset.id = String(id);
-    card.dataset.name = name.toLowerCase();
-    card.innerHTML =
-      '<img src="' + animatedBase + '/' + id + '.gif" alt="' + name + '" loading="lazy" onerror="this.onerror=null;this.src=\'' + fallbackBase + '/' + id + '.png\';">' +
-      '<div class="gremory-pokedex-num">#' + String(id).padStart(3, '0') + '</div>' +
-      '<div class="gremory-pokedex-name">' + name + '</div>';
-    return card;
-  }
-
-  function render(gen) {
-    const grid = document.getElementById('gremoryPokedexGrid');
-    const search = document.getElementById('gremoryPokedexSearch');
-    if (!grid) return;
-
-    currentGen = gen || 1;
-    const range = GENS[currentGen] || GENS[1];
-    grid.innerHTML = '';
-
-    for (let id = range.start; id <= range.end; id++) {
-      grid.appendChild(makeCard(id));
-    }
-
-    if (search) search.value = '';
-  }
-
-  function filterCards(term) {
-    term = String(term || '').toLowerCase().trim();
-    document.querySelectorAll('.gremory-pokedex-card').forEach(function (card) {
-      const id = card.dataset.id || '';
-      const name = card.dataset.name || '';
-      card.style.display = (!term || id.includes(term) || name.includes(term)) ? '' : 'none';
-    });
-  }
-
-  async function loadNames() {
-    try {
-      const res = await fetch('https://pokeapi.co/api/v2/pokemon?limit=386');
-      const data = await res.json();
-      (data.results || []).forEach(function (poke, index) {
-        names[index + 1] = poke.name;
-      });
-      render(currentGen);
-    } catch (e) {
-      // Se a API não carregar, a Pokédex continua funcionando por número.
-    }
-  }
-
-  function init() {
-    const openBtn = document.getElementById('gremoryOpenPokedex');
-    const closeBtn = document.getElementById('gremoryClosePokedex');
-    const overlay = document.getElementById('gremoryPokedexOverlay');
-    const search = document.getElementById('gremoryPokedexSearch');
-    const tabs = document.querySelectorAll('.gremory-pokedex-tab');
-
-    if (!openBtn || !closeBtn || !overlay) return;
-
-    openBtn.addEventListener('click', function () {
-      overlay.classList.add('open');
-      overlay.setAttribute('aria-hidden', 'false');
-      render(currentGen);
-      loadNames();
-    });
-
-    closeBtn.addEventListener('click', function () {
-      overlay.classList.remove('open');
-      overlay.setAttribute('aria-hidden', 'true');
-    });
-
-    overlay.addEventListener('click', function (event) {
-      if (event.target === overlay) {
-        overlay.classList.remove('open');
-        overlay.setAttribute('aria-hidden', 'true');
-      }
-    });
-
-    tabs.forEach(function (tab) {
-      tab.addEventListener('click', function () {
-        tabs.forEach(function (item) { item.classList.remove('active'); });
-        tab.classList.add('active');
-        render(Number(tab.dataset.gen || 1));
-      });
-    });
-
-    if (search) {
-      search.addEventListener('input', function () {
-        filterCards(search.value);
-      });
-    }
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-})();
-</script>
-<!-- GREMORY POKEDEX ADDON: END -->
-
+  <script type="module" src="/assets/js/app.js?v=20261009-v2"></script>
 </body>
 </html>
