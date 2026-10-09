@@ -99,7 +99,7 @@ function matchJsonUrl(html){
   return null;
 }
 function pickDarkKey(body = {}){
-  return process.env.DARKSTARS_API_KEY || process.env.DARK_API_KEY || process.env.GREMORY_APIKEY || process.env.APIKEY || body.apikey || body.apiKey || 'gremory';
+  return process.env.DARKSTARS_API_KEY || process.env.DARK_API_KEY || process.env.GREMORY_APIKEY || process.env.APIKEY || 'gremory';
 }
 function darkAnimeUrl(path, params = {}, key = ''){
   const u = new URL(`https://darkstarsapi.online${path}`);
@@ -1142,7 +1142,7 @@ function normalizeAptoideApp(app = {}){
 }
 
 module.exports = async (req, res) => {
-  const rapidKey = process.env.RAPIDAPI_KEY || '6e6739bedbmsh671d99355539a01p1d9748jsn68265b82360a';
+  const rapidKey = process.env.RAPIDAPI_KEY || '';
   const action = (qp(req, 'action') || '').toLowerCase();
 
   if (action === 'proxy') {
@@ -1183,6 +1183,7 @@ module.exports = async (req, res) => {
   }
 
   if (action === 'instagram') {
+    if (!rapidKey) return sendJson(res, 503, { erro: 'RAPIDAPI_KEY não configurada no servidor' });
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
     const body = await readJsonBody(req);
     const url = body.url;
@@ -1218,6 +1219,7 @@ module.exports = async (req, res) => {
   }
 
   if (action === 'spotify') {
+    if (!rapidKey) return sendJson(res, 503, { erro: 'RAPIDAPI_KEY não configurada no servidor' });
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
     const body = await readJsonBody(req);
     const songId = body.url || body.songId;
@@ -1280,6 +1282,7 @@ module.exports = async (req, res) => {
   }
 
   if (action === 'tiktok') {
+    if (!rapidKey) return sendJson(res, 503, { erro: 'RAPIDAPI_KEY não configurada no servidor' });
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
     const body = await readJsonBody(req);
     const url = body.url;
