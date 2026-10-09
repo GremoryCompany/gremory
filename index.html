@@ -3,13 +3,58 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0b0b10">
+  <meta name="theme-color" content="#09090d">
   <meta name="color-scheme" content="dark">
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261009-v2">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261009-v3">
 </head>
-<body>
-  <div class="app-shell" id="appShell">
+<body class="auth-loading">
+  <section class="auth-gate" id="authModal" aria-hidden="false">
+    <div class="auth-media" aria-hidden="true">
+      <img id="authGif" src="/assets/video/login.gif" data-src="/assets/video/login.gif" alt="">
+      <div class="auth-media-shade"></div>
+      <div class="auth-media-brand">
+        <div class="brand-seal">G</div>
+        <div>
+          <strong>Gremory</strong>
+          <span>Charlotte • Pokémon • RPG</span>
+        </div>
+      </div>
+    </div>
+    <div class="auth-panel">
+      <div class="auth-panel-inner">
+        <div class="auth-mobile-brand"><span>G</span><strong>Gremory</strong></div>
+        <div class="auth-heading">
+          <span class="eyebrow">CONTA GREMORY</span>
+          <h1 id="authHeading">Bem-vindo</h1>
+        </div>
+        <div class="auth-tabs">
+          <button class="active" data-auth-tab="login" type="button">Entrar</button>
+          <button data-auth-tab="register" type="button">Criar conta</button>
+        </div>
+
+        <form class="auth-form active" id="loginForm" data-auth-form="login">
+          <label>E-mail<input id="loginEmail" type="email" autocomplete="email" required></label>
+          <label>Senha<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+          <label class="check-row"><input id="loginRemember" type="checkbox"><span>Manter conectado neste aparelho</span></label>
+          <button class="btn primary full" type="submit">Entrar</button>
+          <button class="link-btn" id="resetPasswordBtn" type="button">Esqueci minha senha</button>
+        </form>
+
+        <form class="auth-form" id="registerForm" data-auth-form="register">
+          <label>Nome<input id="registerName" maxlength="40" autocomplete="name" required></label>
+          <label>E-mail<input id="registerEmail" type="email" autocomplete="email" required></label>
+          <label>Senha<input id="registerPassword" type="password" minlength="6" autocomplete="new-password" required></label>
+          <label>Confirmar senha<input id="registerPassword2" type="password" minlength="6" autocomplete="new-password" required></label>
+          <label class="check-row"><input id="registerRemember" type="checkbox"><span>Manter conectado neste aparelho</span></label>
+          <button class="btn primary full" type="submit">Criar conta</button>
+        </form>
+        <div class="form-status" id="authStatus"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="app-shell" id="appShell" aria-hidden="true">
     <aside class="sidebar" aria-label="Navegação principal">
       <button class="brand" data-route="home" aria-label="Gremory">
         <span class="brand-mark">G</span>
@@ -18,16 +63,18 @@
 
       <nav class="side-nav">
         <button class="nav-item active" data-route="home"><span>⌂</span><b>Início</b></button>
+        <button class="nav-item" data-route="charlotte"><span>✦</span><b>Charlotte</b></button>
         <button class="nav-item" data-route="pokemon"><span>◉</span><b>Pokémon</b></button>
+        <button class="nav-item" data-route="friends"><span>◇</span><b>Amigos</b></button>
         <button class="nav-item" data-route="downloads"><span>↓</span><b>Downloads</b></button>
         <button class="nav-item" data-route="rpg"><span>⚄</span><b>RPG</b></button>
         <button class="nav-item" data-route="premium"><span>♛</span><b>Premium</b></button>
       </nav>
 
-      <div class="account-mini" aria-label="Resumo da conta">
+      <button class="account-mini" id="sideAccountBtn" type="button" aria-label="Abrir perfil">
         <img id="sideAvatar" src="/assets/img/profile.jpg" alt="">
-        <span><strong id="sideName">Conta</strong><small id="sideStatus">Entrar</small></span>
-      </div>
+        <span><strong id="sideName">Conta</strong><small id="sideStatus">Gremory</small></span>
+      </button>
     </aside>
 
     <div class="main-shell">
@@ -37,195 +84,198 @@
           <h1 id="pageTitle">Início</h1>
         </div>
         <div class="top-actions">
-          <button class="avatar-button" id="topAccountBtn" type="button" aria-label="Abrir conta">
-            <img id="topAvatar" src="/assets/img/profile.jpg" alt="">
-          </button>
+          <button class="top-pill" id="topCharlotteStatus" data-route="charlotte" type="button"><span class="status-dot"></span><b>Charlotte</b></button>
+          <button class="avatar-button" id="topAccountBtn" type="button" aria-label="Abrir conta"><img id="topAvatar" src="/assets/img/profile.jpg" alt=""></button>
         </div>
       </header>
 
       <main class="content" id="content">
         <section class="view active" data-view="home">
-          <div class="hero-panel">
-            <div class="hero-copy">
-              <span class="tag">GREMORY HUB</span>
-              <h2>Charlotte, Pokémon, RPG e downloads.</h2>
-              <p id="homeGreeting">Entre na sua conta para continuar.</p>
+          <div class="home-hero">
+            <div class="home-hero-copy">
+              <span class="tag">GREMORY</span>
+              <h2 id="homeGreeting">Olá.</h2>
+              <p>O que você quer fazer agora?</p>
               <div class="hero-actions">
-                <button class="btn primary" data-route="pokemon">Pokémon</button>
-                <button class="btn" data-route="rpg">Abrir RPG</button>
+                <button class="btn primary" data-route="charlotte">Abrir Charlotte</button>
+                <button class="btn" data-route="pokemon">Pokémon</button>
+                <button class="btn" data-route="rpg">Mesa RPG</button>
               </div>
             </div>
-            <div class="crest" aria-hidden="true">
-              <span class="crest-wing left"></span><span class="crest-core">G</span><span class="crest-wing right"></span>
+            <div class="home-emblem" aria-hidden="true">
+              <div class="home-emblem-ring"></div>
+              <div class="home-emblem-core">G</div>
             </div>
           </div>
 
-          <div class="quick-grid">
-            <button class="quick-card" data-route="pokemon"><span class="quick-icon">◉</span><strong>Pokémon</strong><small>Pokédex e equipe</small></button>
-            <button class="quick-card" data-route="rpg"><span class="quick-icon">⚄</span><strong>RPG</strong><small>Mesas e personagens</small></button>
-            <button class="quick-card" data-route="downloads"><span class="quick-icon">↓</span><strong>Downloads</strong><small>Ferramentas rápidas</small></button>
-            <button class="quick-card" data-route="premium"><span class="quick-icon">♛</span><strong>Premium</strong><small>Planos Gremory</small></button>
+          <div class="home-cards">
+            <button class="home-card" data-route="charlotte"><span class="home-card-icon">✦</span><div><strong>Charlotte</strong><small id="homeCharlotteText">Não vinculada</small></div><b>›</b></button>
+            <button class="home-card" data-route="pokemon"><span class="home-card-icon">◉</span><div><strong>Pokémon</strong><small id="homePokemonText">Abrir centro</small></div><b>›</b></button>
+            <button class="home-card" data-route="friends"><span class="home-card-icon">◇</span><div><strong>Amigos</strong><small id="homeFriendsText">Ver pessoas</small></div><b>›</b></button>
+            <button class="home-card" data-route="rpg"><span class="home-card-icon">⚄</span><div><strong>RPG</strong><small id="homeRpgRecent">Suas mesas</small></div><b>›</b></button>
           </div>
 
-          <div class="dashboard-grid">
-            <article class="panel compact-panel">
-              <div class="panel-head"><h3>Sua conta</h3><button class="text-button" id="homeProfileBtn">Abrir</button></div>
+          <div class="home-dashboard">
+            <article class="panel account-overview">
+              <div class="panel-head"><div><span class="tag">CONTA</span><h3>Seu resumo</h3></div><button class="text-button" id="homeProfileBtn">Perfil</button></div>
               <div class="stats-row">
-                <div><span>Status</span><strong id="homePlan">Visitante</strong></div>
-                <div><span>Nível</span><strong id="homeLevel">—</strong></div>
-                <div><span>Rupias</span><strong id="homeBalance">—</strong></div>
+                <div><span>Status</span><strong id="homePlan">Padrão</strong></div>
+                <div><span>Nível</span><strong id="homeLevel">0</strong></div>
+                <div><span>Rupias</span><strong id="homeBalance">₹ 0</strong></div>
               </div>
             </article>
-            <article class="panel compact-panel">
-              <div class="panel-head"><h3>RPG recente</h3><button class="text-button" data-route="rpg">Ver mesas</button></div>
-              <div class="empty-inline" id="homeRpgRecent">Nenhuma mesa aberta.</div>
+            <article class="panel shortcut-panel">
+              <div class="panel-head"><div><span class="tag">ATALHOS</span><h3>Mais usados</h3></div></div>
+              <div class="shortcut-row">
+                <button data-bot-command="/daily">Daily</button>
+                <button data-bot-command="/perfil">Perfil</button>
+                <button data-bot-command="/conquistas">Conquistas</button>
+                <button data-route="downloads">Downloads</button>
+              </div>
             </article>
           </div>
         </section>
 
-        <section class="view" data-view="pokemon">
-          <div class="section-head">
-            <div><span class="tag">POKÉMON</span><h2>Centro Pokémon</h2></div>
-            <div class="section-actions"><button class="btn" id="randomPokemonBtn">Explorar</button></div>
-          </div>
+        <section class="view" data-view="charlotte">
+          <div class="section-head"><div><span class="tag">CHARLOTTE</span><h2>Charlotte</h2></div><button class="btn" id="syncCharlotteBtn" type="button">Sincronizar</button></div>
 
-          <div class="pokemon-layout">
-            <article class="panel pokemon-search-panel">
-              <div class="panel-head"><h3>Pokédex</h3><span class="muted">Buscar por nome ou número</span></div>
-              <form class="search-row" id="pokemonSearchForm">
-                <input id="pokemonSearchInput" autocomplete="off" placeholder="Ex: pikachu ou 25">
-                <button class="btn primary" type="submit">Buscar</button>
-              </form>
-              <div class="pokemon-result" id="pokemonResult">
-                <div class="empty-state small">Procure um Pokémon.</div>
+          <div class="charlotte-grid">
+            <article class="panel link-card">
+              <div class="link-card-head"><div class="charlotte-orb">✦</div><div><small>WHATSAPP</small><h3 id="linkStatusTitle">Vincular Charlotte</h3></div></div>
+              <p id="linkStatusText">Gere um código e envie para a Charlotte.</p>
+              <div class="link-code-box" id="linkCodeBox" hidden><span>Código</span><strong id="linkCodeValue">------</strong></div>
+              <div class="link-actions">
+                <button class="btn primary" id="createLinkCodeBtn" type="button">Gerar código</button>
+                <button class="btn" id="openCharlotteLinkBtn" type="button" hidden>Abrir WhatsApp</button>
               </div>
             </article>
 
+            <article class="panel command-launcher">
+              <div class="panel-head"><div><span class="tag">COMANDOS</span><h3>Abrir no bot</h3></div></div>
+              <div class="command-grid">
+                <button data-bot-command="/perfil">Perfil</button><button data-bot-command="/daily">Daily</button>
+                <button data-bot-command="/conquistas">Conquistas</button><button data-bot-command="/pokemon">Pokémon</button>
+                <button data-bot-command="/meuspokemon">Meus Pokémon</button><button data-bot-command="/pcpokemon">PC Pokémon</button>
+                <button data-bot-command="/vip">Premium</button><button data-bot-command="/meuvip">Meu VIP</button>
+                <button data-bot-command="/loja">Loja</button><button data-bot-command="/pdf">PDF</button>
+                <button data-bot-command="/tinder">Tinder</button><button data-bot-command="/sorteios">Sorteios</button>
+              </div>
+              <form class="command-search" id="playBotForm"><input id="playBotInput" placeholder="Música ou vídeo"><button class="btn primary" type="submit">/play</button></form>
+            </article>
+          </div>
+
+          <article class="panel bot-sync-card">
+            <div class="panel-head"><div><span class="tag">SINCRONIZAÇÃO</span><h3>Dados da Charlotte</h3></div><span class="pill" id="syncStatePill">Desconectado</span></div>
+            <div class="sync-grid">
+              <div><span>WhatsApp</span><strong id="syncWhatsapp">—</strong></div>
+              <div><span>Pokémon</span><strong id="syncPokemonCount">0</strong></div>
+              <div><span>Última sync</span><strong id="syncUpdatedAt">—</strong></div>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" data-view="pokemon">
+          <div class="section-head"><div><span class="tag">POKÉMON</span><h2>Centro Pokémon</h2></div><button class="btn primary" id="pokemonExploreBotBtn" type="button">Explorar na Charlotte</button></div>
+
+          <div class="pokemon-top-grid">
             <article class="panel team-panel">
-              <div class="panel-head"><h3>Minha equipe</h3><span class="pill" id="teamCount">0/6</span></div>
+              <div class="panel-head"><div><h3>Minha equipe</h3><small id="teamSourceLabel" class="muted">Site</small></div><span class="pill" id="teamCount">0/6</span></div>
               <div class="team-grid" id="pokemonTeam"></div>
+            </article>
+            <article class="panel pokemon-search-panel">
+              <div class="panel-head"><h3>Pokédex</h3><span class="muted">Nome ou número</span></div>
+              <form class="search-row" id="pokemonSearchForm"><input id="pokemonSearchInput" autocomplete="off" placeholder="Pikachu"><button class="btn" type="submit">Buscar</button></form>
+              <div class="pokemon-result" id="pokemonResult"><div class="empty-state small">Procure um Pokémon.</div></div>
+            </article>
+          </div>
+
+          <article class="panel duel-panel">
+            <div class="panel-head"><div><span class="tag">DUELO</span><h3>Batalha com amigos</h3></div><span class="pill" id="duelStatusPill">Aguardando</span></div>
+            <div id="duelLobby" class="duel-lobby">
+              <div class="duel-create">
+                <label>Amigo<select id="duelFriendSelect"><option value="">Escolha um amigo</option></select></label>
+                <button class="btn primary" id="sendDuelChallengeBtn" type="button">Desafiar</button>
+              </div>
+              <div class="duel-inbox" id="duelInbox"><div class="empty-state small">Nenhum desafio.</div></div>
+            </div>
+            <div id="duelArena" class="duel-arena" hidden>
+              <div class="duel-player enemy"><div class="duel-pokemon-copy"><strong id="duelEnemyName">Pokémon</strong><span id="duelEnemyOwner">Adversário</span></div><div class="hpbar"><i id="duelEnemyHpBar"></i></div><small id="duelEnemyHp">0 / 0</small><img id="duelEnemySprite" alt=""></div>
+              <div class="duel-vs">VS</div>
+              <div class="duel-player mine"><img id="duelMySprite" alt=""><div class="duel-pokemon-copy"><strong id="duelMyName">Pokémon</strong><span id="duelMyOwner">Você</span></div><div class="hpbar"><i id="duelMyHpBar"></i></div><small id="duelMyHp">0 / 0</small></div>
+              <div class="duel-actions" id="duelMoveButtons"></div>
+              <div class="duel-log" id="duelLog"></div>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" data-view="friends">
+          <div class="section-head"><div><span class="tag">AMIGOS</span><h2>Pessoas</h2></div></div>
+          <div class="friends-layout">
+            <article class="panel people-search-panel">
+              <div class="panel-head"><h3>Procurar</h3></div>
+              <div class="search-row"><input id="friendSearchInput" placeholder="Nome"><button class="btn" id="friendSearchBtn" type="button">Buscar</button></div>
+              <div class="people-list" id="peopleSearchResults"></div>
+            </article>
+            <article class="panel friend-requests-panel">
+              <div class="panel-head"><h3>Solicitações</h3><span class="pill" id="requestCount">0</span></div>
+              <div class="people-list" id="friendRequestList"><div class="empty-state small">Nenhuma solicitação.</div></div>
+            </article>
+            <article class="panel friends-panel">
+              <div class="panel-head"><h3>Seus amigos</h3><span class="pill" id="friendCount">0</span></div>
+              <div class="people-list" id="friendList"><div class="empty-state small">Nenhum amigo ainda.</div></div>
             </article>
           </div>
         </section>
 
         <section class="view" data-view="downloads">
-          <div class="section-head">
-            <div><span class="tag">DOWNLOADS</span><h2>Baixar mídia</h2></div>
-          </div>
-
+          <div class="section-head"><div><span class="tag">DOWNLOADS</span><h2>Downloads</h2></div></div>
           <article class="panel download-panel">
             <div class="service-tabs" id="downloadServices">
               <button class="service-tab active" data-service="tiktok">TikTok</button>
               <button class="service-tab" data-service="instagram">Instagram</button>
               <button class="service-tab" data-service="pinterest">Pinterest</button>
               <button class="service-tab" data-service="spotify">Spotify</button>
+              <button class="service-tab" data-service="youtube">YouTube</button>
+              <button class="service-tab" data-service="facebook">Facebook</button>
+              <button class="service-tab" data-service="apk">APK</button>
             </div>
             <form class="download-form" id="downloadForm">
               <label id="downloadLabel" for="downloadInput">Link do TikTok</label>
-              <div class="search-row">
-                <input id="downloadInput" type="url" inputmode="url" placeholder="Cole o link aqui" required>
-                <button class="btn primary" id="downloadSubmit" type="submit">Preparar</button>
-              </div>
+              <div class="search-row"><input id="downloadInput" placeholder="Cole o link aqui" required><button class="btn primary" id="downloadSubmit" type="submit">Preparar</button></div>
             </form>
             <div class="download-result" id="downloadResult"></div>
           </article>
         </section>
 
         <section class="view" data-view="rpg">
-          <div class="section-head">
-            <div><span class="tag">RPG GREMORY</span><h2>Mesas</h2></div>
-            <div class="section-actions"><button class="btn primary" id="createRoomOpen">Criar mesa</button></div>
-          </div>
+          <div class="section-head"><div><span class="tag">RPG</span><h2>Mesas</h2></div><div class="section-actions"><button class="btn primary" id="createRoomOpen">Criar mesa</button></div></div>
 
           <div class="rpg-lobby" id="rpgLobby">
-            <article class="panel join-panel">
-              <div class="panel-head"><h3>Entrar por convite</h3></div>
-              <form id="joinRoomForm" class="join-form">
-                <input id="joinRoomCode" maxlength="8" autocomplete="off" placeholder="Código da mesa">
-                <button class="btn" type="submit">Entrar</button>
-              </form>
-            </article>
-            <article class="panel rooms-panel">
-              <div class="panel-head"><h3>Minhas mesas</h3><button class="text-button" id="refreshRoomsBtn">Atualizar</button></div>
-              <div id="myRooms" class="room-list"><div class="empty-state small">Faça login para ver suas mesas.</div></div>
-            </article>
+            <article class="panel join-panel"><div class="panel-head"><h3>Entrar por convite</h3></div><form id="joinRoomForm" class="join-form"><input id="joinRoomCode" maxlength="8" autocomplete="off" placeholder="Código da mesa"><button class="btn" type="submit">Entrar</button></form></article>
+            <article class="panel rooms-panel"><div class="panel-head"><h3>Minhas mesas</h3><button class="text-button" id="refreshRoomsBtn">Atualizar</button></div><div id="myRooms" class="room-list"><div class="empty-state small">Nenhuma mesa.</div></div></article>
           </div>
 
           <div class="table-shell" id="rpgTable" hidden>
             <div class="table-topbar">
-              <div>
-                <button class="back-button" id="leaveTableView" type="button">← Mesas</button>
-                <h2 id="tableRoomName">Mesa</h2>
-                <div class="room-meta"><span id="tableSystem">Livre</span><span>•</span><button id="copyInviteBtn" class="inline-copy" type="button">Convite <b id="tableCode">------</b></button></div>
-              </div>
-              <div class="table-top-actions">
-                <button class="btn" id="characterBtn">Personagem</button>
-                <button class="btn danger-ghost" id="exitRoomBtn">Sair</button>
-              </div>
+              <div><button class="back-button" id="leaveTableView" type="button">← Mesas</button><h2 id="tableRoomName">Mesa</h2><div class="room-meta"><span id="tableSystem">Livre</span><span>•</span><button id="copyInviteBtn" class="inline-copy" type="button">Convite <b id="tableCode">------</b></button></div></div>
+              <div class="table-top-actions"><button class="btn" id="characterBtn">Personagem</button><button class="btn danger-ghost" id="exitRoomBtn">Sair</button></div>
             </div>
-
             <div class="table-grid">
-              <aside class="table-column players-column panel">
-                <div class="panel-head"><h3>Grupo</h3><span class="pill" id="memberCount">0</span></div>
-                <div class="member-list" id="memberList"></div>
-
-                <div class="divider"></div>
-                <div class="panel-head"><h3>Iniciativa</h3><button class="text-button" id="rollInitiativeBtn">Rolar</button></div>
-                <div class="initiative-list" id="initiativeList"></div>
-              </aside>
-
+              <aside class="table-column players-column panel"><div class="panel-head"><h3>Grupo</h3><span class="pill" id="memberCount">0</span></div><div class="member-list" id="memberList"></div><div class="divider"></div><div class="panel-head"><h3>Iniciativa</h3><button class="text-button" id="rollInitiativeBtn">Rolar</button></div><div class="initiative-list" id="initiativeList"></div></aside>
               <section class="table-center panel">
-                <div class="scene-toolbar">
-                  <span class="tag">CENA</span>
-                  <button class="text-button" id="editSceneBtn">Editar</button>
-                </div>
-                <div class="scene-card" id="sceneCard">
-                  <div class="scene-placeholder" id="scenePlaceholder">
-                    <span>✦</span>
-                    <strong id="sceneTitle">A aventura começa aqui</strong>
-                    <small id="sceneDescription">O mestre pode mudar a cena.</small>
-                  </div>
-                  <img id="sceneImage" alt="Cena da mesa" hidden>
-                </div>
-
-                <div class="dice-dock">
-                  <div class="dice-buttons" id="diceButtons">
-                    <button data-die="4">d4</button><button data-die="6">d6</button><button data-die="8">d8</button><button data-die="10">d10</button><button data-die="12">d12</button><button data-die="20">d20</button><button data-die="100">d100</button>
-                  </div>
-                  <form id="customRollForm" class="custom-roll"><input id="customRollInput" placeholder="2d6+3"><button type="submit">Rolar</button></form>
-                </div>
-
+                <div class="scene-toolbar"><span class="tag">CENA</span><button class="text-button" id="editSceneBtn">Editar</button></div>
+                <div class="scene-card" id="sceneCard"><div class="scene-placeholder" id="scenePlaceholder"><span>✦</span><strong id="sceneTitle">A aventura começa aqui</strong><small id="sceneDescription">O mestre pode mudar a cena.</small></div><img id="sceneImage" alt="Cena da mesa" hidden></div>
+                <div class="dice-dock"><div class="dice-buttons" id="diceButtons"><button data-die="4">d4</button><button data-die="6">d6</button><button data-die="8">d8</button><button data-die="10">d10</button><button data-die="12">d12</button><button data-die="20">d20</button><button data-die="100">d100</button></div><form id="customRollForm" class="custom-roll"><input id="customRollInput" placeholder="2d6+3"><button type="submit">Rolar</button></form></div>
                 <div class="roll-log" id="rollLog"></div>
               </section>
-
-              <aside class="table-column chat-column panel">
-                <div class="table-tabs">
-                  <button class="table-tab active" data-table-tab="chat">Chat</button>
-                  <button class="table-tab" data-table-tab="rules">Regras</button>
-                </div>
-
-                <div class="table-tab-pane active" data-table-pane="chat">
-                  <div class="chat-list" id="chatList"></div>
-                  <form id="chatForm" class="chat-form"><input id="chatInput" maxlength="500" autocomplete="off" placeholder="Mensagem"><button type="submit">Enviar</button></form>
-                </div>
-
-                <div class="table-tab-pane" data-table-pane="rules">
-                  <textarea id="roomRules" maxlength="4000" placeholder="Regras, lembretes, links..." readonly></textarea>
-                  <button class="btn" id="saveRulesBtn" hidden>Salvar regras</button>
-                </div>
-              </aside>
+              <aside class="table-column chat-column panel"><div class="table-tabs"><button class="table-tab active" data-table-tab="chat">Chat</button><button class="table-tab" data-table-tab="rules">Regras</button></div><div class="table-tab-pane active" data-table-pane="chat"><div class="chat-list" id="chatList"></div><form id="chatForm" class="chat-form"><input id="chatInput" maxlength="500" autocomplete="off" placeholder="Mensagem"><button type="submit">Enviar</button></form></div><div class="table-tab-pane" data-table-pane="rules"><textarea id="roomRules" maxlength="4000" placeholder="Regras, lembretes, links..." readonly></textarea><button class="btn" id="saveRulesBtn" hidden>Salvar regras</button></div></aside>
             </div>
           </div>
         </section>
 
         <section class="view" data-view="premium">
-          <div class="section-head"><div><span class="tag">GREMORY PREMIUM</span><h2>Planos</h2></div></div>
-          <div class="plans-grid">
-            <article class="plan-card"><small>1 DIA</small><strong>R$ 2</strong><span>Teste rápido</span><button class="btn" data-buy-plan="1d">Comprar</button></article>
-            <article class="plan-card"><small>7 DIAS</small><strong>R$ 5</strong><span>Uma semana</span><button class="btn" data-buy-plan="7d">Comprar</button></article>
-            <article class="plan-card featured"><small>15 DIAS</small><strong>R$ 8</strong><span>Mais escolhido</span><button class="btn primary" data-buy-plan="15d">Comprar</button></article>
-            <article class="plan-card"><small>30 DIAS</small><strong>R$ 12</strong><span>Um mês</span><button class="btn" data-buy-plan="30d">Comprar</button></article>
-          </div>
+          <div class="section-head"><div><span class="tag">PREMIUM</span><h2>Gremory Premium</h2></div></div>
+          <div class="plans-grid"><article class="plan-card"><small>1 DIA</small><strong>R$ 2</strong><span>1 dia</span><button class="btn" data-buy-plan="1d">Comprar</button></article><article class="plan-card"><small>7 DIAS</small><strong>R$ 5</strong><span>7 dias</span><button class="btn" data-buy-plan="7d">Comprar</button></article><article class="plan-card featured"><small>15 DIAS</small><strong>R$ 8</strong><span>15 dias</span><button class="btn primary" data-buy-plan="15d">Comprar</button></article><article class="plan-card"><small>30 DIAS</small><strong>R$ 12</strong><span>30 dias</span><button class="btn" data-buy-plan="30d">Comprar</button></article></div>
         </section>
       </main>
     </div>
@@ -233,107 +283,35 @@
     <nav class="mobile-nav" aria-label="Navegação mobile">
       <button class="active" data-route="home"><span>⌂</span><small>Início</small></button>
       <button data-route="pokemon"><span>◉</span><small>Pokémon</small></button>
+      <button data-route="charlotte"><span>✦</span><small>Charlotte</small></button>
       <button data-route="rpg"><span>⚄</span><small>RPG</small></button>
-      <button data-route="downloads"><span>↓</span><small>Baixar</small></button>
       <button id="mobileAccountBtn"><span>●</span><small>Conta</small></button>
     </nav>
-  </div>
-
-  <div class="modal open locked" id="authModal" aria-hidden="false">
-    <div class="modal-backdrop"></div>
-    <div class="auth-card modal-card">
-      <button class="modal-close" id="authCloseBtn" type="button" aria-label="Fechar">×</button>
-      <div class="auth-brand"><span>G</span><div><strong>Gremory</strong><small>Conta</small></div></div>
-      <div class="auth-tabs"><button class="active" data-auth-tab="login">Entrar</button><button data-auth-tab="register">Criar conta</button></div>
-
-      <form class="auth-form active" id="loginForm" data-auth-form="login">
-        <label>E-mail<input id="loginEmail" type="email" autocomplete="email" required></label>
-        <label>Senha<input id="loginPassword" type="password" autocomplete="current-password" required></label>
-        <label class="check-row"><input id="loginRemember" type="checkbox"><span>Manter conectado</span></label>
-        <button class="btn primary full" type="submit">Entrar</button>
-        <button class="link-btn" id="resetPasswordBtn" type="button">Esqueci minha senha</button>
-      </form>
-
-      <form class="auth-form" id="registerForm" data-auth-form="register">
-        <label>Nome<input id="registerName" maxlength="40" autocomplete="name" required></label>
-        <label>E-mail<input id="registerEmail" type="email" autocomplete="email" required></label>
-        <label>Senha<input id="registerPassword" type="password" minlength="6" autocomplete="new-password" required></label>
-        <label>Confirmar senha<input id="registerPassword2" type="password" minlength="6" autocomplete="new-password" required></label>
-        <label class="check-row"><input id="registerRemember" type="checkbox"><span>Manter conectado</span></label>
-        <button class="btn primary full" type="submit">Criar conta</button>
-      </form>
-      <div class="form-status" id="authStatus"></div>
-    </div>
   </div>
 
   <div class="drawer" id="accountDrawer" aria-hidden="true">
     <button class="drawer-backdrop" id="accountDrawerBackdrop" aria-label="Fechar"></button>
     <aside class="drawer-card">
       <div class="drawer-head"><div><span class="tag">CONTA</span><h2>Meu perfil</h2></div><button class="modal-close static" id="accountDrawerClose">×</button></div>
-      <div class="profile-summary">
-        <img id="profileAvatarPreview" src="/assets/img/profile.jpg" alt="">
-        <div><strong id="profileNameView">Usuário</strong><span id="profilePlanView">Padrão</span></div>
-      </div>
+      <div class="profile-summary"><img id="profileAvatarPreview" src="/assets/img/profile.jpg" alt=""><div><strong id="profileNameView">Usuário</strong><span id="profilePlanView">Padrão</span></div></div>
       <form id="profileForm" class="profile-form">
         <label>Nome<input id="profileName" maxlength="40"></label>
         <label>Foto (URL)<input id="profileAvatar" type="url" placeholder="https://..."></label>
         <label>Bio<textarea id="profileBio" maxlength="180" rows="3" placeholder="Seu recado"></textarea></label>
         <label>Anime favorito<input id="profileFavoriteAnime" maxlength="80"></label>
         <div class="profile-stats"><div><span>Nível</span><strong id="profileLevel">0</strong></div><div><span>Rupias</span><strong id="profileBalance">0</strong></div></div>
-        <button class="btn primary full" type="submit">Salvar</button>
-        <button class="btn full danger-ghost" id="logoutBtn" type="button">Sair</button>
+        <button class="btn primary full" type="submit">Salvar</button><button class="btn full danger-ghost" id="logoutBtn" type="button">Sair</button>
       </form>
     </aside>
   </div>
 
-  <div class="modal" id="createRoomModal" aria-hidden="true">
-    <button class="modal-backdrop" data-close-modal="createRoomModal"></button>
-    <div class="modal-card">
-      <button class="modal-close" data-close-modal="createRoomModal">×</button>
-      <span class="tag">NOVA MESA</span><h2>Criar RPG</h2>
-      <form id="createRoomForm" class="stack-form">
-        <label>Nome da mesa<input id="roomNameInput" maxlength="60" placeholder="Ex: Ecos de Ravenfall" required></label>
-        <label>Sistema<select id="roomSystemInput"><option>Livre</option><option>D&D 5e</option><option>Tormenta 20</option><option>Ordem Paranormal</option><option>Call of Cthulhu</option><option>Outro</option></select></label>
-        <label>Privacidade<select id="roomPrivacyInput"><option value="invite">Somente convite</option></select></label>
-        <button class="btn primary full" type="submit">Criar mesa</button>
-      </form>
-    </div>
-  </div>
+  <div class="modal" id="createRoomModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="createRoomModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="createRoomModal">×</button><span class="tag">NOVA MESA</span><h2>Criar RPG</h2><form id="createRoomForm" class="stack-form"><label>Nome da mesa<input id="roomNameInput" maxlength="60" placeholder="Ex: Ecos de Ravenfall" required></label><label>Sistema<select id="roomSystemInput"><option>Livre</option><option>D&D 5e</option><option>Tormenta 20</option><option>Ordem Paranormal</option><option>Call of Cthulhu</option><option>Outro</option></select></label><label>Privacidade<select id="roomPrivacyInput"><option value="invite">Somente convite</option></select></label><button class="btn primary full" type="submit">Criar mesa</button></form></div></div>
 
-  <div class="modal" id="characterModal" aria-hidden="true">
-    <button class="modal-backdrop" data-close-modal="characterModal"></button>
-    <div class="modal-card wide">
-      <button class="modal-close" data-close-modal="characterModal">×</button>
-      <span class="tag">PERSONAGEM</span><h2>Ficha rápida</h2>
-      <form id="characterForm" class="character-form">
-        <label>Nome<input id="charName" maxlength="50" required></label>
-        <label>Classe / arquétipo<input id="charClass" maxlength="50"></label>
-        <label>Nível<input id="charLevel" type="number" min="1" max="99" value="1"></label>
-        <label>HP atual<input id="charHp" type="number" min="0" value="10"></label>
-        <label>HP máximo<input id="charMaxHp" type="number" min="1" value="10"></label>
-        <label>Defesa<input id="charDefense" type="number" min="0" value="10"></label>
-        <label class="full-span">Notas<textarea id="charNotes" rows="4" maxlength="1000"></textarea></label>
-        <button class="btn primary full-span" type="submit">Salvar personagem</button>
-      </form>
-    </div>
-  </div>
+  <div class="modal" id="characterModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="characterModal"></button><div class="modal-card wide"><button class="modal-close" data-close-modal="characterModal">×</button><span class="tag">PERSONAGEM</span><h2>Ficha rápida</h2><form id="characterForm" class="character-form"><label>Nome<input id="charName" maxlength="50" required></label><label>Classe / arquétipo<input id="charClass" maxlength="50"></label><label>Nível<input id="charLevel" type="number" min="1" max="99" value="1"></label><label>HP atual<input id="charHp" type="number" min="0" value="10"></label><label>HP máximo<input id="charMaxHp" type="number" min="1" value="10"></label><label>Defesa<input id="charDefense" type="number" min="0" value="10"></label><label class="full-span">Notas<textarea id="charNotes" rows="4" maxlength="1000"></textarea></label><button class="btn primary full-span" type="submit">Salvar personagem</button></form></div></div>
 
-  <div class="modal" id="sceneModal" aria-hidden="true">
-    <button class="modal-backdrop" data-close-modal="sceneModal"></button>
-    <div class="modal-card">
-      <button class="modal-close" data-close-modal="sceneModal">×</button>
-      <span class="tag">CENA</span><h2>Editar cena</h2>
-      <form id="sceneForm" class="stack-form">
-        <label>Título<input id="sceneTitleInput" maxlength="80"></label>
-        <label>Descrição<textarea id="sceneDescriptionInput" rows="3" maxlength="300"></textarea></label>
-        <label>Imagem (URL)<input id="sceneImageInput" type="url" placeholder="https://..."></label>
-        <button class="btn primary full" type="submit">Salvar cena</button>
-      </form>
-    </div>
-  </div>
+  <div class="modal" id="sceneModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="sceneModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="sceneModal">×</button><span class="tag">CENA</span><h2>Editar cena</h2><form id="sceneForm" class="stack-form"><label>Título<input id="sceneTitleInput" maxlength="80"></label><label>Descrição<textarea id="sceneDescriptionInput" rows="3" maxlength="300"></textarea></label><label>Imagem (URL)<input id="sceneImageInput" type="url" placeholder="https://..."></label><button class="btn primary full" type="submit">Salvar cena</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-
-  <script type="module" src="/assets/js/app.js?v=20261009-v2"></script>
+  <script type="module" src="/assets/js/app.js?v=20261009-v3"></script>
 </body>
 </html>
