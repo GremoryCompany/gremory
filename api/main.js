@@ -38,6 +38,128 @@ function qp(req, key){
 function safeFilename(name){
   return String(name || 'download').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120) || 'download';
 }
+
+function mimeFromExt(ext=''){
+  const e = String(ext || '').toLowerCase().replace(/^\./, '');
+  if (e === 'mp4') return 'video/mp4';
+  if (e === 'webm') return 'video/webm';
+  if (e === 'm4a' || e === 'mp4a') return 'audio/mp4';
+  if (e === 'mp3') return 'audio/mpeg';
+  if (e === 'ogg' || e === 'opus') return 'audio/ogg';
+  if (e === 'jpg' || e === 'jpeg') return 'image/jpeg';
+  if (e === 'png') return 'image/png';
+  if (e === 'webp') return 'image/webp';
+  if (e === 'apk') return 'application/vnd.android.package-archive';
+  return 'application/octet-stream';
+}
+function qualityScore(value=''){
+  const s = String(value || '').toLowerCase();
+  const m = s.match(/(\d{3,4})p/);
+  if (m) return Number(m[1]);
+  if (s.includes('hd')) return 720;
+  if (s.includes('high')) return 600;
+  if (s.includes('medium')) return 360;
+  if (s.includes('low')) return 144;
+  return 0;
+}
+function normalizeSocialMediaPayload(data={}){
+  const root = data?.data && typeof data.data === 'object' ? data.data : data;
+  const mediasRaw =
+    root?.medias ||
+    root?.media ||
+    root?.links ||
+    root?.downloads ||
+    root?.result?.medias ||
+    root?.result?.media ||
+    [];
+  const medias = (Array.isArray(mediasRaw) ? mediasRaw : [mediasRaw])
+    .flatMap(item => {
+      if (!item) return [];
+      if (typeof item === 'string') return [{ url:item }];
+      if (Array.isArray(item)) return item;
+      return [item];
+    })
+    .map(item => ({
+      url: cleanUrl(item?.url || item?.link || item?.download || item?.downloadUrl || item?.src || ''),
+      quality: item?.quality || item?.label || item?.resolution || '',
+      extension: String(item?.extension || item?.ext || '').replace(/^\./, '').toLowerCase(),
+      type: String(item?.type || item?.mediaType || '').toLowerCase()
+    }))
+    .filter(x => /^https?:\/\//i.test(x.url));
+  return {
+    source: root?.source || root?.platform || '',
+    author: root?.author || root?.username || root?.owner || '',
+    title: root?.title || root?.caption || root?.name || '',
+    thumbnail: cleanUrl(root?.thumbnail || root?.thumb || root?.cover || ''),
+    duration: root?.duration || '',
+    medias
+  };
+}
+async function socialDownloadAllInOne(url){
+  const key = String(process.env.SOCIAL_DOWN_KEY || process.env.RAPIDAPI_KEY || '').trim();
+  if (!key) throw new Error('RAPIDAPI_KEY não configurada no servidor.');
+  const apiUrl = String(process.env.SOCIAL_DOWN_API_URL || 'https://social-download-all-in-one.p.rapidapi.com/v1/social/autolink').trim();
+  const host = String(process.env.SOCIAL_DOWN_HOST || 'social-download-all-in-one.p.rapidapi.com').trim();
+  const attempts = [
+    { 'content-type':'application/json', body:JSON.stringify({ url }) },
+    { 'content-type':'application/x-www-form-urlencoded', body:new URLSearchParams({ url }).toString() }
+  ];
+  let last = null;
+  for (const attempt of attempts){
+    try{
+      const r = await fetch(apiUrl, {
+        method:'POST',
+        headers:{
+          'content-type': attempt['content-type'],
+          'x-rapidapi-key': key,
+          'x-rapidapi-host': host
+        },
+        body: attempt.body,
+        redirect:'follow'
+      });
+      const data = await r.json().catch(()=>null);
+      if (r.ok && data){
+        const normalized = normalizeSocialMediaPayload(data);
+        if (normalized.medias.length) return normalized;
+      }
+      last = new Error(data?.message || data?.error || data?.erro || `HTTP ${r.status}`);
+    }catch(e){ last = e; }
+  }
+  throw last || new Error('A API social não retornou mídia.');
+}
+function pickSocialMedia(mediaInfo, prefer='video'){
+  const rows = Array.isArray(mediaInfo?.medias) ? mediaInfo.medias : [];
+  if (!rows.length) return null;
+  const preferred = rows.filter(x => x.type === prefer);
+  const candidates = preferred.length ? preferred : rows;
+  return [...candidates].sort((a,b) => qualityScore(b.quality) - qualityScore(a.quality))[0] || null;
+}
+async function resolveYoutubeInput(input=''){
+  const value = String(input || '').trim();
+  if (!value) throw new Error('Nome ou link do YouTube obrigatório.');
+  const ytdl = require('@distube/ytdl-core');
+  if (ytdl.validateURL(value)) return value;
+  const yts = require('yt-search');
+  const search = await yts(value);
+  const video = Array.isArray(search?.videos) ? search.videos[0] : null;
+  if (!video?.url) throw new Error('Nenhum vídeo encontrado no YouTube.');
+  return video.url;
+}
+function pickYoutubeFormat(formats=[], mode='video'){
+  const list = Array.isArray(formats) ? formats : [];
+  if (mode === 'audio'){
+    const m4a = list.filter(f => f?.hasAudio && !f?.hasVideo && (f.container === 'mp4' || f.container === 'm4a'));
+    const audioOnly = m4a.length ? m4a : list.filter(f => f?.hasAudio && !f?.hasVideo);
+    return [...audioOnly].sort((a,b) => Number(b.audioBitrate || b.bitrate || 0) - Number(a.audioBitrate || a.bitrate || 0))[0] || null;
+  }
+  const combinedMp4 = list.filter(f => f?.hasAudio && f?.hasVideo && f.container === 'mp4');
+  const combined = combinedMp4.length ? combinedMp4 : list.filter(f => f?.hasAudio && f?.hasVideo);
+  return [...combined].sort((a,b) => {
+    const ah = Number(a.height || String(a.qualityLabel || '').match(/\d+/)?.[0] || 0);
+    const bh = Number(b.height || String(b.qualityLabel || '').match(/\d+/)?.[0] || 0);
+    return bh - ah || Number(b.bitrate || 0) - Number(a.bitrate || 0);
+  })[0] || null;
+}
 function blockPrivateHost(host){
   const h = (host || '').toLowerCase();
   if (!h) return true;
@@ -1181,7 +1303,12 @@ module.exports = async (req, res) => {
     if (!['https:', 'http:'].includes(target.protocol)) return sendJson(res, 400, { erro: 'protocolo inválido' });
     if (blockPrivateHost(target.hostname)) return sendJson(res, 400, { erro: 'host bloqueado' });
     try{
-      const r = await fetch(target.toString(), { redirect: 'follow' });
+      const headers = {};
+      if (/googlevideo\.com$/i.test(target.hostname) || /\.googlevideo\.com$/i.test(target.hostname)) {
+        headers['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36';
+        headers['referer'] = 'https://www.youtube.com/';
+      }
+      const r = await fetch(target.toString(), { headers, redirect: 'follow' });
       if (!r.ok || !r.body) return sendJson(res, 502, { erro: 'falha ao obter arquivo' });
       return streamAsAttachment(res, r, filename);
     }catch{
@@ -1238,7 +1365,7 @@ module.exports = async (req, res) => {
       const ext = /(\.jpg|\.jpeg|\.png|\.webp)(\?|$)/i.test(String(mediaUrl)) ? 'jpg' : 'mp4';
       const filename = `instagram-${Date.now()}.${ext}`;
       const prox = signedProxyPath(mediaUrl, filename);
-      return sendJson(res, 200, { ok:true, downloadUrl: prox, filename });
+      return sendJson(res, 200, { ok:true, downloadUrl: prox, filename, mimetype:mimeFromExt(ext) });
     }catch{
       return sendJson(res, 500, { erro: 'Falha ao gerar download do Instagram' });
     }
@@ -1268,6 +1395,7 @@ module.exports = async (req, res) => {
         ok:true,
         downloadUrl: prox,
         filename: `${title}.mp3`,
+        mimetype:'audio/mpeg',
         title: data.data.title || '',
         artist: data.data.artist || '',
         album: data.data.album || '',
@@ -1283,6 +1411,28 @@ module.exports = async (req, res) => {
     const body = await readJsonBody(req);
     const url = body.url;
     if (!url) return sendJson(res, 400, { erro: 'URL obrigatória' });
+
+    // Primeiro tenta a API social. Se ela não estiver assinada/disponível,
+    // cai no extrator leve que já existia.
+    try{
+      const info = await socialDownloadAllInOne(url);
+      const media = pickSocialMedia(info, 'video') || pickSocialMedia(info, 'image');
+      if (media?.url){
+        const ext = media.extension || (media.type === 'video' ? 'mp4' : 'jpg');
+        const filename = `${safeFilename(info.title || 'pinterest')}.${ext}`;
+        return sendJson(res, 200, {
+          ok:true,
+          downloadUrl:signedProxyPath(media.url, filename),
+          filename,
+          mimetype:mimeFromExt(ext),
+          title:info.title || 'Pinterest',
+          artist:info.author || '',
+          thumb:info.thumbnail || '',
+          quality:media.quality || ''
+        });
+      }
+    }catch{}
+
     try{
       const html = await fetchText(url, {
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
@@ -1301,7 +1451,7 @@ module.exports = async (req, res) => {
       if (isVideo) ext = 'mp4';
       const filename = `pinterest-${Date.now()}.${ext}`;
       const prox = signedProxyPath(mediaUrl, filename);
-      return sendJson(res, 200, { ok:true, downloadUrl: prox, filename });
+      return sendJson(res, 200, { ok:true, downloadUrl: prox, filename, mimetype:mimeFromExt(ext) });
     }catch{
       return sendJson(res, 500, { erro: 'Falha ao baixar Pinterest' });
     }
@@ -1332,11 +1482,105 @@ module.exports = async (req, res) => {
         ok:true,
         downloadUrl: prox,
         filename:`${title}.mp4`,
+        mimetype:'video/mp4',
         thumb:data.data.cover || '',
         autor:data.data.author?.nickname || ''
       });
     }catch{
       return sendJson(res, 500, { erro: 'Falha ao baixar TikTok' });
+    }
+  }
+
+
+  if (action === 'facebook') {
+    if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
+    const body = await readJsonBody(req);
+    const url = String(body.url || '').trim();
+    if (!url) return sendJson(res, 400, { erro: 'Link do Facebook obrigatório' });
+    try{
+      const info = await socialDownloadAllInOne(url);
+      const media = pickSocialMedia(info, 'video');
+      if (!media?.url) return sendJson(res, 404, { erro: 'A API não retornou vídeo para esse link.' });
+      const ext = media.extension || 'mp4';
+      const title = safeFilename(info.title || 'facebook-video');
+      const filename = `${title}.${ext}`;
+      return sendJson(res, 200, {
+        ok:true,
+        downloadUrl:signedProxyPath(media.url, filename),
+        filename,
+        mimetype:mimeFromExt(ext),
+        title:info.title || 'Facebook',
+        artist:info.author || '',
+        thumb:info.thumbnail || '',
+        quality:media.quality || ''
+      });
+    }catch(e){
+      return sendJson(res, 502, { erro:`Falha ao preparar Facebook: ${e.message}` });
+    }
+  }
+
+  if (action === 'youtube_info') {
+    if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
+    const body = await readJsonBody(req);
+    const input = String(body.input || body.url || body.query || '').trim();
+    if (!input) return sendJson(res, 400, { erro: 'Nome ou link do YouTube obrigatório' });
+    try{
+      const ytdl = require('@distube/ytdl-core');
+      const url = await resolveYoutubeInput(input);
+      const info = await ytdl.getInfo(url);
+      const details = info?.videoDetails || {};
+      return sendJson(res, 200, {
+        ok:true,
+        url,
+        title:details.title || 'YouTube',
+        author:details.author?.name || details.ownerChannelName || '',
+        duration:Number(details.lengthSeconds || 0),
+        thumb:details.thumbnails?.slice?.(-1)?.[0]?.url || '',
+        videoId:details.videoId || ''
+      });
+    }catch(e){
+      return sendJson(res, 502, { erro:`Não foi possível localizar esse vídeo: ${e.message}` });
+    }
+  }
+
+  if (action === 'youtube') {
+    if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
+    const body = await readJsonBody(req);
+    const input = String(body.input || body.url || body.query || '').trim();
+    const mode = String(body.mode || 'video').toLowerCase() === 'audio' ? 'audio' : 'video';
+    if (!input) return sendJson(res, 400, { erro: 'Nome ou link do YouTube obrigatório' });
+    try{
+      const ytdl = require('@distube/ytdl-core');
+      const url = await resolveYoutubeInput(input);
+      const info = await ytdl.getInfo(url);
+      const details = info?.videoDetails || {};
+      const format = pickYoutubeFormat(info?.formats || [], mode);
+      if (!format?.url) {
+        return sendJson(res, 404, {
+          erro: mode === 'audio'
+            ? 'Não encontrei um formato de áudio compatível.'
+            : 'Não encontrei um formato de vídeo com áudio compatível.'
+        });
+      }
+      let ext = String(format.container || '').toLowerCase();
+      if (mode === 'audio' && ext === 'mp4') ext = 'm4a';
+      if (!ext) ext = mode === 'audio' ? 'm4a' : 'mp4';
+      const base = safeFilename(details.title || (mode === 'audio' ? 'youtube-audio' : 'youtube-video'));
+      const filename = `${base}.${ext}`;
+      return sendJson(res, 200, {
+        ok:true,
+        downloadUrl:signedProxyPath(format.url, filename),
+        filename,
+        mimetype:mimeFromExt(ext),
+        title:details.title || 'YouTube',
+        artist:details.author?.name || details.ownerChannelName || '',
+        thumb:details.thumbnails?.slice?.(-1)?.[0]?.url || '',
+        duration:Number(details.lengthSeconds || 0),
+        quality:format.qualityLabel || format.audioQuality || '',
+        mode
+      });
+    }catch(e){
+      return sendJson(res, 502, { erro:`Falha no YTDL: ${e.message}` });
     }
   }
 
@@ -1527,7 +1771,7 @@ module.exports = async (req, res) => {
     const ext = /\.xapk(\?|$)/i.test(fileUrl) ? '.xapk' : '.apk';
     const filename = `${name}${ext}`;
     const prox = signedProxyPath(fileUrl, filename);
-    return sendJson(res, 200, { ok:true, downloadUrl: prox, filename });
+    return sendJson(res, 200, { ok:true, downloadUrl: prox, filename, mimetype:mimeFromExt(ext) });
   }
 
   return sendJson(res, 404, { erro: 'Ação inválida' });

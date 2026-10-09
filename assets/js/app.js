@@ -294,18 +294,36 @@ async function prepareApkSearch(input){
   const list=document.createElement('div');list.className='people-list';
   data.result.slice(0,12).forEach(app=>{const row=document.createElement('div');row.className='person-row';const img=document.createElement('img');img.src=app.icon||DEFAULT_AVATAR;const cp=document.createElement('div');cp.className='person-copy';const st=document.createElement('strong');st.textContent=app.name||app.package||'Aplicativo';const sm=document.createElement('small');sm.textContent=app.package||app.version||'APK';cp.append(st,sm);const b=document.createElement('button');b.className='mini-btn primary';b.textContent='Preparar';b.onclick=async()=>{try{b.disabled=true;const rr=await fetch('/api/main?action=apk_download',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:app.downloadUrl||app.file?.path||app.url,name:app.name||app.package})});const d=await rr.json().catch(()=>({}));if(!rr.ok||!d.downloadUrl)throw new Error(d.erro||'Falha ao preparar APK.');renderDownloadReady(d,'apk',input)}catch(e){toast(e.message)}finally{b.disabled=false}};row.append(img,cp,b);list.appendChild(row)});box.appendChild(list);
 }
+async function prepareYoutube(input){
+  const r=await fetch('/api/main?action=youtube_info',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({input})});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok||!data.url)throw new Error(data.erro||'Não foi possível localizar esse vídeo.');
+  renderYoutubeChoice(data,input);
+}
+function renderYoutubeChoice(info,input){
+  const box=$('downloadResult');box.innerHTML='';
+  const row=document.createElement('div');row.className='download-youtube-card';
+  if(info.thumb){const img=document.createElement('img');img.src=info.thumb;img.alt='';row.appendChild(img)}
+  const copy=document.createElement('div');copy.className='download-youtube-copy';
+  const st=document.createElement('strong');st.textContent=info.title||'YouTube';
+  const sm=document.createElement('small');const mins=Math.floor(Number(info.duration||0)/60),secs=String(Number(info.duration||0)%60).padStart(2,'0');sm.textContent=[info.author||'',info.duration?`${mins}:${secs}`:''].filter(Boolean).join(' • ');
+  const acts=document.createElement('div');acts.className='download-ready-actions';
+  const makeBtn=(mode,label)=>{const b=document.createElement('button');b.type='button';b.className=mode==='video'?'btn primary':'btn';b.textContent=label;b.onclick=async()=>{try{b.disabled=true;const rr=await fetch('/api/main?action=youtube',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({input:info.url||input,mode})});const d=await rr.json().catch(()=>({}));if(!rr.ok||!d.downloadUrl)throw new Error(d.erro||'Falha no YTDL.');renderDownloadReady(d,mode==='audio'?'youtube_audio':'youtube_video',input)}catch(e){toast(e.message)}finally{b.disabled=false}};return b};
+  acts.append(makeBtn('audio','Áudio'),makeBtn('video','Vídeo'));
+  copy.append(st,sm,acts);row.appendChild(copy);box.appendChild(row);
+}
 $('downloadForm').addEventListener('submit',async ev=>{
   ev.preventDefault();const input=$('downloadInput').value.trim();if(!input)return;state.lastDownloadInput=input;const service=state.downloadService;
-  if(service==='youtube'||service==='facebook'){const cmd=service==='youtube'?`/play ${input}`:`/facebook ${input}`;wa(cmd);$('downloadResult').innerHTML='<div class="download-ready"><div><strong>Continua na Charlotte</strong><small>Esse serviço ainda usa o fluxo do bot.</small></div></div>';return}
   $('downloadSubmit').disabled=true;$('downloadResult').innerHTML='<div class="loading-line">Preparando...</div>';
   try{
     if(service==='apk'){await prepareApkSearch(input);return}
+    if(service==='youtube'){await prepareYoutube(input);return}
     const r=await fetch(`/api/main?action=${service}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:input})});const data=await r.json().catch(()=>({}));if(!r.ok||!data.downloadUrl)throw new Error(data.erro||'Não foi possível preparar o arquivo.');renderDownloadReady(data,service,input)
   }catch(e){$('downloadResult').innerHTML=`<div class="empty-state small">${escText(e.message)}</div>`}finally{$('downloadSubmit').disabled=false}
 });
 function renderDownloadReady(data,service,input){
-  const box=$('downloadResult');box.innerHTML='';const row=document.createElement('div');row.className='download-ready';const copy=document.createElement('div');const st=document.createElement('strong');st.textContent=data.title||data.filename||service;const sm=document.createElement('small');sm.textContent=data.artist?`${data.artist}${data.album?' • '+data.album:''}`:'Arquivo pronto';copy.append(st,sm);const acts=document.createElement('div');acts.className='download-ready-actions';const a=document.createElement('a');a.className='btn primary';a.href=data.downloadUrl;a.target='_blank';a.rel='noreferrer';a.textContent='Baixar';acts.append(a);
-  if(linkedCharlotte()){const w=document.createElement('button');w.className='btn';w.textContent='Enviar no WhatsApp';w.onclick=async()=>{try{w.disabled=true;const absolute=new URL(data.downloadUrl,location.origin).toString();await bridgeRequest('send_download_link',{url:absolute,title:data.title||data.filename||service,service},20000);toast('Link enviado pelo bot no seu WhatsApp.')}catch(e){toast(e.message)}finally{w.disabled=false}};acts.append(w)}
+  const box=$('downloadResult');box.innerHTML='';const row=document.createElement('div');row.className='download-ready';const copy=document.createElement('div');const st=document.createElement('strong');st.textContent=data.title||data.filename||service;const sm=document.createElement('small');sm.textContent=data.artist?`${data.artist}${data.album?' • '+data.album:''}`:(data.quality?`Qualidade: ${data.quality}`:'Arquivo pronto');copy.append(st,sm);const acts=document.createElement('div');acts.className='download-ready-actions';const a=document.createElement('a');a.className='btn primary';a.href=data.downloadUrl;a.target='_blank';a.rel='noreferrer';a.textContent='Baixar';acts.append(a);
+  if(linkedCharlotte()){const w=document.createElement('button');w.className='btn';w.textContent='Enviar no WhatsApp';w.onclick=async()=>{try{w.disabled=true;const absolute=new URL(data.downloadUrl,location.origin).toString();await bridgeRequest('send_download_link',{url:absolute,title:data.title||data.filename||service,service,filename:data.filename||'',mimetype:data.mimetype||''},30000);toast('Arquivo enviado pelo bot no seu WhatsApp.')}catch(e){toast(e.message)}finally{w.disabled=false}};acts.append(w)}
   row.append(copy,acts);box.appendChild(row)
 }
 
