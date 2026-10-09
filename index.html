@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#09090d">
   <meta name="color-scheme" content="dark">
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261009-v3">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261009-v4">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -69,6 +69,8 @@
         <button class="nav-item" data-route="downloads"><span>↓</span><b>Downloads</b></button>
         <button class="nav-item" data-route="rpg"><span>⚄</span><b>RPG</b></button>
         <button class="nav-item" data-route="premium"><span>♛</span><b>Premium</b></button>
+        <button class="nav-item" data-route="personalize"><span>✧</span><b>Personalizar</b></button>
+        <button class="nav-item" data-route="support"><span>?</span><b>Suporte</b></button>
       </nav>
 
       <button class="account-mini" id="sideAccountBtn" type="button" aria-label="Abrir perfil">
@@ -113,6 +115,8 @@
             <button class="home-card" data-route="pokemon"><span class="home-card-icon">◉</span><div><strong>Pokémon</strong><small id="homePokemonText">Abrir centro</small></div><b>›</b></button>
             <button class="home-card" data-route="friends"><span class="home-card-icon">◇</span><div><strong>Amigos</strong><small id="homeFriendsText">Ver pessoas</small></div><b>›</b></button>
             <button class="home-card" data-route="rpg"><span class="home-card-icon">⚄</span><div><strong>RPG</strong><small id="homeRpgRecent">Suas mesas</small></div><b>›</b></button>
+            <button class="home-card" data-route="personalize"><span class="home-card-icon">✧</span><div><strong>Personalizar</strong><small>Use suas rúpias</small></div><b>›</b></button>
+            <button class="home-card" data-route="support"><span class="home-card-icon">?</span><div><strong>Suporte</strong><small>Grupo e comunidade</small></div><b>›</b></button>
           </div>
 
           <div class="home-dashboard">
@@ -127,9 +131,9 @@
             <article class="panel shortcut-panel">
               <div class="panel-head"><div><span class="tag">ATALHOS</span><h3>Mais usados</h3></div></div>
               <div class="shortcut-row">
-                <button data-bot-command="/daily">Daily</button>
-                <button data-bot-command="/perfil">Perfil</button>
-                <button data-bot-command="/conquistas">Conquistas</button>
+                <button data-site-action="daily">Daily</button>
+                <button data-site-action="profile">Perfil</button>
+                <button data-site-action="achievements">Conquistas</button>
                 <button data-route="downloads">Downloads</button>
               </div>
             </article>
@@ -151,16 +155,26 @@
             </article>
 
             <article class="panel command-launcher">
-              <div class="panel-head"><div><span class="tag">COMANDOS</span><h3>Abrir no bot</h3></div></div>
+              <div class="panel-head"><div><span class="tag">CHARLOTTE</span><h3>Ações no site</h3></div><span class="pill">dados do bot</span></div>
               <div class="command-grid">
-                <button data-bot-command="/perfil">Perfil</button><button data-bot-command="/daily">Daily</button>
-                <button data-bot-command="/conquistas">Conquistas</button><button data-bot-command="/pokemon">Pokémon</button>
-                <button data-bot-command="/meuspokemon">Meus Pokémon</button><button data-bot-command="/pcpokemon">PC Pokémon</button>
-                <button data-bot-command="/vip">Premium</button><button data-bot-command="/meuvip">Meu VIP</button>
-                <button data-bot-command="/loja">Loja</button><button data-bot-command="/pdf">PDF</button>
-                <button data-bot-command="/tinder">Tinder</button><button data-bot-command="/sorteios">Sorteios</button>
+                <button data-site-action="profile">Perfil</button>
+                <button data-site-action="daily">Daily</button>
+                <button data-site-action="achievements">Conquistas</button>
+                <button data-route="pokemon">Pokémon</button>
+                <button data-site-action="team">Meus Pokémon</button>
+                <button data-site-action="collection">PC Pokémon</button>
+                <button data-route="premium">Premium</button>
+                <button data-site-action="vip">Meu VIP</button>
+                <button data-route="premium">Loja Premium</button>
+                <button data-route="personalize">Loja de rúpias</button>
+                <button data-bot-command="/pdf">PDF no bot</button>
+                <button data-bot-command="/tinder">Tinder no bot</button>
+                <button data-bot-command="/sorteios">Sorteios no bot</button>
               </div>
-              <form class="command-search" id="playBotForm"><input id="playBotInput" placeholder="Música ou vídeo"><button class="btn primary" type="submit">/play</button></form>
+              <div class="site-command-result" id="siteCommandResult">
+                <div class="empty-state small">Escolha uma ação acima.</div>
+              </div>
+              <form class="command-search" id="playBotForm"><input id="playBotInput" placeholder="Música ou vídeo"><button class="btn primary" type="submit">Abrir /play</button></form>
             </article>
           </div>
 
@@ -168,6 +182,10 @@
             <div class="panel-head"><div><span class="tag">SINCRONIZAÇÃO</span><h3>Dados da Charlotte</h3></div><span class="pill" id="syncStatePill">Desconectado</span></div>
             <div class="sync-grid">
               <div><span>WhatsApp</span><strong id="syncWhatsapp">—</strong></div>
+              <div><span>Rúpias</span><strong id="syncBalance">₹ 0</strong></div>
+              <div><span>Nível</span><strong id="syncLevel">0</strong></div>
+              <div><span>Premium</span><strong id="syncPremium">Padrão</strong></div>
+              <div><span>Conquistas</span><strong id="syncAchievements">0</strong></div>
               <div><span>Pokémon</span><strong id="syncPokemonCount">0</strong></div>
               <div><span>Última sync</span><strong id="syncUpdatedAt">—</strong></div>
             </div>
@@ -188,6 +206,11 @@
               <div class="pokemon-result" id="pokemonResult"><div class="empty-state small">Procure um Pokémon.</div></div>
             </article>
           </div>
+
+          <article class="panel collection-panel" id="pokemonCollectionPanel">
+            <div class="panel-head"><div><span class="tag">COLEÇÃO</span><h3>PC Pokémon</h3></div><span class="pill" id="collectionCount">0</span></div>
+            <div class="collection-grid" id="pokemonCollection"><div class="empty-state small">Sincronize a Charlotte para carregar sua coleção.</div></div>
+          </article>
 
           <article class="panel duel-panel">
             <div class="panel-head"><div><span class="tag">DUELO</span><h3>Batalha com amigos</h3></div><span class="pill" id="duelStatusPill">Aguardando</span></div>
@@ -230,6 +253,7 @@
         <section class="view" data-view="downloads">
           <div class="section-head"><div><span class="tag">DOWNLOADS</span><h2>Downloads</h2></div></div>
           <article class="panel download-panel">
+            <div class="download-note"><strong>Baixe aqui.</strong><span>Se sua Charlotte estiver vinculada, o mesmo link também pode ser enviado pelo bot para o seu WhatsApp.</span></div>
             <div class="service-tabs" id="downloadServices">
               <button class="service-tab active" data-service="tiktok">TikTok</button>
               <button class="service-tab" data-service="instagram">Instagram</button>
@@ -260,6 +284,16 @@
               <div><button class="back-button" id="leaveTableView" type="button">← Mesas</button><h2 id="tableRoomName">Mesa</h2><div class="room-meta"><span id="tableSystem">Livre</span><span>•</span><button id="copyInviteBtn" class="inline-copy" type="button">Convite <b id="tableCode">------</b></button></div></div>
               <div class="table-top-actions"><button class="btn" id="characterBtn">Personagem</button><button class="btn danger-ghost" id="exitRoomBtn">Sair</button></div>
             </div>
+            <div class="voice-strip panel" id="voiceStrip">
+              <div class="voice-copy"><span class="status-dot" id="voiceStatusDot"></span><div><strong>Sala de voz</strong><small id="voiceStatusText">Fora da chamada</small></div></div>
+              <div class="voice-actions">
+                <button class="btn primary" id="joinVoiceBtn" type="button">Entrar na voz</button>
+                <button class="btn" id="toggleMicBtn" type="button" hidden>Microfone</button>
+                <button class="btn" id="shareScreenBtn" type="button" hidden>Compartilhar tela</button>
+                <button class="btn danger-ghost" id="leaveVoiceBtn" type="button" hidden>Sair da voz</button>
+              </div>
+            </div>
+            <div class="remote-media-grid" id="remoteMediaGrid"></div>
             <div class="table-grid">
               <aside class="table-column players-column panel"><div class="panel-head"><h3>Grupo</h3><span class="pill" id="memberCount">0</span></div><div class="member-list" id="memberList"></div><div class="divider"></div><div class="panel-head"><h3>Iniciativa</h3><button class="text-button" id="rollInitiativeBtn">Rolar</button></div><div class="initiative-list" id="initiativeList"></div></aside>
               <section class="table-center panel">
@@ -274,8 +308,37 @@
         </section>
 
         <section class="view" data-view="premium">
-          <div class="section-head"><div><span class="tag">PREMIUM</span><h2>Gremory Premium</h2></div></div>
-          <div class="plans-grid"><article class="plan-card"><small>1 DIA</small><strong>R$ 2</strong><span>1 dia</span><button class="btn" data-buy-plan="1d">Comprar</button></article><article class="plan-card"><small>7 DIAS</small><strong>R$ 5</strong><span>7 dias</span><button class="btn" data-buy-plan="7d">Comprar</button></article><article class="plan-card featured"><small>15 DIAS</small><strong>R$ 8</strong><span>15 dias</span><button class="btn primary" data-buy-plan="15d">Comprar</button></article><article class="plan-card"><small>30 DIAS</small><strong>R$ 12</strong><span>30 dias</span><button class="btn" data-buy-plan="30d">Comprar</button></article></div>
+          <div class="section-head"><div><span class="tag">PREMIUM</span><h2>Gremory Premium</h2></div><button class="btn" id="refreshPremiumBtn" type="button">Atualizar status</button></div>
+          <article class="panel premium-status-card">
+            <div><span class="tag">SUA CONTA</span><h3 id="premiumStatusTitle">Plano padrão</h3><p id="premiumStatusText">Vincule a Charlotte para comprar e sincronizar o Premium pelo site.</p></div>
+            <span class="pill" id="premiumStatusPill">Padrão</span>
+          </article>
+          <div class="plans-grid">
+            <article class="plan-card"><small>1 DIA</small><strong>R$ 2</strong><span>1 dia</span><button class="btn" data-buy-plan="1">Comprar</button></article>
+            <article class="plan-card"><small>7 DIAS</small><strong>R$ 5</strong><span>7 dias</span><button class="btn" data-buy-plan="7">Comprar</button></article>
+            <article class="plan-card featured"><small>15 DIAS</small><strong>R$ 8</strong><span>15 dias</span><button class="btn primary" data-buy-plan="15">Comprar</button></article>
+            <article class="plan-card"><small>30 DIAS</small><strong>R$ 12</strong><span>30 dias</span><button class="btn" data-buy-plan="30">Comprar</button></article>
+          </div>
+          <div class="form-status" id="premiumCheckoutStatus"></div>
+        </section>
+
+        <section class="view" data-view="personalize">
+          <div class="section-head"><div><span class="tag">PERSONALIZAR</span><h2>Loja de rúpias</h2></div><button class="btn" id="refreshStoreBtn" type="button">Atualizar saldo</button></div>
+          <article class="panel store-balance-card"><span>Seu saldo sincronizado</span><strong id="storeBalance">₹ 0</strong><small>Compras são validadas pelo bot. O navegador não altera seu saldo.</small></article>
+          <div class="store-grid" id="storeGrid">
+            <article class="store-item" data-store-item="frame_crimson"><div class="store-preview frame-crimson">G</div><div><small>MOLDURA</small><strong>Carmesim</strong><span>₹350</span></div><button class="btn" data-buy-customization="frame_crimson">Comprar</button></article>
+            <article class="store-item" data-store-item="scale_dragon"><div class="store-preview scale-dragon">◇</div><div><small>EFEITO</small><strong>Escamas Gremory</strong><span>₹600</span></div><button class="btn" data-buy-customization="scale_dragon">Comprar</button></article>
+            <article class="store-item" data-store-item="name_gold"><div class="store-preview name-gold">G</div><div><small>PERFIL</small><strong>Nome Dourado</strong><span>₹900</span></div><button class="btn" data-buy-customization="name_gold">Comprar</button></article>
+            <article class="store-item" data-store-item="aura_rose"><div class="store-preview aura-rose">✦</div><div><small>AURA</small><strong>Rosa Demoníaca</strong><span>₹1200</span></div><button class="btn" data-buy-customization="aura_rose">Comprar</button></article>
+          </div>
+        </section>
+
+        <section class="view" data-view="support">
+          <div class="section-head"><div><span class="tag">SUPORTE</span><h2>Gremory oficial</h2></div></div>
+          <div class="support-grid">
+            <article class="panel support-card"><div class="support-icon">?</div><div><h3>Grupo de suporte</h3><p>Ajuda com Charlotte, site, vínculo e sistemas.</p></div><a class="btn primary" href="https://chat.whatsapp.com/CVD1yQCsQbNHmIeazbsS7e" target="_blank" rel="noopener noreferrer">Entrar no grupo</a></article>
+            <article class="panel support-card"><div class="support-icon">G</div><div><h3>Comunidade oficial</h3><p>Novidades, avisos e espaços oficiais da Gremory.</p></div><a class="btn" href="https://chat.whatsapp.com/DiQrPvCDN2hCrIw4LCb0lQ" target="_blank" rel="noopener noreferrer">Abrir comunidade</a></article>
+          </div>
         </section>
       </main>
     </div>
@@ -312,6 +375,6 @@
   <div class="modal" id="sceneModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="sceneModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="sceneModal">×</button><span class="tag">CENA</span><h2>Editar cena</h2><form id="sceneForm" class="stack-form"><label>Título<input id="sceneTitleInput" maxlength="80"></label><label>Descrição<textarea id="sceneDescriptionInput" rows="3" maxlength="300"></textarea></label><label>Imagem (URL)<input id="sceneImageInput" type="url" placeholder="https://..."></label><button class="btn primary full" type="submit">Salvar cena</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261009-v3"></script>
+  <script type="module" src="/assets/js/app.js?v=20261009-v4"></script>
 </body>
 </html>
