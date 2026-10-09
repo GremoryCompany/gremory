@@ -79,29 +79,11 @@ function escapeHtml(value){
   return String(value ?? "").replace(/[&<>'"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
 }
 
-let DARK_CONFIG_CACHE = null;
-async function getDarkstarsKey(){
-  const fromWindow = window.DARKSTARS_API_KEY || window.GREMORY_CONFIG?.darkstarsApiKey || window.darkstarsApiKey;
-  if (fromWindow) return String(fromWindow).trim();
-  if (DARK_CONFIG_CACHE) return DARK_CONFIG_CACHE.darkstarsApiKey || DARK_CONFIG_CACHE.apikey || "gremory";
-  try{
-    const r = await fetch('/config.json?t=' + Date.now(), { cache: 'no-store' });
-    if (r.ok) DARK_CONFIG_CACHE = await r.json();
-  }catch{}
-  return String(DARK_CONFIG_CACHE?.darkstarsApiKey || DARK_CONFIG_CACHE?.apikey || "gremory").trim();
-}
-
-async function darkstarsJson(endpoint, params = {}){
-  const key = await getDarkstarsKey();
-  const u = new URL(`https://darkstarsapi.online/api/anime/p2h/${endpoint}`);
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && String(v).trim() !== '') u.searchParams.set(k, String(v));
-  });
-  u.searchParams.set('apikey', key || 'gremory');
-  const r = await fetch(u.toString(), { cache: 'no-store', headers: { accept: 'application/json' } });
-  const data = await r.json().catch(() => null);
-  if (!r.ok || !data) throw new Error(data?.erro || data?.message || `Falha na Dark Stars (${endpoint})`);
-  return data;
+// As integrações externas sensíveis passam sempre pelo backend.
+// O navegador não recebe mais chave privada de provedor.
+async function getDarkstarsKey(){ return ""; }
+async function darkstarsJson(){
+  throw new Error('Acesso direto ao provedor desativado. Use a API do servidor.');
 }
 
 function asList(data){
@@ -148,113 +130,52 @@ function setModalResults(html){
 const animeDownloadState = { results: [], currentAnime: null, episodes: [], sources: [] };
 
 async function animeSearchLikeBot(query){
-  let list = [];
-  let warning = '';
   try{
-    const data = await darkstarsJson('animefire', { name: query });
-    list = asList(data).map(x => ({...x, provider:'animefire'}));
+    const data = await postJson('/api/main?action=anime_search', { query });
+    return { list: asList(data), warning: data?.warning || '' };
   }catch(e){
-    warning = e.message || String(e);
+    return { list: [], warning: e?.message || String(e) };
   }
-
-  // fallback pela segunda API do bot, só se AnimeFire não achar nada.
-  if (!list.length){
-    try{
-      const data2 = await darkstarsJson('animes', { name: query });
-      list = asList(data2).map(x => ({...x, provider:'nexus'}));
-    }catch(e){
-      warning = warning ? `${warning} | ${e.message}` : (e.message || String(e));
-    }
-  }
-
-  // fallback backend, caso o navegador bloqueie CORS da Dark Stars.
-  if (!list.length){
-    try{
-      const key = await getDarkstarsKey();
-      const data = await postJson('/api/main?action=anime_search', { query, apiKey:key });
-      list = asList(data).map(x => ({...x, provider:x.provider || x.source || 'animefire'}));
-    }catch(e){
-      if (!warning) warning = e.message || String(e);
-    }
-  }
-  return { list, warning };
 }
 
 async function animeEpisodesLikeBot(anime){
   const provider = anime.provider || anime.source || 'animefire';
-  if (provider === 'nexus'){
-    const slug = anime.slug || anime.ep || anime.code || anime.id || anime.link || anime.url;
-    const data = await darkstarsJson('animesep', { ep: slug });
-    const obj = data?.result || data?.data || data;
-    const raw = Array.isArray(obj) ? obj : (obj.episodes || obj.episodios || obj.result || []);
-    return {
-      details: {
-        title: obj.title || obj.name || pickAnimeName(anime),
-        cover: obj.cover || obj.image || pickAnimeCover(anime),
-        synopsis: obj.synopsis || obj.sinopse || '',
-        audio: obj.audio || '',
-        status: obj.status || '',
-        year: obj.year || '',
-        provider:'nexus'
-      },
-      episodes: raw.map((ep, i) => ({
-        title: ep.title || ep.name || ep.nome || `Episódio ${i + 1}`,
-        url: ep.url || ep.link || ep.href || '',
-        slug: ep.slug || ep.code || ep.id || ep.ep || ep.linkCode || ep.url || ep.link || '',
-        provider:'nexus'
-      })).filter(ep => ep.slug || ep.url)
-    };
-  }
-
-  const url = anime.link || anime.url || anime.href;
-  if (!url) throw new Error('Esse resultado não trouxe link do anime.');
-  const data = await darkstarsJson('animefireEp', { url });
-  const { details, episodes } = pickEpisodeListFromDetails(data);
+  const data = await postJson('/api/main?action=anime_eps', {
+    url: anime.link || anime.url || '',
+    slug: anime.slug || anime.code || anime.id || '',
+    provider,
+    title: pickAnimeName(anime)
+  });
+  const details = data?.anime || data?.result || data?.data || {};
+  const episodes = Array.isArray(details?.episodes) ? details.episodes : [];
   return {
-    details: { ...details, provider:'animefire' },
+    details,
     episodes: episodes.map((ep, i) => ({
-      title: ep.title || ep.name || `Episódio ${i + 1}`,
+      title: ep.title || ep.name || ep.nome || `Episódio ${i + 1}`,
       url: ep.url || ep.link || ep.href || '',
-      slug: ep.slug || ep.code || ep.id || '',
-      provider:'animefire'
-    })).filter(ep => ep.url)
+      slug: ep.slug || ep.code || ep.id || ep.ep || '',
+      provider: ep.provider || details.provider || provider
+    })).filter(ep => ep.url || ep.slug)
   };
 }
 
 async function animeSourcesLikeBot(ep){
   const provider = ep.provider || 'animefire';
-  let list = [];
   try{
-    let data;
-    if (provider === 'nexus'){
-      const link = ep.slug || ep.url;
-      data = await darkstarsJson('animesver', { link });
-    } else {
-      data = await darkstarsJson('animefireDow', { url: ep.url });
-    }
-    list = asList(data).map((s, i) => ({
-      label: s.label || s.quality || s.resolution || `${i + 1}ª opção`,
-      src: s.src || s.url || s.link || s.download || s.file || '',
+    const data = await postJson('/api/main?action=anime_stream', {
+      url: ep.url || '',
+      slug: ep.slug || '',
       provider
+    });
+    const raw = data?.sources || data?.result || [];
+    return (Array.isArray(raw) ? raw : []).map((s, i) => ({
+      label: s.label || s.quality || s.resolution || `${i + 1}ª opção`,
+      src: s.playUrl || s.url || s.directUrl || s.src || s.originalUrl || '',
+      provider: s.provider || provider
     })).filter(s => s.src);
-  }catch(_){
-    list = [];
+  }catch{
+    return [];
   }
-
-  if (!list.length){
-    // fallback backend quando CORS bloquear a Dark Stars; pode não baixar em todos os hosts,
-    // mas mantém o fluxo como plano B.
-    try{
-      const key = await getDarkstarsKey();
-      const data2 = await postJson('/api/main?action=anime_stream', { url: ep.url, slug: ep.slug, provider, apiKey:key });
-      list = (data2.sources || data2.result || []).map((s, i) => ({
-        label: s.label || `${i + 1}ª opção`,
-        src: s.directUrl || s.originalUrl || s.src || s.url || s.playUrl,
-        provider
-      })).filter(s => s.src);
-    }catch{}
-  }
-  return list;
 }
 
 function renderAnimeSearchResults(list, warning){
@@ -566,15 +487,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Updates (sininho)
   function loadUpdates(){
-    try{
-      const raw = localStorage.getItem("gremory_updates");
-      if (raw) return JSON.parse(raw);
-    }catch{}
     return Array.isArray(window.UPDATES_DEFAULT) ? window.UPDATES_DEFAULT : [];
   }
 
-  function saveUpdates(list){
-    try{ localStorage.setItem("gremory_updates", JSON.stringify(list)); }catch{}
+  function saveUpdates(){
+    // As atualizações oficiais não são mais alteradas pelo navegador do usuário.
   }
 
   function renderUpdates(){
@@ -605,19 +522,6 @@ document.addEventListener("DOMContentLoaded", () => {
       meta.className = "update-meta";
       meta.innerHTML = `<span>${safeText(u.date || "")}</span>`;
 
-      const del = document.createElement("button");
-      del.className = "icon-btn update-del";
-      del.title = "Remover";
-      del.innerHTML = '<i class="fa-solid fa-trash"></i>';
-      del.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        const next = loadUpdates();
-        next.splice(idx, 1);
-        saveUpdates(next);
-        renderUpdates();
-      });
-
-      meta.appendChild(del);
 
       const text = document.createElement("div");
       text.className = "update-text";

@@ -147,7 +147,6 @@
         const cfg = await res.json();
         window.GREMORY_CONFIG = { ...(window.GREMORY_CONFIG || {}), ...(cfg || {}) };
         if (cfg?.apiBase !== undefined) window.API_BASE = cfg.apiBase || '';
-        if (cfg?.darkstarsApiKey && !window.DARKSTARS_API_KEY) window.DARKSTARS_API_KEY = cfg.darkstarsApiKey;
         return cfg;
       }catch{ return null; }
     })();
@@ -155,18 +154,11 @@
   }
 
   function getApiKey(){
-    try{
-      const authData = window.gremoryAuthGetUser?.();
-      const cfg = window.GREMORY_CONFIG || {};
-      const k = cfg.darkstarsApiKey || window.DARKSTARS_API_KEY || authData?.dbData?.apiKey || $('profileApiKey')?.value || localStorage.getItem('gremory_dark_apikey') || 'gremory';
-      return String(k || '').trim();
-    }catch{ return 'gremory'; }
+    return '';
   }
 
   async function post(action, body = {}){
     const payload = { ...body };
-    const apiKey = getApiKey();
-    if (apiKey && !payload.apikey) payload.apikey = apiKey;
     const res = await fetch(`${API_BASE()}/api/main?action=${encodeURIComponent(action)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -178,9 +170,7 @@
   }
 
   async function get(action, params = {}){
-    const apiKey = getApiKey();
     const finalParams = { ...params };
-    if (apiKey && !finalParams.apikey) finalParams.apikey = apiKey;
     const qs = new URLSearchParams({ action, ...finalParams });
     const res = await fetch(`${API_BASE()}/api/main?${qs.toString()}`);
     const data = await res.json().catch(() => ({}));

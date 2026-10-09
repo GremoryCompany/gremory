@@ -1,39 +1,19 @@
-# Gremory Site
+# Gremory Web
 
-Versão ajustada: a parte de anime foi removida do modelo streaming/Gremory Play e voltou para a aba de Downloads.
+Hub web da Gremory com foco em Charlotte, Pokémon, downloads, Premium, RPG e salas futuras.
 
-## Anime
+## Desenvolvimento local
 
-Fluxo igual ao bot:
+Sirva a pasta usando um servidor HTTP. O projeto foi preparado para Vercel.
 
-1. Downloads → Anime
-2. Digite o nome do anime
-3. Escolha o resultado
-4. Escolha o episódio
-5. Escolha a qualidade para abrir/baixar
+## Variáveis privadas
 
-APIs usadas:
+Não coloque chaves privadas em `config.js`, `config.json`, HTML ou JavaScript do navegador.
+Use as Environment Variables da Vercel/Railway:
 
-- `animefire?name=` para pesquisar
-- `animefireEp?url=` para listar detalhes e episódios
-- `animefireDow?url=` para gerar links 360p/720p
-- fallback com `animes`, `animesep` e `animesver`
-
-A API key fica em `config.js` ou `config.json`:
-
-```js
-window.GREMORY_CONFIG.darkstarsApiKey = "sua_key";
+```env
+RAPIDAPI_KEY=
+DARKSTARS_API_KEY=
 ```
 
-ou:
-
-```json
-{
-  "apiBase": "",
-  "darkstarsApiKey": "sua_key"
-}
-```
-
-## Observação
-
-O streaming/player de anime foi descartado. O site agora apenas prepara os links de download/abertura usando o retorno das APIs, como no bot.
+Veja `README_GREMORY_COMPLETO.md` para as mudanças e próximos passos.

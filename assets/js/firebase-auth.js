@@ -41,24 +41,25 @@ const accountBg = document.querySelector(".auth-account-bg");
 let currentUserData = null;
 let hasInteractedAuth = false;
 
-const authPersistenceReady = (async () => {
+let currentPersistenceMode = null;
+async function ensurePersistence(remember = false){
+  const desired = remember ? "local" : "session";
+  if (currentPersistenceMode === desired) return currentPersistenceMode;
   try {
-    await setPersistence(auth, browserLocalPersistence);
-    return "local";
+    await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
+    currentPersistenceMode = desired;
+    return currentPersistenceMode;
   } catch {
     try {
-      await setPersistence(auth, browserSessionPersistence);
-      return "session";
+      await setPersistence(auth, inMemoryPersistence);
+      currentPersistenceMode = "memory";
+      return currentPersistenceMode;
     } catch {
-      try {
-        await setPersistence(auth, inMemoryPersistence);
-        return "memory";
-      } catch {
-        return "none";
-      }
+      currentPersistenceMode = "none";
+      return currentPersistenceMode;
     }
   }
-})();
+}
 
 function setSubmitBusy(form, busy){
   if (!form) return;
@@ -68,9 +69,6 @@ function setSubmitBusy(form, busy){
     el.disabled = !!busy || wasDisabled;
     if (!busy) el.removeAttribute("data-was-disabled");
   });
-}
-async function ensurePersistence(){
-  try { await authPersistenceReady; } catch {}
 }
 async function ensureUserProfile(user, overrides = {}){
   if (!user?.uid) return null;
@@ -88,8 +86,7 @@ async function ensureUserProfile(user, overrides = {}){
     email: overrides.email || current?.email || user.email || "",
     avatar: overrides.avatar || current?.avatar || user.photoURL || svgAvatar(baseName),
     createdAt: overrides.createdAt || current?.createdAt || new Date(user.metadata?.creationTime || Date.now()).toISOString(),
-    premium: typeof overrides.premium === "boolean" ? overrides.premium : !!current?.premium,
-    apiKey: overrides.apiKey ?? current?.apiKey ?? "",
+    premium: !!current?.premium,
     website: overrides.website ?? current?.website ?? "",
     youtube: overrides.youtube ?? current?.youtube ?? "",
     instagram: overrides.instagram ?? current?.instagram ?? "",
@@ -103,15 +100,32 @@ async function ensureUserProfile(user, overrides = {}){
     total: Number(overrides.total ?? current?.total ?? 0)
   };
 
+  const safePayload = {
+    uid: payload.uid,
+    nome: payload.nome,
+    email: payload.email,
+    avatar: payload.avatar,
+    createdAt: payload.createdAt,
+    website: payload.website,
+    youtube: payload.youtube,
+    instagram: payload.instagram,
+    whatsapp: payload.whatsapp,
+    wallpaper: payload.wallpaper,
+    bio: payload.bio,
+    favoriteAnime: payload.favoriteAnime,
+    theme: payload.theme,
+    updatedAt: new Date().toISOString()
+  };
+
   try {
     if (current) {
-      await update(userRef, payload);
+      await update(userRef, safePayload);
     } else {
-      await set(userRef, payload);
+      await set(userRef, safePayload);
     }
   } catch {}
 
-  return payload;
+  return { ...current, ...safePayload };
 }
 function setBodyLocked(locked){
   document.body.classList.toggle("auth-locked", !!locked);
@@ -215,12 +229,11 @@ function setProfileInputs(data, user){
   setText("authUserPremium", data?.premium ? "Premium" : "Padrão");
   setText("authUserCreatedAt", formatDate(data?.createdAt || user?.metadata?.creationTime));
   setText("authUserUid", user?.uid || "");
-  setText("authUserLevel", String(data?.total ?? 0));
-  setText("authUserSaldo", String(data?.saldo ?? 50));
+  setText("authUserLevel", String(data?.serverTotal ?? data?.total ?? 0));
+  setText("authUserSaldo", String(data?.saldo ?? 0));
   setValue("profileDisplayName", nome);
   setValue("profilePhotoUrl", data?.avatar || "");
   setValue("profileWallpaper", data?.wallpaper || "");
-  setValue("profileApiKey", data?.apiKey || "");
   setValue("profileWebsite", data?.website || "");
   setValue("profileYoutube", data?.youtube || "");
   setValue("profileInstagram", data?.instagram || "");
@@ -228,8 +241,8 @@ function setProfileInputs(data, user){
   setValue("profileBio", data?.bio || "");
   setValue("profileFavoriteAnime", data?.favoriteAnime || data?.animeFavorito || "");
   setValue("profileTheme", data?.theme || "purple");
-  setText("profileActivityPoints", String(data?.total ?? 0));
-  setText("profileLastAction", data?.activity?.lastAction || "-");
+  setText("profileActivityPoints", String(data?.serverTotal ?? data?.total ?? 0));
+  setText("profileLastAction", data?.clientActivity?.lastAction || data?.activity?.lastAction || "-");
   setText("profileFavoriteAnimeView", data?.favoriteAnime || data?.animeFavorito || "-");
 
   setQuickLink("profileOpenInstagram", sanitizeInstagram(data?.instagram || ""));
@@ -280,22 +293,18 @@ function bindLiveProfilePreview(){
 
 window.gremoryAuthGetUser = () => currentUserData;
 
-window.gremoryRecordActivity = async (action = "atividade", points = 1) => {
+window.gremoryRecordActivity = async (action = "atividade") => {
   if (!currentUserData?.user?.uid) return false;
   const user = currentUserData.user;
   const now = new Date().toISOString();
   const current = currentUserData.dbData || {};
-  const activity = { ...(current.activity || {}) };
-  activity[action] = Number(activity[action] || 0) + 1;
-  activity.lastAction = action;
-  activity.lastAt = now;
-  const total = Number(current.total || 0) + Number(points || 1);
-  const payload = { total, activity, updatedAt: now };
+  const clientActivity = { ...(current.clientActivity || {}) };
+  clientActivity[action] = Number(clientActivity[action] || 0) + 1;
+  clientActivity.lastAction = action;
+  clientActivity.lastAt = now;
   try {
-    await update(ref(db, "users/" + user.uid), payload);
-    currentUserData.dbData = { ...current, ...payload };
-    setText("authUserLevel", String(total));
-    setText("profileActivityPoints", String(total));
+    await update(ref(db, "users/" + user.uid), { clientActivity, updatedAt: now });
+    currentUserData.dbData = { ...current, clientActivity, updatedAt: now };
     setText("profileLastAction", action);
     return true;
   } catch {
@@ -303,25 +312,8 @@ window.gremoryRecordActivity = async (action = "atividade", points = 1) => {
   }
 };
 
-window.gremoryGetRanking = async () => {
-  try {
-    const snap = await get(ref(db, "users"));
-    if (!snap.exists()) return [];
-    const users = snap.val() || {};
-    return Object.values(users)
-      .map((u) => ({
-        nome: u.nome || u.email || "Usuário",
-        avatar: u.avatar || "",
-        total: Number(u.total || 0),
-        premium: !!u.premium,
-        activity: u.activity || {}
-      }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 50);
-  } catch {
-    return [];
-  }
-};
+// Ranking público deve vir de uma API do servidor, não da coleção inteira de usuários.
+window.gremoryGetRanking = async () => [];
 
 authBtn?.addEventListener("click", () => {
   if (!currentUserData?.user) return;
@@ -351,7 +343,8 @@ loginForm?.addEventListener("submit", async (e) => {
   try {
     const email = $("loginEmail").value.trim();
     const password = $("loginPassword").value;
-    await ensurePersistence();
+    const remember = !!$("loginRemember")?.checked;
+    await ensurePersistence(remember);
     await signInWithEmailAndPassword(auth, email, password);
     authStatus.textContent = "Login realizado com sucesso.";
   } catch (err) {
@@ -375,7 +368,8 @@ registerForm?.addEventListener("submit", async (e) => {
     if (password.length < 6) throw new Error("A senha precisa ter pelo menos 6 caracteres.");
     if (password !== password2) throw new Error("As senhas não coincidem.");
 
-    await ensurePersistence();
+    const remember = !!$("registerRemember")?.checked;
+    await ensurePersistence(remember);
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     const avatar = svgAvatar(name);
     await updateProfile(cred.user, { displayName: name, photoURL: avatar }).catch(() => {});
@@ -384,8 +378,6 @@ registerForm?.addEventListener("submit", async (e) => {
       email,
       avatar,
       createdAt: new Date().toISOString(),
-      premium: false,
-      apiKey: "",
       website: "",
       youtube: "",
       instagram: "",
@@ -393,10 +385,7 @@ registerForm?.addEventListener("submit", async (e) => {
       wallpaper: "",
       bio: "",
       favoriteAnime: "",
-      theme: "purple",
-      activity: {},
-      saldo: 50,
-      total: 0
+      theme: "purple"
     });
 
     authStatus.textContent = "Conta criada com sucesso.";
@@ -431,7 +420,6 @@ $("saveProfileBtn")?.addEventListener("click", async () => {
     nome,
     avatar: $("profilePhotoUrl").value.trim() || svgAvatar(nome),
     wallpaper: $("profileWallpaper").value.trim(),
-    apiKey: $("profileApiKey").value.trim(),
     website: sanitizeWebsite($("profileWebsite").value),
     youtube: sanitizeYoutube($("profileYoutube").value),
     instagram: sanitizeInstagram($("profileInstagram").value),
@@ -439,12 +427,9 @@ $("saveProfileBtn")?.addEventListener("click", async () => {
     bio: $("profileBio")?.value.trim() || "",
     favoriteAnime: $("profileFavoriteAnime")?.value.trim() || "",
     theme: $("profileTheme")?.value || "purple",
-    activity: currentUserData?.dbData?.activity || {},
     email: user.email || currentUserData?.dbData?.email || "",
     createdAt: currentUserData?.dbData?.createdAt || new Date().toISOString(),
-    saldo: Number(currentUserData?.dbData?.saldo ?? 50),
-    total: Number(currentUserData?.dbData?.total ?? 0),
-    premium: !!currentUserData?.dbData?.premium
+    updatedAt: new Date().toISOString()
   };
   try {
     await update(dbRef, payload);

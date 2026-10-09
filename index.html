@@ -5,12 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Gremory</title>
   <link rel="stylesheet" href="/assets/css/style.css?v=20260621-darkstars-final-v1" />
+  <link rel="stylesheet" href="/assets/css/gremory-core.css?v=20261009-core-v1" />
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
   <div class="bg"></div>
   <div class="overlay"></div>
+
+  <nav class="gremory-desktop-nav" aria-label="Navegação Gremory">
+    <button class="gremory-nav-brand" type="button" data-gremory-go="home" aria-label="Ir para o início">G</button>
+    <button type="button" data-gremory-go="home" title="Início"><i class="fa-solid fa-house"></i><span>Início</span></button>
+    <button type="button" data-gremory-go="pokemon" title="Pokémon"><i class="fa-solid fa-dragon"></i><span>Pokémon</span></button>
+    <button type="button" data-gremory-go="downloads" title="Downloads"><i class="fa-solid fa-download"></i><span>Downloads</span></button>
+    <button type="button" data-gremory-go="rpg" title="RPG"><i class="fa-solid fa-dice-d20"></i><span>RPG</span></button>
+    <button type="button" data-gremory-go="watch" title="Salas"><i class="fa-solid fa-tv"></i><span>Salas</span></button>
+    <button type="button" data-gremory-go="shop" title="Premium"><i class="fa-solid fa-crown"></i><span>Premium</span></button>
+    <button type="button" data-gremory-go="profile" title="Perfil"><i class="fa-solid fa-user"></i><span>Perfil</span></button>
+  </nav>
 
   <!-- Top-right: clock -->
   <div class="clock" id="clock" aria-label="Relógio">
@@ -42,12 +54,11 @@
     <div class="updates-head">
       <div class="updates-title">Atualizações</div>
       <div class="updates-actions">
-        <button class="icon-btn" id="addUpdate" aria-label="Adicionar atualização"><i class="fa-solid fa-plus"></i></button>
         <button class="icon-btn" id="closeUpdates" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
       </div>
     </div>
     <div class="updates-body" id="updatesList"></div>
-    <div class="updates-foot">Dica: clique em “+” para adicionar texto (salva no seu navegador).</div>
+    <div class="updates-foot">Atualizações oficiais da Gremory. O sistema global pelo bot entra na próxima integração.</div>
   </div>
 
   <aside class="panel panel-left" id="downloadsPanel" aria-label="Painel de downloads">
@@ -128,7 +139,8 @@
       <img class="profile" src="/assets/img/profile.jpg" alt="Foto de perfil" />
     </div>
 
-    <h1 class="rgb-title">Loserzinn Gremory</h1>
+    <div class="brand-kicker">Charlotte • Pokémon • Comunidade • Gremory Web</div>
+    <h1 class="rgb-title">Gremory Company</h1>
 
     <div class="social">
       <a class="social-btn" id="linkWhats" href="#" target="_blank" rel="noreferrer" aria-label="WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>
@@ -137,8 +149,210 @@
       <a class="social-btn" id="linkYoutube" href="#" target="_blank" rel="noreferrer" aria-label="YouTube"><i class="fa-brands fa-youtube"></i></a>
     </div>
 
-    <p class="subtitle">Portfólio • Automação • Bots • Sistemas premium</p>
+    <p class="subtitle">Um hub para Charlotte, Pokémon, comunidade, watch party, RPG e experiências premium — pensado para mobile e PC.</p>
+
+    <div class="hero-actions">
+      <button class="hero-btn primary" id="hubOpenProfile">Minha conta</button>
+      <button class="hero-btn ghost" id="hubOpenDownloads">Downloads</button>
+      <button class="hero-btn ghost" id="hubOpenPokemon">Pokédex</button>
+    </div>
   </main>
+
+
+  <section class="gremory-hub" id="gremoryHub" aria-label="Ecossistema Gremory">
+    <div class="hub-shell">
+      <div class="hub-intro">
+        <div>
+          <div class="hub-eyebrow">ECOSSISTEMA GREMORY</div>
+          <h2>Seu bot, seu site e sua comunidade no mesmo lugar.</h2>
+          <p>Essa primeira versão já prepara a base visual do projeto: conta Gremory, módulos principais, área Pokémon, watch party, RPG, loja e suporte — tudo com identidade única e foco em uma experiência melhor no celular e no PC.</p>
+        </div>
+        <div class="hub-intro-side">
+          <div class="hub-status-card">
+            <div class="hub-status-title">Status da plataforma</div>
+            <ul class="hub-status-list">
+              <li><span class="state online"></span> Site base com tema Gremory</li>
+              <li><span class="state online"></span> Conta / perfil / autenticação</li>
+              <li><span class="state building"></span> Pokémon Web em evolução</li>
+              <li><span class="state building"></span> Watch party e RPG</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="hub-grid">
+        <article class="hub-card card-primary">
+          <div class="hub-card-icon"><i class="fa-solid fa-bolt"></i></div>
+          <h3>Charlotte Hub</h3>
+          <p>Entre, veja seu perfil, gerencie links rápidos, acompanhe seu progresso e futuramente sincronize tudo com o WhatsApp.</p>
+          <div class="hub-card-actions">
+            <button class="hero-btn primary" id="hubOpenProfile2">Abrir perfil</button>
+          </div>
+        </article>
+
+        <article class="hub-card">
+          <div class="hub-card-icon"><i class="fa-solid fa-download"></i></div>
+          <h3>Downloads</h3>
+          <p>Atalhos rápidos para TikTok, Instagram, Pinterest, Spotify, Wikipedia, anime e downloads futuros com envio ao WhatsApp.</p>
+          <div class="hub-card-actions">
+            <button class="hero-btn ghost" id="hubOpenDownloads2">Abrir downloads</button>
+          </div>
+        </article>
+
+        <article class="hub-card">
+          <div class="hub-card-icon"><i class="fa-solid fa-dragon"></i></div>
+          <h3>Pokémon</h3>
+          <p>Prepare o terreno para Pokédex, equipe, mochila, batalhas e sincronização entre o site e a Charlotte.</p>
+          <div class="hub-card-actions">
+            <button class="hero-btn ghost" id="hubOpenPokemon2">Abrir Pokédex</button>
+            <button class="hero-btn subtle" id="hubOpenPokemonRoadmap">Ver roadmap</button>
+          </div>
+        </article>
+
+        <article class="hub-card">
+          <div class="hub-card-icon"><i class="fa-solid fa-tv"></i></div>
+          <h3>Watch Party</h3>
+          <p>Salas privadas para ver YouTube com amigos, com base pronta para convites, presença e sincronização.</p>
+          <div class="hub-card-actions">
+            <button class="hero-btn ghost" id="hubOpenWatch">Saiba mais</button>
+          </div>
+        </article>
+
+        <article class="hub-card">
+          <div class="hub-card-icon"><i class="fa-solid fa-dice-d20"></i></div>
+          <h3>RPG Gremory</h3>
+          <p>Módulo pensado para fichas, mesas, mapas, dados, chat, voz e compartilhamento de tela em fases futuras.</p>
+          <div class="hub-card-actions">
+            <button class="hero-btn ghost" id="hubOpenRpg">Saiba mais</button>
+          </div>
+        </article>
+
+        <article class="hub-card">
+          <div class="hub-card-icon"><i class="fa-solid fa-crown"></i></div>
+          <h3>Loja & Premium</h3>
+          <p>A loja continua disponível aqui como ponte para o Premium, planos e futuras integrações automáticas com o bot.</p>
+          <div class="hub-card-actions">
+            <button class="hero-btn ghost" id="hubOpenShop2">Abrir loja</button>
+          </div>
+        </article>
+      </div>
+
+      <section class="pokemon-portal" id="pokemonPortal" aria-label="Pokémon Gremory">
+        <div class="pokemon-portal-head">
+          <div>
+            <div class="hub-eyebrow">POKÉMON GREMORY</div>
+            <h2>Uma área própria para sua jornada.</h2>
+            <p>Sem copiar o bot inteiro: aqui ficam as partes que realmente ficam melhores numa tela — Pokédex, equipe, batalha, exploração e progresso.</p>
+          </div>
+          <button class="hero-btn primary" id="pokemonPortalPokedex" type="button">Abrir Pokédex</button>
+        </div>
+
+        <div class="pokemon-portal-grid">
+          <article class="pokemon-feature active">
+            <div class="pokemon-feature-icon">⚡</div>
+            <div>
+              <span class="pokemon-feature-label">AGORA</span>
+              <h3>Pokédex</h3>
+              <p>Pesquisa por gerações com sprites animados e acesso rápido pelo site.</p>
+            </div>
+          </article>
+          <article class="pokemon-feature">
+            <div class="pokemon-feature-icon">🎒</div>
+            <div>
+              <span class="pokemon-feature-label">PRÓXIMA ETAPA</span>
+              <h3>Minha equipe</h3>
+              <p>Equipe e mochila usando os mesmos dados da Charlotte depois do vínculo da conta.</p>
+            </div>
+          </article>
+          <article class="pokemon-feature">
+            <div class="pokemon-feature-icon">⚔️</div>
+            <div>
+              <span class="pokemon-feature-label">PRÓXIMA ETAPA</span>
+              <h3>Batalhas</h3>
+              <p>Interface animada para escolher golpes, acompanhar HP e batalhar contra outros usuários.</p>
+            </div>
+          </article>
+          <article class="pokemon-feature">
+            <div class="pokemon-feature-icon">🗺️</div>
+            <div>
+              <span class="pokemon-feature-label">PRÓXIMA ETAPA</span>
+              <h3>Explorar</h3>
+              <p>Exploração web sincronizada com capturas, conquistas e inventário do bot.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <div class="hub-columns">
+        <section class="hub-panel hub-roadmap" id="hubRoadmap">
+          <div class="hub-panel-head">
+            <h3>Roadmap imediato</h3>
+            <span class="hub-badge">FASE 1</span>
+          </div>
+          <div class="roadmap-list">
+            <div class="roadmap-item">
+              <strong>Base visual Gremory</strong>
+              <span>Layout novo, responsivo e com identidade própria.</span>
+            </div>
+            <div class="roadmap-item">
+              <strong>Conta unificada</strong>
+              <span>Preparação para ligar site, Charlotte e Pokémon.</span>
+            </div>
+            <div class="roadmap-item">
+              <strong>Pokémon Web</strong>
+              <span>Telas dedicadas para equipe, batalhas e progresso.</span>
+            </div>
+            <div class="roadmap-item">
+              <strong>Salas sociais</strong>
+              <span>Convites, watch party, chat e experiências privadas.</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="hub-panel hub-highlights">
+          <div class="hub-panel-head">
+            <h3>Diferenciais Gremory</h3>
+            <span class="hub-badge alt">CORE</span>
+          </div>
+          <div class="highlight-grid">
+            <div class="highlight-card">
+              <i class="fa-solid fa-mobile-screen-button"></i>
+              <strong>Mobile primeiro</strong>
+              <span>Experiência boa no celular sem perder o visual no PC.</span>
+            </div>
+            <div class="highlight-card">
+              <i class="fa-solid fa-shield-halved"></i>
+              <strong>Mais seguro</strong>
+              <span>Base pronta para separar o que o cliente vê do que o servidor decide.</span>
+            </div>
+            <div class="highlight-card">
+              <i class="fa-solid fa-link"></i>
+              <strong>Ligação com o bot</strong>
+              <span>Downloads, notificações e Pokémon podem conversar com a Charlotte.</span>
+            </div>
+            <div class="highlight-card">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <strong>Escalável</strong>
+              <span>Pronto para receber RPG, social, suporte e mais serviços.</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <div class="feature-modal" id="featureModal" aria-hidden="true">
+    <div class="feature-modal-backdrop" id="featureModalBackdrop"></div>
+    <div class="feature-modal-box" role="dialog" aria-modal="true" aria-labelledby="featureModalTitle">
+      <button class="feature-close" id="featureModalClose" type="button" aria-label="Fechar">×</button>
+      <div class="feature-kicker" id="featureModalKicker">Gremory</div>
+      <h3 id="featureModalTitle">Módulo em evolução</h3>
+      <p id="featureModalText">Essa área está sendo preparada para as próximas versões do ecossistema Gremory.</p>
+      <div class="feature-modal-actions">
+        <button class="hero-btn primary" id="featureModalPrimary">Entendi</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Bottom-right: support -->
   <button class="dock-btn dock-right" id="supportBtn" aria-label="Abrir suporte">
@@ -252,6 +466,21 @@
     </div>
   </div>
 
+  <section class="gremory-no-feed-note" aria-label="Sobre o Gremory Hub">
+    <div>
+      <i class="fa-solid fa-shield-dragon"></i>
+      <div><strong>Gremory é um hub, não uma rede social.</strong><span>Perfil, Pokémon, RPG, salas, downloads, Premium e suporte em uma conta só.</span></div>
+    </div>
+  </section>
+
+  <nav class="gremory-mobile-nav" aria-label="Navegação mobile">
+    <button type="button" data-gremory-go="home"><i class="fa-solid fa-house"></i><span>Início</span></button>
+    <button type="button" data-gremory-go="pokemon"><i class="fa-solid fa-dragon"></i><span>Pokémon</span></button>
+    <button type="button" data-gremory-go="downloads"><i class="fa-solid fa-download"></i><span>Baixar</span></button>
+    <button type="button" data-gremory-go="watch"><i class="fa-solid fa-tv"></i><span>Salas</span></button>
+    <button type="button" data-gremory-go="profile"><i class="fa-solid fa-user"></i><span>Perfil</span></button>
+  </nav>
+
   <footer class="footer">Direitos reservados a Gremory Company</footer>
 
   <!-- Wiki Result Modal (popup no centro) -->
@@ -290,6 +519,7 @@
       <form id="loginForm" class="auth-gate-form active">
         <input id="loginEmail" type="email" placeholder="Email" required>
         <input id="loginPassword" type="password" placeholder="Senha" required>
+        <label class="auth-remember"><input id="loginRemember" type="checkbox"> <span>Manter conectado neste aparelho</span></label>
         <button type="submit" class="auth-gate-submit">Entrar</button>
         <div class="auth-gate-switch">Ainda não tem uma conta? <button type="button" class="auth-gate-link" id="showRegisterLink">Criar</button></div>
       </form>
@@ -299,6 +529,7 @@
         <input id="registerEmail" type="email" placeholder="Email" required>
         <input id="registerPassword" type="password" placeholder="Senha" required>
         <input id="registerPassword2" type="password" placeholder="Confirmar senha" required>
+        <label class="auth-remember"><input id="registerRemember" type="checkbox"> <span>Manter conectado neste aparelho</span></label>
         <button type="submit" class="auth-gate-submit">Criar conta</button>
         <div class="auth-gate-switch">Já tem uma conta? <button type="button" class="auth-gate-link" id="showLoginLink">Login</button></div>
       </form>
@@ -370,11 +601,6 @@
               <div class="profile-field">
                 <label for="profileWallpaper">Wallpaper URL</label>
                 <input id="profileWallpaper" type="text" placeholder="https://...">
-              </div>
-
-              <div class="profile-field">
-                <label for="profileApiKey">ApiKey</label>
-                <input id="profileApiKey" type="text" placeholder="Sua chave">
               </div>
 
               <div class="profile-field">
@@ -450,6 +676,7 @@
 
 <script type="module" src="/assets/js/firebase-auth.js?v=20260621-darkstars-final-v1"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+<script src="/assets/js/gremory-core.js?v=20261009-core-v1"></script>
 
 
 <!-- GREMORY POKEDEX ADDON: START -->
