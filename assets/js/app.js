@@ -26,6 +26,8 @@ const $ = (id) => document.getElementById(id);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 const DEFAULT_AVATAR = '/assets/img/profile.jpg';
 const WHATSAPP_NUMBER = '5521973747709';
+const ADMIN_EMAIL = 'losermodder@gmail.com';
+const USERNAME_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 let RTC_CONFIG={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
 
 const state = {
@@ -38,6 +40,8 @@ const state = {
   bridgeResults:{}, siteInventory:{}, siteCustomization:{},
   teamDraft:[], pokemonEncounter:null, pokemonHealing:{},
   ttt:{game:null,unsub:null,index:{},lastResultId:''},
+  notificationFilter:'team',
+  admin:{reports:{},updates:{},directory:{},bans:{},selectedUid:''},
   tinder:{current:null,seen:[]},updates:{},notifications:{},ban:null,
   watchCode:null,watchRoom:null,watchUnsubs:[],watchApplying:false,
   watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set()},
@@ -56,6 +60,24 @@ function setDrawer(open){const d=$('accountDrawer');if(!d)return;d.classList.tog
 function escText(v){return String(v??'')}
 function formatNumber(v){return new Intl.NumberFormat('pt-BR').format(Number(v||0))}
 function displayName(){return state.profile?.nome||state.user?.displayName||state.user?.email?.split('@')[0]||'Usuário'}
+function isSiteAdmin(){return String(state.user?.email||'').trim().toLowerCase()===ADMIN_EMAIL}
+function normalizeUsername(v=''){return String(v||'').trim().toLowerCase().replace(/^@+/,'')}
+function validUsername(v=''){return /^[a-z][a-z0-9_]{2,19}$/.test(normalizeUsername(v))}
+function usernameLabel(p=state.profile){const u=normalizeUsername(p?.username||'');return u?`@${u}`:'@sem_usuario'}
+function usernameCooldownRemaining(p=state.profile){
+  const at=Number(p?.usernameChangedAt||0);if(!at)return 0;
+  return Math.max(0,USERNAME_COOLDOWN_MS-(Date.now()-at));
+}
+function formatCooldown(ms){
+  if(ms<=0)return'Você pode alterar agora.';
+  const d=Math.ceil(ms/86400000);return `Você poderá trocar novamente em ${d} dia${d===1?'':'s'}.`;
+}
+function renderAdminAccess(){
+  const ok=isSiteAdmin();
+  if($('adminNavBtn'))$('adminNavBtn').hidden=!ok;
+  if($('adminDrawerBtn'))$('adminDrawerBtn').hidden=!ok;
+}
+
 function avatarFor(p=state.profile){return p?.avatar||state.user?.photoURL||DEFAULT_AVATAR}
 function nowIso(){return new Date().toISOString()}
 function shortDate(v){try{return new Date(v).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'})}catch{return'—'}}
@@ -70,9 +92,10 @@ function permissionMessage(err, fallback='Acesso negado pelo Firebase.'){
 }
 
 const routeMeta={
-  home:['GREMORY','Início'],charlotte:['CHARLOTTE','Charlotte'],pokemon:['POKÉMON','Centro Pokémon'],friends:['AMIGOS','Pessoas'],tinder:['TINDER','Descobrir pessoas'],updates:['ATUALIZAÇÕES','Novidades'],downloads:['DOWNLOADS','Downloads'],games:['JOGOS','Jogos'],watch:['WATCH PARTY','Assistir com amigos'],rpg:['RPG','Mesas'],premium:['PREMIUM','Gremory Premium'],personalize:['PERSONALIZAR','Loja de rúpias'],support:['SUPORTE','Gremory oficial']
+  home:['GREMORY','Início'],charlotte:['CHARLOTTE','Charlotte'],pokemon:['POKÉMON','Centro Pokémon'],friends:['AMIGOS','Pessoas'],tinder:['TINDER','Descobrir pessoas'],updates:['ATUALIZAÇÕES','Novidades'],downloads:['DOWNLOADS','Downloads'],games:['JOGOS','Jogos'],watch:['WATCH PARTY','Assistir com amigos'],rpg:['RPG','Mesas'],premium:['PREMIUM','Gremory Premium'],personalize:['PERSONALIZAR','Loja de rúpias'],support:['SUPORTE','Gremory oficial'],admin:['ADMINISTRAÇÃO','Painel do host']
 };
 function navigate(route){
+  if(route==='admin'&&!isSiteAdmin()){toast('Acesso restrito ao host.');route='home'}
   if(!routeMeta[route]) route='home'; state.route=route;
   $$('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===route));
   $$('[data-route]').forEach(el=>el.classList.toggle('active',el.dataset.route===route));
@@ -89,11 +112,13 @@ function navigate(route){
   if(route==='rpg'&&state.user&&!state.roomCode) loadMyRooms();
   if(route==='premium'&&state.user&&state.charlottePublic?.status==='linked') requestAccountSync().catch(()=>{});
   if(route==='personalize') renderStore();
+  if(route==='admin') loadAdminDashboard();
 }
 $$('[data-route]').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.route)));
 ['topAccountBtn','mobileAccountBtn','homeProfileBtn','sideAccountBtn'].forEach(id=>$(id)?.addEventListener('click',()=>setDrawer(true)));
 $('accountDrawerBackdrop')?.addEventListener('click',()=>setDrawer(false));
 $('accountDrawerClose')?.addEventListener('click',()=>setDrawer(false));
+$('adminDrawerBtn')?.addEventListener('click',()=>{setDrawer(false);navigate('admin')});
 $$('[data-close-modal]').forEach(el=>el.addEventListener('click',()=>closeModal(el.dataset.closeModal)));
 
 // Auth: sem "manter conectado", recarregar a página exige login novamente.
@@ -115,19 +140,37 @@ async function initialAuthPolicy(){
 }
 $('loginForm').addEventListener('submit',async ev=>{ev.preventDefault();$('authStatus').textContent='Entrando...';try{await configurePersistence($('loginRemember').checked);await signInWithEmailAndPassword(auth,$('loginEmail').value.trim(),$('loginPassword').value);$('authStatus').textContent=''}catch(e){$('authStatus').textContent=authError(e)}});
 $('registerForm').addEventListener('submit',async ev=>{
-  ev.preventDefault(); const name=$('registerName').value.trim();const email=$('registerEmail').value.trim();const pass=$('registerPassword').value;const pass2=$('registerPassword2').value;
-  if(!name)return $('authStatus').textContent='Digite seu nome.';if(pass.length<6)return $('authStatus').textContent='A senha precisa ter pelo menos 6 caracteres.';if(pass!==pass2)return $('authStatus').textContent='As senhas não coincidem.';
+  ev.preventDefault();
+  const name=$('registerName').value.trim(),username=normalizeUsername($('registerUsername').value),email=$('registerEmail').value.trim(),pass=$('registerPassword').value,pass2=$('registerPassword2').value;
+  if(!name)return $('authStatus').textContent='Digite seu nome.';
+  if(!validUsername(username))return $('authStatus').textContent='Nome de usuário inválido. Use 3–20 caracteres, começando por letra.';
+  if(pass.length<6)return $('authStatus').textContent='A senha precisa ter pelo menos 6 caracteres.';
+  if(pass!==pass2)return $('authStatus').textContent='As senhas não coincidem.';
   $('authStatus').textContent='Criando conta...';
-  try{await configurePersistence($('registerRemember').checked);const cred=await createUserWithEmailAndPassword(auth,email,pass);await updateProfile(cred.user,{displayName:name});const p={uid:cred.user.uid,nome:name,avatar:'',bio:'',favoriteAnime:'',createdAt:nowIso(),updatedAt:nowIso()};await set(ref(db,`profiles/${cred.user.uid}`),p);await set(ref(db,`directory/${cred.user.uid}`),publicProfile(p));$('authStatus').textContent=''}catch(e){$('authStatus').textContent=authError(e)}
+  try{
+    const taken=await get(ref(db,`usernames/${username}`)).catch(()=>null);
+    if(taken?.exists())throw new Error('USERNAME_TAKEN');
+    await configurePersistence($('registerRemember').checked);
+    const cred=await createUserWithEmailAndPassword(auth,email,pass);
+    const stamp=Date.now();
+    await updateProfile(cred.user,{displayName:name});
+    await set(ref(db,`usernames/${username}`),{uid:cred.user.uid,username,updatedAt:stamp});
+    const p={uid:cred.user.uid,nome:name,username,usernameChangedAt:stamp,avatar:'',bio:'',favoriteAnime:'',createdAt:nowIso(),updatedAt:nowIso()};
+    await set(ref(db,`profiles/${cred.user.uid}`),p);
+    await set(ref(db,`directory/${cred.user.uid}`),publicProfile(p));
+    $('authStatus').textContent='';
+  }catch(e){
+    $('authStatus').textContent=e?.message==='USERNAME_TAKEN'?'Esse nome de usuário já está em uso.':authError(e)
+  }
 });
 $('resetPasswordBtn').addEventListener('click',async()=>{const email=$('loginEmail').value.trim();if(!email)return $('authStatus').textContent='Digite seu e-mail primeiro.';try{await sendPasswordResetEmail(auth,email);$('authStatus').textContent='E-mail de recuperação enviado.'}catch(e){$('authStatus').textContent=authError(e)}});
 $('logoutBtn').addEventListener('click',async()=>{localStorage.removeItem('gremory:remember');clearUserSubscriptions();await signOut(auth);setDrawer(false)});
 
-function publicProfile(p){return{uid:p.uid,nome:p.nome||'Usuário',avatar:p.avatar||'',bio:p.bio||'',favoriteAnime:p.favoriteAnime||'',createdAt:p.createdAt||nowIso(),updatedAt:nowIso()}}
+function publicProfile(p){return{uid:p.uid,nome:p.nome||'Usuário',username:normalizeUsername(p.username||''),avatar:p.avatar||'',bio:p.bio||'',favoriteAnime:p.favoriteAnime||'',createdAt:p.createdAt||nowIso(),updatedAt:p.updatedAt||nowIso()}}
 async function readUserData(user){
   const [ps,old]=await Promise.all([get(ref(db,`profiles/${user.uid}`)).catch(()=>null),get(ref(db,`users/${user.uid}`)).catch(()=>null)]);
   const p=ps?.exists()?ps.val():{};const o=old?.exists()?old.val():{};
-  const merged={uid:user.uid,nome:p.nome||o.nome||user.displayName||'Usuário',avatar:p.avatar||o.avatar||user.photoURL||'',bio:p.bio||o.bio||'',favoriteAnime:p.favoriteAnime||o.favoriteAnime||o.animeFavorito||'',createdAt:p.createdAt||o.createdAt||user.metadata?.creationTime||nowIso()};
+  const merged={uid:user.uid,nome:p.nome||o.nome||user.displayName||'Usuário',username:normalizeUsername(p.username||o.username||''),usernameChangedAt:Number(p.usernameChangedAt||o.usernameChangedAt||0),avatar:p.avatar||o.avatar||user.photoURL||'',bio:p.bio||o.bio||'',favoriteAnime:p.favoriteAnime||o.favoriteAnime||o.animeFavorito||'',createdAt:p.createdAt||o.createdAt||user.metadata?.creationTime||nowIso()};
   if(!ps?.exists()) await set(ref(db,`profiles/${user.uid}`),{...merged,updatedAt:nowIso()}).catch(()=>{});
   await set(ref(db,`directory/${user.uid}`),publicProfile(merged)).catch(()=>{});
   state.profile=merged;state.privateData=o;renderAccount();
@@ -145,14 +188,41 @@ function accountSnapshot(){
 }
 function renderAccount(){
   const p=state.profile||{};const avatar=avatarFor(p);const name=p.nome||'Usuário';const acc=accountSnapshot();const premium=acc.premium;const level=acc.level;const balance=acc.balance;
-  ['sideAvatar','topAvatar','profileAvatarPreview'].forEach(id=>{if($(id))$(id).src=avatar});$('sideName').textContent=name;$('sideStatus').textContent=premium?'Premium':'Gremory';$('profileNameView').textContent=name;$('profilePlanView').textContent=premium?'Premium':'Padrão';$('profileName').value=name;$('profileAvatar').value=p.avatar||'';$('profileBio').value=p.bio||'';$('profileFavoriteAnime').value=p.favoriteAnime||'';$('profileLevel').textContent=formatNumber(level);$('profileBalance').textContent=`₹ ${formatNumber(balance)}`;$('homePlan').textContent=premium?'Premium':'Padrão';$('homeLevel').textContent=formatNumber(level);$('homeBalance').textContent=`₹ ${formatNumber(balance)}`;$('homeGreeting').textContent=`Olá, ${name}.`;
+  ['sideAvatar','topAvatar','profileAvatarPreview'].forEach(id=>{if($(id))$(id).src=avatar});$('sideName').textContent=name;$('sideStatus').textContent=premium?'Premium':usernameLabel(p);$('profileNameView').textContent=name;if($('profileUsernameView'))$('profileUsernameView').textContent=usernameLabel(p);$('profilePlanView').textContent=premium?'Premium':'Padrão';$('profileName').value=name;if($('profileUsername'))$('profileUsername').value=normalizeUsername(p.username||'');if($('profileUsernameHint'))$('profileUsernameHint').textContent=formatCooldown(usernameCooldownRemaining(p));$('profileAvatar').value=p.avatar||'';$('profileBio').value=p.bio||'';$('profileFavoriteAnime').value=p.favoriteAnime||'';renderAdminAccess();$('profileLevel').textContent=formatNumber(level);$('profileBalance').textContent=`₹ ${formatNumber(balance)}`;$('homePlan').textContent=premium?'Premium':'Padrão';$('homeLevel').textContent=formatNumber(level);$('homeBalance').textContent=`₹ ${formatNumber(balance)}`;$('homeGreeting').textContent=`Olá, ${name}.`;
   if($('storeBalance'))$('storeBalance').textContent=`₹ ${formatNumber(balance)}`;
   if($('premiumStatusPill'))$('premiumStatusPill').textContent=premium?'Premium':'Padrão';
   if($('premiumStatusTitle'))$('premiumStatusTitle').textContent=premium?'Premium ativo':'Plano padrão';
   if($('premiumStatusText'))$('premiumStatusText').textContent=state.charlottePublic?.status==='linked'?(premium?'Seu Premium está sincronizado com a Charlotte.':'Escolha um plano abaixo. O pagamento é criado pelo bot com Mercado Pago.'):'Vincule a Charlotte para comprar e sincronizar o Premium pelo site.';
 }
 $('profileAvatar').addEventListener('input',()=>{$('profileAvatarPreview').src=$('profileAvatar').value.trim()||DEFAULT_AVATAR});
-$('profileForm').addEventListener('submit',async ev=>{ev.preventDefault();if(!state.user)return;const payload={uid:state.user.uid,nome:$('profileName').value.trim().slice(0,40)||'Usuário',avatar:$('profileAvatar').value.trim(),bio:$('profileBio').value.trim().slice(0,180),favoriteAnime:$('profileFavoriteAnime').value.trim().slice(0,80),createdAt:state.profile?.createdAt||nowIso(),updatedAt:nowIso()};try{await set(ref(db,`profiles/${state.user.uid}`),payload);await set(ref(db,`directory/${state.user.uid}`),publicProfile(payload));if(state.user.displayName!==payload.nome)await updateProfile(state.user,{displayName:payload.nome});state.profile=payload;renderAccount();toast('Perfil salvo.')}catch(e){toast(permissionMessage(e,'Não foi possível salvar o perfil.'))}});
+$('profileForm').addEventListener('submit',async ev=>{
+  ev.preventDefault();if(!state.user)return;
+  const oldProfile=state.profile||{},oldUsername=normalizeUsername(oldProfile.username||''),username=normalizeUsername($('profileUsername')?.value||'');
+  if(!validUsername(username))return toast('Use um nome de usuário com 3–20 caracteres, começando por letra.');
+  const changing=username!==oldUsername;
+  if(changing&&oldUsername){
+    const remaining=usernameCooldownRemaining(oldProfile);
+    if(remaining>0)return toast(`Seu @usuário só pode mudar a cada 7 dias. ${formatCooldown(remaining)}`,5000);
+  }
+  let reservedNew=false;
+  try{
+    if(changing){
+      const sn=await get(ref(db,`usernames/${username}`));
+      if(sn.exists()&&sn.val()?.uid!==state.user.uid)throw new Error('Esse nome de usuário já está em uso.');
+      await set(ref(db,`usernames/${username}`),{uid:state.user.uid,username,updatedAt:Date.now()});
+      reservedNew=true;
+    }
+    const payload={uid:state.user.uid,nome:$('profileName').value.trim().slice(0,40)||'Usuário',username,usernameChangedAt:changing?Date.now():Number(oldProfile.usernameChangedAt||Date.now()),avatar:$('profileAvatar').value.trim(),bio:$('profileBio').value.trim().slice(0,180),favoriteAnime:$('profileFavoriteAnime').value.trim().slice(0,80),createdAt:oldProfile.createdAt||nowIso(),updatedAt:nowIso()};
+    await set(ref(db,`profiles/${state.user.uid}`),payload);
+    await set(ref(db,`directory/${state.user.uid}`),publicProfile(payload));
+    if(changing&&oldUsername)await remove(ref(db,`usernames/${oldUsername}`)).catch(()=>{});
+    if(state.user.displayName!==payload.nome)await updateProfile(state.user,{displayName:payload.nome});
+    state.profile=payload;renderAccount();toast('Perfil salvo.');
+  }catch(e){
+    if(reservedNew&&changing)await remove(ref(db,`usernames/${username}`)).catch(()=>{});
+    toast(permissionMessage(e,e.message||'Não foi possível salvar o perfil.'))
+  }
+});state.profile=payload;renderAccount();toast('Perfil salvo.')}catch(e){toast(permissionMessage(e,'Não foi possível salvar o perfil.'))}});
 
 function clearUserSubscriptions(){if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonHealing={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.ban=null;state.watchCode=null;state.watchRoom=null}
 function startUserSubscriptions(){
@@ -187,6 +257,9 @@ onAuthStateChanged(auth,async user=>{
   document.body.classList.remove('auth-loading');state.user=user||null;
   if(!user){document.body.classList.remove('authenticated');$('appShell').setAttribute('aria-hidden','true');const reason=sessionStorage.getItem('gremory:banReason');if(reason){$('authStatus').textContent=`Conta suspensa: ${reason}`;sessionStorage.removeItem('gremory:banReason')}clearUserSubscriptions();return}
   try{await readUserData(user)}catch{}
+  state.ttt.lastResultId=localStorage.getItem(`gremory:tttSeen:${user.uid}`)||'';
+  renderAdminAccess();
+  if(!state.profile?.username)setTimeout(()=>{toast('Escolha seu nome de usuário para completar a conta.',5000);setDrawer(true)},700);
   document.body.classList.add('authenticated');$('appShell').setAttribute('aria-hidden','false');setTimeout(()=>{const gif=$('authGif');if(gif)gif.removeAttribute('src')},250);startUserSubscriptions();await loadPokemonSources();
   const params=new URLSearchParams(location.search);
   const watchInvite=params.get('watch');
@@ -206,6 +279,13 @@ function playNotificationTone(){playSiteSound('notification',720)}
 function playVictoryTone(){playSiteSound('victory',920)}
 function notificationLastSeen(){return Number(localStorage.getItem('gremory:notifSeen')||0)}
 function notificationSignature(n){return [String(n?.type||''),String(n?.title||''),String(n?.text||''),String(n?.link||''),String(n?.imageUrl||'')].join('\u241f')}
+function notificationCategory(n){
+  const type=String(n?.type||'').toLowerCase();
+  if(['friend_request','pokemon_duel','ttt','tinder_match','friend','social'].includes(type))return'social';
+  return'team';
+}
+function notificationCategoryLabel(n){return notificationCategory(n)==='social'?'Amigos':'Equipe'}
+
 function uniqueNotificationRows(source=state.notifications){
   const rows=Object.entries(source||{}).map(([id,v])=>({id,...(v||{})})).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
   const latestBySignature=new Map(),unique=[];
@@ -252,21 +332,56 @@ function openNotificationDetail(n){
   openModal('notificationDetailModal');
 }
 function renderNotifications(){
-  const rows=uniqueNotificationRows();
-  const unseen=rows.filter(x=>Number(x.createdAt||0)>notificationLastSeen()).length,badge=$('notificationBadge');
+  const all=uniqueNotificationRows();
+  const unseen=all.filter(x=>Number(x.createdAt||0)>notificationLastSeen()).length,badge=$('notificationBadge');
   if(badge){badge.hidden=!unseen;badge.textContent=String(Math.min(99,unseen))}
+  const team=all.filter(x=>notificationCategory(x)==='team'),social=all.filter(x=>notificationCategory(x)==='social');
+  if($('notificationTeamCount'))$('notificationTeamCount').textContent=String(team.length);
+  if($('notificationSocialCount'))$('notificationSocialCount').textContent=String(social.length);
+  $$('[data-notification-filter]').forEach(b=>b.classList.toggle('active',b.dataset.notificationFilter===state.notificationFilter));
+  const rows=state.notificationFilter==='all'?all:state.notificationFilter==='social'?social:team;
   const box=$('notificationList');if(!box)return;box.innerHTML='';
-  if(!rows.length){box.innerHTML='<div class="empty-state small">Sua caixa de entrada está vazia.</div>';return}
-  rows.slice(0,40).forEach(n=>{
-    const d=document.createElement('button');d.type='button';d.className='notification-row';const st=document.createElement('strong');st.textContent=n.title||'Notificação';const sm=document.createElement('span');sm.textContent=n.text||'';const time=document.createElement('small');time.textContent=shortDateTime(n.createdAt);d.append(st,sm,time);
-    d.onclick=()=>{if(n.imageUrl||n.type==='admin_notice'){openNotificationDetail(n);return}if(n.link?.startsWith('#')){closeModal('notificationModal');navigate(n.link.slice(1));return}openNotificationDetail(n)};box.appendChild(d)
+  if(!rows.length){box.innerHTML=`<div class="empty-state small">${state.notificationFilter==='social'?'Nenhuma notificação de amigos ou jogos.':'Nenhum aviso da equipe.'}</div>`;return}
+  rows.slice(0,60).forEach(n=>{
+    const d=document.createElement('button');d.type='button';d.className='notification-row';
+    const head=document.createElement('div');head.className='notification-row-head';
+    const st=document.createElement('strong');st.textContent=n.title||'Notificação';
+    const kind=document.createElement('em');kind.textContent=notificationCategoryLabel(n);
+    head.append(st,kind);
+    const sm=document.createElement('span');sm.textContent=n.text||'';
+    const time=document.createElement('small');time.textContent=shortDateTime(n.createdAt);
+    d.append(head,sm,time);
+    d.onclick=()=>{if(n.imageUrl||n.type==='admin_notice'||n.type==='site_update'){openNotificationDetail(n);return}if(n.link?.startsWith('#')){closeModal('notificationModal');navigate(n.link.slice(1));return}openNotificationDetail(n)};
+    box.appendChild(d)
   })
 }
+$$('[data-notification-filter]').forEach(btn=>btn.addEventListener('click',()=>{state.notificationFilter=btn.dataset.notificationFilter||'team';renderNotifications()}));
 $('notificationBtn')?.addEventListener('click',()=>{localStorage.setItem('gremory:notifSeen',String(Date.now()));renderNotifications();openModal('notificationModal')});
 function renderUpdates(){
-  const box=$('updatesFeed');if(!box)return;const rows=Object.entries(state.updates||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));box.innerHTML='';
+  const box=$('updatesFeed');if(!box)return;
+  const rows=Object.entries(state.updates||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
+  box.innerHTML='';
   if(!rows.length){box.innerHTML='<div class="empty-state">Nenhuma atualização publicada.</div>';return}
-  rows.slice(0,60).forEach(post=>{const art=document.createElement('article');art.className='panel update-card';if(post.imageUrl){const img=document.createElement('img');img.src=post.imageUrl;img.alt='';img.loading='lazy';art.appendChild(img)}const copy=document.createElement('div');const meta=document.createElement('small');meta.textContent=`${post.author||'Gremory'} • ${shortDateTime(post.createdAt)}`;const text=document.createElement('p');text.textContent=post.text||'';copy.append(meta,text);art.appendChild(copy);box.appendChild(art)})
+  rows.slice(0,60).forEach(post=>{
+    const art=document.createElement('article');art.className='panel update-card';
+    if(post.imageUrl){
+      const media=document.createElement('div');media.className='update-card-media';
+      const img=document.createElement('img');img.src=post.imageUrl;img.alt='Imagem da atualização';img.loading='lazy';
+      media.appendChild(img);art.appendChild(media)
+    }
+    const copy=document.createElement('div');copy.className='update-card-body';
+    const meta=document.createElement('div');meta.className='update-card-meta';
+    const small=document.createElement('small');small.textContent=`${post.author||'Gremory'} • ${shortDateTime(post.createdAt)}`;
+    meta.appendChild(small);
+    if(isSiteAdmin()){
+      const idchip=document.createElement('button');idchip.type='button';idchip.className='update-id-chip';idchip.textContent=`ID ${post.id}`;
+      idchip.onclick=async()=>{try{await navigator.clipboard.writeText(post.id);toast('ID copiado.')}catch{}};
+      const del=document.createElement('button');del.type='button';del.className='mini-btn danger';del.textContent='Apagar';del.onclick=()=>adminDeletePublication(post.id);
+      meta.append(idchip,del)
+    }
+    const text=document.createElement('p');text.className='update-card-text';text.textContent=post.text||'';
+    copy.append(meta,text);art.appendChild(copy);box.appendChild(art)
+  })
 }
 function applySiteBan(){
   if(!state.ban||!state.user)return;
@@ -286,6 +401,104 @@ async function submitReport(ev){
 }
 $('reportForm')?.addEventListener('submit',submitReport);
 
+// Administração do site — visível apenas para o e-mail host.
+const REPORT_LABELS={harassment:'Assédio',minor_sexual_content:'Conteúdo sexual envolvendo menores',threats:'Ameaças',gore:'Gore / violência extrema',spam_fraud:'Spam ou fraude',other:'Outro'};
+async function resolveAdminUid(query){
+  const raw=String(query||'').trim();if(!raw)return'';
+  const user=normalizeUsername(raw);
+  if(raw.startsWith('@')||validUsername(user)){
+    const sn=await get(ref(db,`usernames/${user}`)).catch(()=>null);
+    if(sn?.exists())return String(sn.val()?.uid||'')
+  }
+  return raw;
+}
+async function loadAdminDashboard(){
+  if(!isSiteAdmin())return;
+  try{
+    const [reportsSnap,updatesSnap,directorySnap,bansSnap]=await Promise.all([
+      get(ref(db,'siteReports')),get(ref(db,'siteUpdates')),get(ref(db,'directory')),get(ref(db,'siteBans'))
+    ]);
+    state.admin.reports=reportsSnap.exists()?reportsSnap.val():{};
+    state.admin.updates=updatesSnap.exists()?updatesSnap.val():{};
+    state.admin.directory=directorySnap.exists()?directorySnap.val():{};
+    state.admin.bans=bansSnap.exists()?bansSnap.val():{};
+    renderAdminDashboard()
+  }catch(e){toast(permissionMessage(e,'Não foi possível carregar a administração.'),5500)}
+}
+function renderAdminDashboard(){
+  if(!isSiteAdmin())return;
+  const reports=Object.entries(state.admin.reports||{}).map(([id,v])=>({id,...v})).filter(x=>x.status!=='closed').sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
+  const updates=Object.entries(state.admin.updates||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
+  if($('adminOpenReports'))$('adminOpenReports').textContent=String(reports.length);
+  if($('adminUpdateCount'))$('adminUpdateCount').textContent=String(updates.length);
+  if($('adminUserCount'))$('adminUserCount').textContent=String(Object.keys(state.admin.directory||{}).length);
+
+  const reportBox=$('adminReportsList');if(reportBox){reportBox.innerHTML='';if(!reports.length)reportBox.innerHTML='<div class="empty-state small">Nenhuma denúncia aberta.</div>';
+    const counts={};reports.forEach(r=>counts[r.targetUid]=(counts[r.targetUid]||0)+1);
+    reports.slice(0,80).forEach(r=>{
+      const p=state.admin.directory?.[r.targetUid]||{},row=document.createElement('article');row.className='admin-list-row';
+      const copy=document.createElement('div');const h=document.createElement('strong');h.textContent=`${p.nome||'Usuário'}${p.username?' (@'+normalizeUsername(p.username)+')':''}`;
+      const meta=document.createElement('small');meta.textContent=`${REPORT_LABELS[r.category]||r.category||'Outro'} • ${shortDateTime(r.createdAt)} • ${counts[r.targetUid]} denúncia${counts[r.targetUid]===1?'':'s'}`;
+      const details=document.createElement('p');details.textContent=r.details||'Sem detalhes.';
+      const idline=document.createElement('code');idline.textContent=`${r.id} • UID ${r.targetUid}`;
+      copy.append(h,meta,details,idline);
+      const acts=document.createElement('div');acts.className='admin-row-actions';
+      const profile=document.createElement('button');profile.className='mini-btn';profile.textContent='Perfil';profile.onclick=()=>openPublicProfile(r.targetUid,p);
+      const ban=document.createElement('button');ban.className='mini-btn danger';ban.textContent='Suspender';ban.onclick=()=>adminBanUid(r.targetUid,r.details||REPORT_LABELS[r.category]||'Violação das regras');
+      const close=document.createElement('button');close.className='mini-btn';close.textContent='Fechar';close.onclick=()=>adminCloseReport(r.id);
+      acts.append(profile,ban,close);row.append(copy,acts);reportBox.appendChild(row)
+    })
+  }
+
+  const updateBox=$('adminUpdatesList');if(updateBox){updateBox.innerHTML='';if(!updates.length)updateBox.innerHTML='<div class="empty-state small">Nenhuma publicação.</div>';
+    updates.slice(0,80).forEach(post=>{
+      const row=document.createElement('article');row.className='admin-list-row';
+      const copy=document.createElement('div');const h=document.createElement('strong');h.textContent=String(post.text||'Publicação').split(/\r?\n/)[0].slice(0,90)||'Publicação';
+      const meta=document.createElement('small');meta.textContent=`${post.author||'Gremory'} • ${shortDateTime(post.createdAt)}`;
+      const idline=document.createElement('code');idline.textContent=post.id;copy.append(h,meta,idline);
+      const del=document.createElement('button');del.className='mini-btn danger';del.textContent='Apagar';del.onclick=()=>adminDeletePublication(post.id);
+      row.append(copy,del);updateBox.appendChild(row)
+    })
+  }
+}
+async function adminDeletePublication(id){
+  if(!isSiteAdmin()||!id)return;
+  if(!confirm(`Apagar a publicação ${id}?`))return;
+  try{
+    const users=Object.keys(state.admin.directory||{});
+    const patch={[`siteUpdates/${id}`]:null};
+    for(const uid of users)patch[`siteNotifications/${uid}/update_${id}`]=null;
+    await update(ref(db),patch);
+    toast('Publicação apagada.');await loadAdminDashboard()
+  }catch(e){toast(permissionMessage(e,e.message||'Não foi possível apagar a publicação.'),5500)}
+}
+async function adminCloseReport(id){
+  if(!isSiteAdmin()||!id)return;
+  try{await update(ref(db,`siteReports/${id}`),{status:'closed',closedAt:Date.now(),closedBy:state.user.uid});toast('Denúncia fechada.');await loadAdminDashboard()}catch(e){toast(permissionMessage(e),5500)}
+}
+async function adminBanUid(uid,reason='Violação das regras'){
+  if(!isSiteAdmin()||!uid)return;
+  try{await set(ref(db,`siteBans/${uid}`),{uid,reason:String(reason||'Violação das regras').slice(0,300),by:state.user.uid,createdAt:Date.now()});toast('Conta suspensa.');await loadAdminDashboard()}catch(e){toast(permissionMessage(e),5500)}
+}
+async function adminUnbanUid(uid){
+  if(!isSiteAdmin()||!uid)return;
+  try{await remove(ref(db,`siteBans/${uid}`));toast('Banimento removido.');await loadAdminDashboard()}catch(e){toast(permissionMessage(e),5500)}
+}
+async function adminLookupUser(ev){
+  ev?.preventDefault?.();if(!isSiteAdmin())return;
+  const uid=await resolveAdminUid($('adminUserQuery')?.value);
+  state.admin.selectedUid=uid;
+  const box=$('adminUserResult');if(!uid){if(box)box.textContent='Usuário não encontrado.';return}
+  let p=state.admin.directory?.[uid];if(!p){const sn=await get(ref(db,`directory/${uid}`)).catch(()=>null);p=sn?.exists()?sn.val():null}
+  if(box)box.innerHTML=p?`<strong>${escText(p.nome||'Usuário')}</strong><span>${p.username?'@'+escText(normalizeUsername(p.username))+' • ':''}${escText(uid)}</span>`:`<span>UID: ${escText(uid)}</span>`;
+}
+$('adminRefreshBtn')?.addEventListener('click',loadAdminDashboard);
+$('adminDeletePostForm')?.addEventListener('submit',async ev=>{ev.preventDefault();await adminDeletePublication($('adminDeletePostId').value.trim())});
+$('adminUserLookupForm')?.addEventListener('submit',adminLookupUser);
+$('adminBanUserBtn')?.addEventListener('click',async()=>{if(!state.admin.selectedUid)await adminLookupUser();if(state.admin.selectedUid)await adminBanUid(state.admin.selectedUid,$('adminBanReason').value.trim()||'Violação das regras')});
+$('adminUnbanUserBtn')?.addEventListener('click',async()=>{if(!state.admin.selectedUid)await adminLookupUser();if(state.admin.selectedUid)await adminUnbanUid(state.admin.selectedUid)});
+
+
 // Tinder sincronizado com o perfil já existente da Charlotte
 function renderTinderCard(profile){
   const box=$('tinderSiteCard'),actions=$('tinderSiteActions');if(!box||!actions)return;box.innerHTML='';
@@ -303,12 +516,12 @@ $('tinderLikeBtn')?.addEventListener('click',async()=>{const p=state.tinder.curr
 // Amigos
 async function loadDirectory(){if(!state.user)return;const box=$('peopleSearchResults');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const s=await get(ref(db,'directory'));state.directory=s.exists()?s.val():{};renderPeople('')}catch(e){box.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
 function renderPeople(q=''){
-  const box=$('peopleSearchResults');box.innerHTML='';const term=String(q||'').trim().toLowerCase();const rows=Object.values(state.directory||{}).filter(p=>p.uid!==state.user?.uid&&(!term||String(p.nome||'').toLowerCase().includes(term))).slice(0,40);
+  const box=$('peopleSearchResults');box.innerHTML='';const term=String(q||'').trim().toLowerCase();const rows=Object.values(state.directory||{}).filter(p=>p.uid!==state.user?.uid&&(!term||String(p.nome||'').toLowerCase().includes(term)||normalizeUsername(p.username||'').includes(normalizeUsername(term)))).slice(0,40);
   if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma pessoa encontrada.</div>';return}
   rows.forEach(p=>box.appendChild(personRow(p,{mode:state.friends[p.uid]?'friend':'add'})));
 }
 function personRow(p,{mode='add',requestUid=''}={}){
-  const row=document.createElement('div');row.className='person-row clickable-person';const img=document.createElement('img');img.src=p.avatar||DEFAULT_AVATAR;img.alt='';img.onclick=()=>openPublicProfile(p.uid,p);const copy=document.createElement('div');copy.className='person-copy';copy.onclick=()=>openPublicProfile(p.uid,p);const st=document.createElement('strong');st.textContent=p.nome||'Usuário';const sm=document.createElement('small');sm.textContent=p.bio||'Conta Gremory';copy.append(st,sm);const acts=document.createElement('div');acts.className='person-actions';
+  const row=document.createElement('div');row.className='person-row clickable-person';const img=document.createElement('img');img.src=p.avatar||DEFAULT_AVATAR;img.alt='';img.onclick=()=>openPublicProfile(p.uid,p);const copy=document.createElement('div');copy.className='person-copy';copy.onclick=()=>openPublicProfile(p.uid,p);const st=document.createElement('strong');st.textContent=p.nome||'Usuário';const sm=document.createElement('small');sm.textContent=`${p.username?'@'+normalizeUsername(p.username)+' • ':''}${p.bio||'Conta Gremory'}`;copy.append(st,sm);const acts=document.createElement('div');acts.className='person-actions';
   const view=document.createElement('button');view.className='mini-btn profile-action';view.textContent='Perfil';view.onclick=()=>openPublicProfile(p.uid,p);acts.appendChild(view);
   if(mode==='add'){const b=document.createElement('button');b.className='mini-btn primary';b.textContent='Adicionar';b.onclick=()=>sendFriendRequest(p.uid,p);acts.appendChild(b)}
   if(mode==='friend'){const b=document.createElement('button');b.className='mini-btn';b.textContent='Pokémon';b.onclick=()=>{navigate('pokemon');$('duelFriendSelect').value=p.uid};const r=document.createElement('button');r.className='mini-btn danger';r.textContent='Remover';r.onclick=()=>removeFriend(p.uid);acts.append(b,r)}
@@ -316,10 +529,18 @@ function personRow(p,{mode='add',requestUid=''}={}){
   row.append(img,copy,acts);return row;
 }
 $('friendSearchBtn').addEventListener('click',()=>renderPeople($('friendSearchInput').value));$('friendSearchInput').addEventListener('input',()=>renderPeople($('friendSearchInput').value));
-async function sendFriendRequest(targetUid,p){if(!state.user||targetUid===state.user.uid)return;try{await set(ref(db,`friendRequests/${targetUid}/${state.user.uid}`),{senderUid:state.user.uid,nome:displayName(),avatar:avatarFor(),bio:state.profile?.bio||'',createdAt:nowIso()});toast(`Solicitação enviada para ${p.nome||'usuário'}.`)}catch(e){toast(permissionMessage(e))}}
+async function sendFriendRequest(targetUid,p){
+  if(!state.user||targetUid===state.user.uid)return;
+  try{
+    const createdAt=Date.now(),request={senderUid:state.user.uid,nome:displayName(),username:normalizeUsername(state.profile?.username||''),avatar:avatarFor(),bio:state.profile?.bio||'',createdAt:nowIso()};
+    await set(ref(db,`friendRequests/${targetUid}/${state.user.uid}`),request);
+    await set(ref(db,`siteNotifications/${targetUid}/friend_${state.user.uid}`),{id:`friend_${state.user.uid}`,type:'friend_request',title:'Nova solicitação de amizade',text:`${displayName()}${state.profile?.username?' (@'+normalizeUsername(state.profile.username)+')':''} quer adicionar você.`,link:'#friends',actorUid:state.user.uid,sound:true,createdAt});
+    toast(`Solicitação enviada para ${p.nome||'usuário'}.`)
+  }catch(e){toast(permissionMessage(e))}
+}
 function renderFriendRequests(){const box=$('friendRequestList');box.innerHTML='';const rows=Object.entries(state.requests||{});$('requestCount').textContent=String(rows.length);if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma solicitação.</div>';return}rows.forEach(([uid,r])=>box.appendChild(personRow({uid,nome:r.nome,avatar:r.avatar,bio:r.bio},{mode:'request',requestUid:uid})))}
-async function acceptFriendRequest(senderUid,p){if(!state.user)return;const me={uid:state.user.uid,nome:displayName(),avatar:avatarFor(),bio:state.profile?.bio||'',since:nowIso()};const other={uid:senderUid,nome:p.nome||'Usuário',avatar:p.avatar||'',bio:p.bio||'',since:nowIso()};const patch={};patch[`friends/${state.user.uid}/${senderUid}`]=other;patch[`friends/${senderUid}/${state.user.uid}`]=me;patch[`friendRequests/${state.user.uid}/${senderUid}`]=null;try{await update(ref(db),patch);toast('Amigo adicionado.')}catch(e){toast(permissionMessage(e))}}
-async function declineFriendRequest(senderUid){try{await remove(ref(db,`friendRequests/${state.user.uid}/${senderUid}`))}catch(e){toast(permissionMessage(e))}}
+async function acceptFriendRequest(senderUid,p){if(!state.user)return;const me={uid:state.user.uid,nome:displayName(),avatar:avatarFor(),bio:state.profile?.bio||'',since:nowIso()};const other={uid:senderUid,nome:p.nome||'Usuário',avatar:p.avatar||'',bio:p.bio||'',since:nowIso()};const patch={};patch[`friends/${state.user.uid}/${senderUid}`]=other;patch[`friends/${senderUid}/${state.user.uid}`]=me;patch[`friendRequests/${state.user.uid}/${senderUid}`]=null;patch[`siteNotifications/${state.user.uid}/friend_${senderUid}`]=null;try{await update(ref(db),patch);toast('Amigo adicionado.')}catch(e){toast(permissionMessage(e))}}
+async function declineFriendRequest(senderUid){try{const patch={};patch[`friendRequests/${state.user.uid}/${senderUid}`]=null;patch[`siteNotifications/${state.user.uid}/friend_${senderUid}`]=null;await update(ref(db),patch)}catch(e){toast(permissionMessage(e))}}
 function renderFriends(){const box=$('friendList');box.innerHTML='';const rows=Object.values(state.friends||{});$('friendCount').textContent=String(rows.length);if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhum amigo ainda.</div>';return}rows.forEach(p=>box.appendChild(personRow(p,{mode:'friend'})))}
 async function removeFriend(friendUid){if(!state.user)return;const patch={};patch[`friends/${state.user.uid}/${friendUid}`]=null;patch[`friends/${friendUid}/${state.user.uid}`]=null;try{await update(ref(db),patch);toast('Amizade removida.')}catch(e){toast(permissionMessage(e))}}
 
@@ -565,7 +786,7 @@ function renderWildEncounter(){
 // Perfis públicos
 let currentPublicProfile=null;
 async function openPublicProfile(uid,fallback={}){
-  if(!uid)return;let p=fallback;try{const sn=await get(ref(db,`directory/${uid}`));if(sn.exists())p=sn.val()}catch{}currentPublicProfile={uid,...p};$('publicProfileAvatar').src=p.avatar||DEFAULT_AVATAR;$('publicProfileName').textContent=p.nome||'Usuário';$('publicProfileBio').textContent=p.bio||'Conta Gremory';$('publicProfileAnime').textContent=p.favoriteAnime||'—';$('publicProfileSince').textContent=p.createdAt?shortDate(p.createdAt):'—';const isFriend=!!state.friends?.[uid];const btn=$('publicProfileActionBtn');btn.textContent=isFriend?'Amigo':'Adicionar amigo';btn.disabled=isFriend||uid===state.user?.uid;$('publicProfileDuelBtn').disabled=!isFriend;openModal('publicProfileModal')
+  if(!uid)return;let p=fallback;try{const sn=await get(ref(db,`directory/${uid}`));if(sn.exists())p=sn.val()}catch{}currentPublicProfile={uid,...p};$('publicProfileAvatar').src=p.avatar||DEFAULT_AVATAR;$('publicProfileName').textContent=p.nome||'Usuário';if($('publicProfileUsername'))$('publicProfileUsername').textContent=p.username?`@${normalizeUsername(p.username)}`:'@sem_usuario';$('publicProfileBio').textContent=p.bio||'Conta Gremory';$('publicProfileAnime').textContent=p.favoriteAnime||'—';$('publicProfileSince').textContent=p.createdAt?shortDate(p.createdAt):'—';const isFriend=!!state.friends?.[uid];const btn=$('publicProfileActionBtn');btn.textContent=isFriend?'Amigo':'Adicionar amigo';btn.disabled=isFriend||uid===state.user?.uid;$('publicProfileDuelBtn').disabled=!isFriend;openModal('publicProfileModal')
 }
 $('publicProfileActionBtn')?.addEventListener('click',()=>{if(currentPublicProfile)sendFriendRequest(currentPublicProfile.uid,currentPublicProfile)});
 $('publicProfileDuelBtn')?.addEventListener('click',()=>{if(!currentPublicProfile)return;closeModal('publicProfileModal');navigate('pokemon');$('duelFriendSelect').value=currentPublicProfile.uid;setTimeout(()=>$('sendDuelChallengeBtn')?.scrollIntoView({behavior:'smooth',block:'center'}),80)});
@@ -593,7 +814,7 @@ function setTttGame(g){
   state.ttt.game=g;const panel=$('tttGamePanel');
   if(!g||g.status!=='active'){
     panel.hidden=true;const won=!!g&&g.winnerUid===state.user?.uid;const draw=!!g&&!g.winnerUid;$('tttStatus').textContent=won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';
-    if(g?.status==='finished'&&g.id&&state.ttt.lastResultId!==g.id){state.ttt.lastResultId=g.id;const reward=g.reward||{};showGameResult({title:draw?'Empate!':won?'Vitória!':'Partida encerrada',text:draw?'Ninguém venceu essa rodada.':won?(reward.rupias?`Você ganhou ₹${reward.rupias}.`:'Você venceu. O limite diário de recompensa pode ter sido atingido.'):'Seu amigo venceu esta rodada.',win:won,icon:draw?'＝':won?'✦':'✕'})}
+    if(g?.status==='finished'&&g.id&&state.ttt.lastResultId!==g.id){state.ttt.lastResultId=g.id;if(state.user)localStorage.setItem(`gremory:tttSeen:${state.user.uid}`,g.id);const reward=g.reward||{};showGameResult({title:draw?'Empate!':won?'Vitória!':'Partida encerrada',text:draw?'Ninguém venceu essa rodada.':won?(reward.rupias?`Você ganhou ₹${reward.rupias}.`:'Você venceu. O limite diário de recompensa pode ter sido atingido.'):'Seu amigo venceu esta rodada.',win:won,icon:draw?'＝':won?'✦':'✕'})}
     return
   }
   panel.hidden=false;$('tttStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderTtt(g)
@@ -880,7 +1101,7 @@ async function leaveWatchVoice(silent=false){
 $('watchJoinVoiceBtn')?.addEventListener('click',joinWatchVoice);$('watchMicBtn')?.addEventListener('click',toggleWatchMic);$('watchShareBtn')?.addEventListener('click',toggleWatchScreen);$('watchScreenFullscreenBtn')?.addEventListener('click',fullscreenWatchScreen);$('watchLeaveVoiceBtn')?.addEventListener('click',()=>leaveWatchAudio(false));watchVoiceUi();
 
 // RPG
-$('createRoomOpen').addEventListener('click',()=>openModal('createRoomModal'));$('refreshRoomsBtn').addEventListener('click',loadMyRooms);$('joinRoomForm').addEventListener('submit',async ev=>{ev.preventDefault();const code=$('joinRoomCode').value.trim().toUpperCase();if(code)await joinRoom(code)});$('createRoomForm').addEventListener('submit',createRoom);$('leaveTableView').addEventListener('click',closeTableView);$('exitRoomBtn').addEventListener('click',exitRoom);$('copyInviteBtn').addEventListener('click',copyInvite);$('characterBtn').addEventListener('click',openCharacter);$('characterForm').addEventListener('submit',saveCharacter);$('editSceneBtn').addEventListener('click',()=>{if(!isRoomOwner())return toast('Só o mestre pode editar a cena.');const s=state.room?.scene||{};$('sceneTitleInput').value=s.title||'';$('sceneDescriptionInput').value=s.description||'';$('sceneImageInput').value=s.image||'';openModal('sceneModal')});$('sceneForm').addEventListener('submit',saveScene);$('saveRulesBtn').addEventListener('click',saveRules);$('rollInitiativeBtn').addEventListener('click',rollInitiative);$('chatForm').addEventListener('submit',sendChat);$('customRollForm').addEventListener('submit',ev=>{ev.preventDefault();rollDice($('customRollInput').value.trim())});$$('[data-die]').forEach(btn=>btn.addEventListener('click',()=>rollDice(`1d${btn.dataset.die}`)));$$('[data-table-tab]').forEach(btn=>btn.addEventListener('click',()=>{const tab=btn.dataset.tableTab;$$('[data-table-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tableTab===tab));$$('[data-table-pane]').forEach(p=>p.classList.toggle('active',p.dataset.tablePane===tab))}));
+$('createRoomOpen').addEventListener('click',()=>openModal('createRoomModal'));$('refreshRoomsBtn').addEventListener('click',loadMyRooms);$('joinRoomForm').addEventListener('submit',async ev=>{ev.preventDefault();const code=$('joinRoomCode').value.trim().toUpperCase();if(code)await joinRoom(code)});$('createRoomForm').addEventListener('submit',createRoom);$('leaveTableView').addEventListener('click',closeTableView);$('exitRoomBtn').addEventListener('click',exitRoom);$('copyInviteBtn').addEventListener('click',copyInvite);$('characterBtn').addEventListener('click',openCharacter);$('characterForm').addEventListener('submit',saveCharacter);$('editSceneBtn').addEventListener('click',()=>{if(!isRoomOwner())return toast('Só o mestre pode editar a cena.');const s=state.room?.scene||{};$('sceneTitleInput').value=s.title||'';$('sceneDescriptionInput').value=s.description||'';$('sceneImageInput').value=s.image||'';openModal('sceneModal')});$('sceneForm').addEventListener('submit',saveScene);$('saveRulesBtn').addEventListener('click',saveRules);$('rollInitiativeBtn').addEventListener('click',rollInitiative);$('clearInitiativeBtn')?.addEventListener('click',clearInitiative);$('chatForm').addEventListener('submit',sendChat);$('customRollForm').addEventListener('submit',ev=>{ev.preventDefault();rollDice($('customRollInput').value.trim())});$$('[data-die]').forEach(btn=>btn.addEventListener('click',()=>rollDice(`1d${btn.dataset.die}`)));$$('[data-table-tab]').forEach(btn=>btn.addEventListener('click',()=>{const tab=btn.dataset.tableTab;$$('[data-table-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tableTab===tab));$$('[data-table-pane]').forEach(p=>p.classList.toggle('active',p.dataset.tablePane===tab))}));
 async function uniqueRoomCode(){for(let i=0;i<8;i++){const c=randomCode();const s=await get(ref(db,`rpgRooms/${c}`));if(!s.exists())return c}throw new Error('Não foi possível gerar o código.')}
 async function createRoom(ev){ev.preventDefault();if(!state.user)return;try{const code=await uniqueRoomCode();const now=nowIso();const name=$('roomNameInput').value.trim();const room={meta:{code,name,system:$('roomSystemInput').value,privacy:'invite',ownerUid:state.user.uid,createdAt:now},scene:{title:'A aventura começa aqui',description:'',image:''},rules:'',members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Mestre',joinedAt:now}}};await set(ref(db,`rpgRooms/${code}`),room);await set(ref(db,`rpgUserRooms/${state.user.uid}/${code}`),{code,name,system:room.meta.system,role:'Mestre',joinedAt:now});closeModal('createRoomModal');$('createRoomForm').reset();await openRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível criar a mesa.'),6000)}}
 async function loadMyRooms(){if(!state.user)return;const wrap=$('myRooms');wrap.innerHTML='<div class="loading-line">Carregando...</div>';try{const s=await get(ref(db,`rpgUserRooms/${state.user.uid}`));wrap.innerHTML='';const rooms=s.exists()?Object.values(s.val()):[];$('homeRpgRecent').textContent=rooms.length?`${rooms.length} mesa${rooms.length===1?'':'s'}`:'Suas mesas';if(!rooms.length){wrap.innerHTML='<div class="empty-state small">Nenhuma mesa.</div>';return}rooms.sort((a,b)=>String(b.joinedAt||'').localeCompare(String(a.joinedAt||''))).forEach(r=>{const item=document.createElement('div');item.className='room-item';const c=document.createElement('div');const st=document.createElement('strong');st.textContent=r.name||r.code;const sm=document.createElement('small');sm.textContent=`${r.system||'Livre'} • ${r.code}`;c.append(st,sm);const acts=document.createElement('div');acts.className='room-item-actions';const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=()=>openRoom(r.code);acts.appendChild(b);if(r.role==='Mestre'){const del=document.createElement('button');del.className='btn danger-ghost';del.textContent='Apagar';del.onclick=()=>deleteRoomFromLobby(r.code,r.name);acts.appendChild(del)}item.append(c,acts);wrap.appendChild(item)})}catch(e){wrap.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
@@ -894,21 +1115,51 @@ async function openRoom(code){clearRoomSubscriptions();state.roomCode=code;$('rp
 function closeTableView(){leaveVoice(true).catch(()=>{});clearRoomSubscriptions();state.roomCode=null;state.room=null;$('rpgTable').hidden=true;$('rpgLobby').hidden=false;loadMyRooms()}
 async function exitRoom(){if(!state.user||!state.roomCode)return;const code=state.roomCode;try{if(isRoomOwner()){if(!confirm('Excluir esta mesa para todos?'))return;const members=state.room?.members||{};await Promise.all(Object.keys(members).map(uid=>remove(ref(db,`rpgUserRooms/${uid}/${code}`)).catch(()=>{})));await remove(ref(db,`rpgRooms/${code}`))}else{await remove(ref(db,`rpgRooms/${code}/members/${state.user.uid}`));await remove(ref(db,`rpgUserRooms/${state.user.uid}/${code}`))}closeTableView()}catch(e){toast(permissionMessage(e),6000)}}
 function isRoomOwner(){return !!state.user&&state.room?.meta?.ownerUid===state.user.uid}
-function renderRoom(){const r=state.room||{};$('tableRoomName').textContent=r.meta?.name||'Mesa';$('tableSystem').textContent=r.meta?.system||'Livre';$('tableCode').textContent=state.roomCode||'';renderMembers(r.members||{},r.characters||{});renderInitiative(r.initiative||{});renderScene(r.scene||{});renderRolls(r.rolls||{});renderChat(r.messages||{});$('roomRules').value=r.rules||'';$('roomRules').readOnly=!isRoomOwner();$('saveRulesBtn').hidden=!isRoomOwner();$('editSceneBtn').hidden=!isRoomOwner();const mine=r.characters?.[state.user?.uid];if(mine)fillCharacterForm(mine)}
-function renderMembers(members,chars){const wrap=$('memberList');wrap.innerHTML='';const list=Object.values(members);$('memberCount').textContent=String(list.length);list.forEach(m=>{const row=document.createElement('div');row.className='member-item';const img=document.createElement('img');img.src=m.avatar||DEFAULT_AVATAR;const s=document.createElement('span');const st=document.createElement('strong');st.textContent=m.name||'Jogador';const sm=document.createElement('small');const ch=chars[m.uid];sm.textContent=ch?`${ch.name}${ch.className?' • '+ch.className:''}`:(m.role||'Jogador');s.append(st,sm);row.append(img,s);wrap.appendChild(row)})}
+function roomCharacter(uid=state.user?.uid){return state.room?.characters?.[uid]||null}
+function rpgDisplayName(uid=state.user?.uid){
+  const ch=roomCharacter(uid),member=state.room?.members?.[uid];
+  return ch?.playerName||ch?.name||member?.name||state.directory?.[uid]?.nome||'Jogador'
+}
+function rpgAvatar(uid=state.user?.uid){
+  const ch=roomCharacter(uid),member=state.room?.members?.[uid];
+  return ch?.playerAvatar||member?.avatar||state.directory?.[uid]?.avatar||DEFAULT_AVATAR
+}
+
+function renderRoom(){
+  const r=state.room||{};$('tableRoomName').textContent=r.meta?.name||'Mesa';$('tableSystem').textContent=r.meta?.system||'Livre';$('tableCode').textContent=state.roomCode||'';
+  renderMembers(r.members||{},r.characters||{});renderInitiative(r.initiative||{});renderScene(r.scene||{});renderRolls(r.rolls||{});renderChat(r.messages||{});
+  $('roomRules').value=r.rules||'';$('roomRules').readOnly=!isRoomOwner();$('saveRulesBtn').hidden=!isRoomOwner();$('editSceneBtn').hidden=!isRoomOwner();if($('clearInitiativeBtn'))$('clearInitiativeBtn').hidden=!isRoomOwner();
+  const mine=r.characters?.[state.user?.uid];
+  if(mine)fillCharacterForm(mine);
+  else if(state.user&&state.roomCode){
+    const key=`gremory:rpgProfilePrompt:${state.roomCode}:${state.user.uid}`;
+    if(!sessionStorage.getItem(key)){sessionStorage.setItem(key,'1');setTimeout(()=>{fillCharacterForm({});openModal('characterModal');toast('Crie seu perfil desta mesa. Ele não altera sua conta Gremory.',4500)},350)}
+  }
+}
+function renderMembers(members,chars){
+  const wrap=$('memberList');wrap.innerHTML='';const list=Object.values(members);$('memberCount').textContent=String(list.length);
+  list.forEach(m=>{const ch=chars[m.uid]||{},row=document.createElement('div');row.className='member-item';const img=document.createElement('img');img.src=ch.playerAvatar||m.avatar||DEFAULT_AVATAR;const s=document.createElement('span');const st=document.createElement('strong');st.textContent=ch.playerName||m.name||'Jogador';const sm=document.createElement('small');sm.textContent=ch.name?`${ch.name}${ch.className?' • '+ch.className:''}${m.role==='Mestre'?' • Mestre':''}`:(m.role||'Jogador');s.append(st,sm);row.append(img,s);wrap.appendChild(row)})
+}
 function renderInitiative(obj){const wrap=$('initiativeList');wrap.innerHTML='';const rows=Object.values(obj).sort((a,b)=>Number(b.value)-Number(a.value));if(!rows.length){wrap.innerHTML='<div class="empty-state small">Sem iniciativa.</div>';return}rows.forEach(x=>{const d=document.createElement('div');d.className='initiative-item';const s=document.createElement('span');s.textContent=x.name||'Jogador';const b=document.createElement('b');b.textContent=String(x.value);d.append(s,b);wrap.appendChild(d)})}
 function renderScene(scene){$('sceneTitle').textContent=scene.title||'A aventura começa aqui';$('sceneDescription').textContent=scene.description||'O mestre pode mudar a cena.';const img=$('sceneImage');if(scene.image){img.src=scene.image;img.hidden=false;$('scenePlaceholder').hidden=true}else{img.hidden=true;$('scenePlaceholder').hidden=false}}
 function valuesRecent(obj,limit=20){return Object.entries(obj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>String(a.at||'').localeCompare(String(b.at||''))).slice(-limit)}
 function renderRolls(obj){const wrap=$('rollLog');wrap.innerHTML='';valuesRecent(obj,12).reverse().forEach(x=>{const d=document.createElement('div');d.className='roll-chip';const s=document.createElement('strong');s.textContent=`${x.formula} = ${x.total}`;const sm=document.createElement('small');sm.textContent=x.name||'Jogador';d.append(s,sm);wrap.appendChild(d)})}
 function renderChat(obj){const wrap=$('chatList');const atBottom=wrap.scrollHeight-wrap.scrollTop-wrap.clientHeight<60;wrap.innerHTML='';valuesRecent(obj,80).forEach(m=>{const d=document.createElement('div');d.className='chat-msg'+(m.uid===state.user?.uid?' mine':'');const head=document.createElement('div');const st=document.createElement('strong');st.textContent=m.name||'Jogador';const t=document.createElement('time');t.textContent=shortDateTime(m.at).split(' ')[1]||'';head.append(st,t);const p=document.createElement('p');p.textContent=m.text||'';d.append(head,p);wrap.appendChild(d)});if(atBottom)wrap.scrollTop=wrap.scrollHeight}
-async function sendChat(ev){ev.preventDefault();if(!state.user||!state.roomCode)return;const text=$('chatInput').value.trim();if(!text)return;$('chatInput').value='';try{await push(ref(db,`rpgRooms/${state.roomCode}/messages`),{uid:state.user.uid,name:displayName(),text:text.slice(0,500),at:nowIso()})}catch(e){toast(permissionMessage(e),6000)}}
+async function sendChat(ev){ev.preventDefault();if(!state.user||!state.roomCode)return;const text=$('chatInput').value.trim();if(!text)return;$('chatInput').value='';try{await push(ref(db,`rpgRooms/${state.roomCode}/messages`),{uid:state.user.uid,name:rpgDisplayName(),text:text.slice(0,500),at:nowIso()})}catch(e){toast(permissionMessage(e),6000)}}
 function secureInt(max){const b=new Uint32Array(1);crypto.getRandomValues(b);return(b[0]%max)+1}
 function parseRoll(formula){const m=String(formula||'').toLowerCase().replace(/\s/g,'').match(/^(\d{1,2})d(4|6|8|10|12|20|100)([+-]\d{1,3})?$/);if(!m)return null;const count=Math.min(20,Number(m[1]));const sides=Number(m[2]);const mod=Number(m[3]||0);const rolls=Array.from({length:count},()=>secureInt(sides));return{formula:`${count}d${sides}${mod>0?'+'+mod:mod<0?mod:''}`,rolls,total:rolls.reduce((a,b)=>a+b,0)+mod}}
-async function rollDice(formula){if(!state.user||!state.roomCode)return;const result=parseRoll(formula);if(!result)return toast('Use algo como 1d20 ou 2d6+3.');try{await push(ref(db,`rpgRooms/${state.roomCode}/rolls`),{uid:state.user.uid,name:displayName(),...result,at:nowIso()})}catch(e){toast(permissionMessage(e),6000)}}
-async function rollInitiative(){if(!state.user||!state.roomCode)return;const value=secureInt(20);const name=state.room?.characters?.[state.user.uid]?.name||displayName();try{await set(ref(db,`rpgRooms/${state.roomCode}/initiative/${state.user.uid}`),{uid:state.user.uid,name,value,at:nowIso()});toast(`Iniciativa: ${value}`)}catch(e){toast(permissionMessage(e),6000)}}
+async function rollDice(formula){if(!state.user||!state.roomCode)return;const result=parseRoll(formula);if(!result)return toast('Use algo como 1d20 ou 2d6+3.');try{await push(ref(db,`rpgRooms/${state.roomCode}/rolls`),{uid:state.user.uid,name:rpgDisplayName(),...result,at:nowIso()})}catch(e){toast(permissionMessage(e),6000)}}
+async function rollInitiative(){if(!state.user||!state.roomCode)return;const value=secureInt(20);const name=state.room?.characters?.[state.user.uid]?.name||rpgDisplayName();try{await set(ref(db,`rpgRooms/${state.roomCode}/initiative/${state.user.uid}`),{uid:state.user.uid,name,value,at:nowIso()});toast(`Iniciativa: ${value}`)}catch(e){toast(permissionMessage(e),6000)}}
+async function clearInitiative(){if(!isRoomOwner()||!state.roomCode)return toast('Só o mestre pode limpar a iniciativa.');if(!confirm('Limpar toda a iniciativa desta cena?'))return;try{await remove(ref(db,`rpgRooms/${state.roomCode}/initiative`));toast('Iniciativa limpa.')}catch(e){toast(permissionMessage(e),6000)}}
 function openCharacter(){if(!state.user||!state.roomCode)return;fillCharacterForm(state.room?.characters?.[state.user.uid]||{});openModal('characterModal')}
-function fillCharacterForm(ch){$('charName').value=ch.name||displayName();$('charClass').value=ch.className||'';$('charLevel').value=ch.level||1;$('charHp').value=ch.hp??10;$('charMaxHp').value=ch.maxHp??10;$('charDefense').value=ch.defense??10;$('charNotes').value=ch.notes||''}
-async function saveCharacter(ev){ev.preventDefault();if(!state.user||!state.roomCode)return;const ch={name:$('charName').value.trim().slice(0,50)||displayName(),className:$('charClass').value.trim().slice(0,50),level:Math.max(1,Number($('charLevel').value||1)),hp:Math.max(0,Number($('charHp').value||0)),maxHp:Math.max(1,Number($('charMaxHp').value||1)),defense:Math.max(0,Number($('charDefense').value||0)),notes:$('charNotes').value.trim().slice(0,1000),updatedAt:nowIso()};try{await set(ref(db,`rpgRooms/${state.roomCode}/characters/${state.user.uid}`),ch);closeModal('characterModal');toast('Personagem salvo.')}catch(e){toast(permissionMessage(e),6000)}}
+function fillCharacterForm(ch){if($('charAlias'))$('charAlias').value=ch.playerName||state.profile?.nome||displayName();if($('charAvatar'))$('charAvatar').value=ch.playerAvatar||avatarFor();$('charName').value=ch.name||'';$('charClass').value=ch.className||'';$('charLevel').value=ch.level||1;$('charHp').value=ch.hp??10;$('charMaxHp').value=ch.maxHp??10;$('charDefense').value=ch.defense??10;$('charNotes').value=ch.notes||''}
+async function saveCharacter(ev){
+  ev.preventDefault();if(!state.user||!state.roomCode)return;
+  const playerName=$('charAlias').value.trim().slice(0,40),name=$('charName').value.trim().slice(0,50);
+  if(!playerName||!name)return toast('Preencha seu nome na mesa e o nome do personagem.');
+  const ch={playerName,playerAvatar:$('charAvatar').value.trim(),name,className:$('charClass').value.trim().slice(0,50),level:Math.max(1,Number($('charLevel').value||1)),hp:Math.max(0,Number($('charHp').value||0)),maxHp:Math.max(1,Number($('charMaxHp').value||1)),defense:Math.max(0,Number($('charDefense').value||0)),notes:$('charNotes').value.trim().slice(0,1000),updatedAt:nowIso()};
+  try{await set(ref(db,`rpgRooms/${state.roomCode}/characters/${state.user.uid}`),ch);closeModal('characterModal');toast('Perfil desta mesa salvo.')}catch(e){toast(permissionMessage(e),6000)}
+}
 async function saveScene(ev){ev.preventDefault();if(!isRoomOwner()||!state.roomCode)return;try{await set(ref(db,`rpgRooms/${state.roomCode}/scene`),{title:$('sceneTitleInput').value.trim().slice(0,80)||'Aventura',description:$('sceneDescriptionInput').value.trim().slice(0,300),image:$('sceneImageInput').value.trim()});closeModal('sceneModal');toast('Cena atualizada.')}catch(e){toast(permissionMessage(e),6000)}}
 async function saveRules(){if(!isRoomOwner()||!state.roomCode)return;try{await set(ref(db,`rpgRooms/${state.roomCode}/rules`),$('roomRules').value.slice(0,4000));toast('Regras salvas.')}catch(e){toast(permissionMessage(e),6000)}}
 async function copyInvite(){if(!state.roomCode)return;const url=`${location.origin}${location.pathname}?rpg=${encodeURIComponent(state.roomCode)}#rpg`;try{await navigator.clipboard.writeText(url);toast('Convite copiado.')}catch{prompt('Copie o convite:',url)}}
@@ -926,7 +1177,7 @@ function voiceUi(){
   if($('leaveVoiceBtn'))$('leaveVoiceBtn').hidden=!joined;
 }
 function peerLabel(uid){
-  return state.room?.members?.[uid]?.name||state.friends?.[uid]?.nome||'Participante';
+  return roomCharacter(uid)?.playerName||state.room?.members?.[uid]?.name||state.friends?.[uid]?.nome||'Participante';
 }
 function ensureRemoteCard(uid){
   const grid=$('remoteMediaGrid');if(!grid)return null;
@@ -999,7 +1250,7 @@ async function joinVoice(){
     const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true},video:false});
     state.rtc.localStream=stream;state.rtc.joined=true;state.rtc.micEnabled=true;state.rtc.processed.clear();
     const presenceRef=ref(db,`rpgVoice/${state.roomCode}/${state.user.uid}`);
-    await set(presenceRef,{uid:state.user.uid,name:displayName(),joinedAt:Date.now()});
+    await set(presenceRef,{uid:state.user.uid,name:rpgDisplayName(),joinedAt:Date.now()});
     try{state.rtc.disconnectRef=onDisconnect(presenceRef);await state.rtc.disconnectRef.remove()}catch{}
     watchRtcInbox();watchVoicePresence();voiceUi();
   }catch(e){toast(e?.name==='NotAllowedError'?'Permita o acesso ao microfone para entrar na voz.':'Não foi possível abrir o microfone.')}
