@@ -205,7 +205,7 @@ function playSiteSound(name,fallbackFreq=720){
 function playNotificationTone(){playSiteSound('notification',720)}
 function playVictoryTone(){playSiteSound('victory',920)}
 function notificationLastSeen(){return Number(localStorage.getItem('gremory:notifSeen')||0)}
-function notificationSignature(n){return [String(n?.type||''),String(n?.title||''),String(n?.text||''),String(n?.link||'')].join('\u241f')}
+function notificationSignature(n){return [String(n?.type||''),String(n?.title||''),String(n?.text||''),String(n?.link||''),String(n?.imageUrl||'')].join('\u241f')}
 function uniqueNotificationRows(source=state.notifications){
   const rows=Object.entries(source||{}).map(([id,v])=>({id,...(v||{})})).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
   const latestBySignature=new Map(),unique=[];
@@ -216,6 +216,41 @@ function uniqueNotificationRows(source=state.notifications){
   }
   return unique;
 }
+function ensureNotificationDetailModal(){
+  let modal=$('notificationDetailModal');
+  if(modal)return modal;
+  modal=document.createElement('div');
+  modal.className='modal';
+  modal.id='notificationDetailModal';
+  modal.setAttribute('aria-hidden','true');
+  modal.innerHTML=`
+    <button class="modal-backdrop" type="button" aria-label="Fechar"></button>
+    <div class="modal-card" style="max-width:560px">
+      <button class="modal-close" type="button" aria-label="Fechar">×</button>
+      <span class="tag">NOTIFICAÇÃO</span>
+      <h2 id="notificationDetailTitle">Aviso da Gremory</h2>
+      <img id="notificationDetailImage" alt="" style="display:none;width:100%;max-height:420px;object-fit:contain;border-radius:16px;margin:10px 0 14px">
+      <p id="notificationDetailText" style="white-space:pre-wrap"></p>
+      <small id="notificationDetailTime"></small>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector('.modal-backdrop')?.addEventListener('click',()=>closeModal('notificationDetailModal'));
+  modal.querySelector('.modal-close')?.addEventListener('click',()=>closeModal('notificationDetailModal'));
+  return modal;
+}
+function openNotificationDetail(n){
+  ensureNotificationDetailModal();
+  $('notificationDetailTitle').textContent=n?.title||'Notificação';
+  $('notificationDetailText').textContent=n?.text||'';
+  $('notificationDetailTime').textContent=shortDateTime(n?.createdAt);
+  const img=$('notificationDetailImage'),url=String(n?.imageUrl||'').trim();
+  if(img){
+    if(url){img.src=url;img.style.display='block'}
+    else{img.removeAttribute('src');img.style.display='none'}
+  }
+  closeModal('notificationModal');
+  openModal('notificationDetailModal');
+}
 function renderNotifications(){
   const rows=uniqueNotificationRows();
   const unseen=rows.filter(x=>Number(x.createdAt||0)>notificationLastSeen()).length,badge=$('notificationBadge');
@@ -224,7 +259,7 @@ function renderNotifications(){
   if(!rows.length){box.innerHTML='<div class="empty-state small">Sua caixa de entrada está vazia.</div>';return}
   rows.slice(0,40).forEach(n=>{
     const d=document.createElement('button');d.type='button';d.className='notification-row';const st=document.createElement('strong');st.textContent=n.title||'Notificação';const sm=document.createElement('span');sm.textContent=n.text||'';const time=document.createElement('small');time.textContent=shortDateTime(n.createdAt);d.append(st,sm,time);
-    d.onclick=()=>{if(n.link?.startsWith('#')){closeModal('notificationModal');navigate(n.link.slice(1))}};box.appendChild(d)
+    d.onclick=()=>{if(n.imageUrl||n.type==='admin_notice'){openNotificationDetail(n);return}if(n.link?.startsWith('#')){closeModal('notificationModal');navigate(n.link.slice(1));return}openNotificationDetail(n)};box.appendChild(d)
   })
 }
 $('notificationBtn')?.addEventListener('click',()=>{localStorage.setItem('gremory:notifSeen',String(Date.now()));renderNotifications();openModal('notificationModal')});
