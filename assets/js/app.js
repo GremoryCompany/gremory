@@ -172,8 +172,12 @@ function startUserSubscriptions(){
   state.userUnsubs.push(onValue(ref(db,'siteUpdates'),s=>{state.updates=s.exists()?s.val():{};renderUpdates()}));
   let notificationBoot=true;
   state.userUnsubs.push(onValue(ref(db,`siteNotifications/${uid}`),s=>{
-    const previousCount=Object.keys(state.notifications||{}).length;state.notifications=s.exists()?s.val():{};renderNotifications();
-    const nextCount=Object.keys(state.notifications||{}).length;if(!notificationBoot&&nextCount>previousCount)playNotificationTone();notificationBoot=false;
+    const previousCount=uniqueNotificationRows(state.notifications).length;
+    state.notifications=s.exists()?s.val():{};
+    const nextCount=uniqueNotificationRows(state.notifications).length;
+    renderNotifications();
+    if(!notificationBoot&&nextCount>previousCount)playNotificationTone();
+    notificationBoot=false;
   }));
   state.userUnsubs.push(onValue(ref(db,`siteBans/${uid}`),s=>{state.ban=s.exists()?s.val():null;applySiteBan()}));
 }
@@ -201,8 +205,19 @@ function playSiteSound(name,fallbackFreq=720){
 function playNotificationTone(){playSiteSound('notification',720)}
 function playVictoryTone(){playSiteSound('victory',920)}
 function notificationLastSeen(){return Number(localStorage.getItem('gremory:notifSeen')||0)}
+function notificationSignature(n){return [String(n?.type||''),String(n?.title||''),String(n?.text||''),String(n?.link||'')].join('\u241f')}
+function uniqueNotificationRows(source=state.notifications){
+  const rows=Object.entries(source||{}).map(([id,v])=>({id,...(v||{})})).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
+  const latestBySignature=new Map(),unique=[];
+  for(const n of rows){
+    const sig=notificationSignature(n),created=Number(n.createdAt||0),latest=latestBySignature.get(sig);
+    if(latest!=null&&Math.abs(latest-created)<=30000)continue;
+    latestBySignature.set(sig,created);unique.push(n);
+  }
+  return unique;
+}
 function renderNotifications(){
-  const rows=Object.entries(state.notifications||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
+  const rows=uniqueNotificationRows();
   const unseen=rows.filter(x=>Number(x.createdAt||0)>notificationLastSeen()).length,badge=$('notificationBadge');
   if(badge){badge.hidden=!unseen;badge.textContent=String(Math.min(99,unseen))}
   const box=$('notificationList');if(!box)return;box.innerHTML='';
@@ -259,7 +274,7 @@ function renderPeople(q=''){
 }
 function personRow(p,{mode='add',requestUid=''}={}){
   const row=document.createElement('div');row.className='person-row clickable-person';const img=document.createElement('img');img.src=p.avatar||DEFAULT_AVATAR;img.alt='';img.onclick=()=>openPublicProfile(p.uid,p);const copy=document.createElement('div');copy.className='person-copy';copy.onclick=()=>openPublicProfile(p.uid,p);const st=document.createElement('strong');st.textContent=p.nome||'Usuário';const sm=document.createElement('small');sm.textContent=p.bio||'Conta Gremory';copy.append(st,sm);const acts=document.createElement('div');acts.className='person-actions';
-  const view=document.createElement('button');view.className='mini-btn';view.textContent='Perfil';view.onclick=()=>openPublicProfile(p.uid,p);acts.appendChild(view);
+  const view=document.createElement('button');view.className='mini-btn profile-action';view.textContent='Perfil';view.onclick=()=>openPublicProfile(p.uid,p);acts.appendChild(view);
   if(mode==='add'){const b=document.createElement('button');b.className='mini-btn primary';b.textContent='Adicionar';b.onclick=()=>sendFriendRequest(p.uid,p);acts.appendChild(b)}
   if(mode==='friend'){const b=document.createElement('button');b.className='mini-btn';b.textContent='Pokémon';b.onclick=()=>{navigate('pokemon');$('duelFriendSelect').value=p.uid};const r=document.createElement('button');r.className='mini-btn danger';r.textContent='Remover';r.onclick=()=>removeFriend(p.uid);acts.append(b,r)}
   if(mode==='request'){const a=document.createElement('button');a.className='mini-btn primary';a.textContent='Aceitar';a.onclick=()=>acceptFriendRequest(requestUid,p);const d=document.createElement('button');d.className='mini-btn';d.textContent='Recusar';d.onclick=()=>declineFriendRequest(requestUid);acts.append(a,d)}
