@@ -124,3 +124,36 @@ body.fx-frame-crimson .avatar-button,body.fx-frame-crimson .profile-summary img{
 .watch-screen-stage{margin-top:12px;border:1px solid #303743;border-radius:18px;background:#030407;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,.22)}.watch-screen-stage[hidden]{display:none!important}.watch-screen-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid #202631;background:#0b0e13}.watch-screen-head>div{display:flex;align-items:center;gap:8px;min-width:0}.watch-screen-head strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}.watch-screen-stage video{display:block;width:100%;aspect-ratio:16/9;max-height:min(68vh,720px);object-fit:contain;background:#000}.watch-screen-stage:fullscreen{width:100vw;height:100vh;border:0;border-radius:0;background:#000;display:flex;flex-direction:column}.watch-screen-stage:fullscreen .watch-screen-head{position:absolute;z-index:2;top:12px;left:12px;right:12px;border-radius:12px;background:rgba(7,9,13,.78);backdrop-filter:blur(10px)}.watch-screen-stage:fullscreen video{width:100%;height:100%;max-height:none;aspect-ratio:auto;object-fit:contain}.screen-share-btn.active{border-color:#d5455f;background:#2b1118;color:#fff}.watch-call-card{display:grid;grid-template-columns:38px minmax(0,1fr);gap:9px;align-items:center;padding:9px;border:1px solid #242a34;background:#0d1016;border-radius:13px}.watch-call-card img{width:38px!important;height:38px!important;border-radius:11px!important;object-fit:cover!important}.watch-call-card>div{min-width:0;display:flex;flex-direction:column}.watch-call-card strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}.watch-call-card small{color:var(--muted);font-size:10px;margin-top:2px}.watch-remote-media{display:grid!important;grid-template-columns:1fr!important;gap:8px!important}.watch-controls .screen-share-btn{margin-left:2px}
 @media(max-width:820px){.watch-screen-stage video{max-height:58vh}.watch-controls{grid-template-columns:1fr 1fr}.watch-controls .pill{grid-column:1/-1}.watch-controls .screen-share-btn{margin-left:0}}
 @media(max-width:480px){.watch-controls{grid-template-columns:1fr}.watch-controls .pill{grid-column:auto}.watch-screen-head{align-items:stretch}.watch-screen-head .btn{min-height:38px}.watch-screen-stage video{max-height:62vh}}
+
+
+/* V5.3 — mobile dock arrastável + Watch Party mais previsível */
+@media(max-width:820px){
+  .mobile-nav-v5{
+    display:flex!important;
+    grid-template-columns:none!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    scroll-snap-type:x proximity;
+    overscroll-behavior-x:contain;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-x;
+    gap:2px;
+    justify-content:flex-start!important;
+    padding:5px 7px!important;
+    scrollbar-width:none;
+  }
+  .mobile-nav-v5::-webkit-scrollbar{display:none}
+  .mobile-nav-v5 button{
+    flex:0 0 72px!important;
+    min-width:72px!important;
+    scroll-snap-align:center;
+    padding:0 5px!important;
+  }
+  .mobile-nav-v5 button.active{box-shadow:inset 0 0 0 1px rgba(255,107,130,.12)}
+}
+@media(max-width:480px){
+  .mobile-nav-v5 button{flex-basis:68px!important;min-width:68px!important}
+}
+.watch-source-note{font-size:11px;color:var(--muted);margin-top:7px;line-height:1.45}
+.watch-player-shell iframe.drive-iframe{background:#0a0c10}
+.watch-controls .screen-share-btn{order:3}
