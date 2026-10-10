@@ -38,7 +38,7 @@ const state = {
   teamDraft:[], pokemonEncounter:null, pokemonHealing:{},
   ttt:{game:null,unsub:null,index:{}},
   watchCode:null,watchRoom:null,watchUnsubs:[],watchApplying:false,
-  watchRtc:{joined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),presenceUnsub:null,inboxUnsub:null,micEnabled:true},
+  watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null},
   rtc:{joined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true},premiumPoll:null
 };
 
@@ -440,12 +440,12 @@ async function loadWatchRooms(){if(!state.user)return;const box=$('watchRoomsLis
 async function joinWatchRoom(code){if(!state.user)return;try{const sn=await get(ref(db,`watchRooms/${code}`));if(!sn.exists())throw new Error('Sala não encontrada.');const room=sn.val(),member={uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:room.meta?.ownerUid===state.user.uid?'Host':'Participante',joinedAt:nowIso()};await set(ref(db,`watchRooms/${code}/members/${state.user.uid}`),member);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name:room.meta?.name||code,role:member.role,joinedAt:nowIso()});$('watchJoinCode').value='';await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível entrar.'))}}
 async function openWatchRoom(code){clearUnsubs(state.watchUnsubs);state.watchCode=code;$('watchLobby').hidden=true;$('watchRoom').hidden=false;state.watchUnsubs.push(onValue(ref(db,`watchRooms/${code}`),sn=>{if(!sn.exists()){toast('Essa sala não existe mais.');closeWatchRoom(false);return}state.watchRoom=sn.val();renderWatchRoom()}));navigate('watch')}
 function isWatchHost(){return !!state.user&&state.watchRoom?.meta?.ownerUid===state.user.uid}
-function renderWatchRoom(){const r=state.watchRoom||{},m=r.meta||{};$('watchRoomName').textContent=m.name||'Watch Party';$('watchCode').textContent=state.watchCode||'------';$('watchHostPill').textContent=isWatchHost()?'Host':'Participante';$('watchMemberCount').textContent=String(Object.keys(r.members||{}).length);const list=$('watchMemberList');list.innerHTML='';Object.values(r.members||{}).forEach(x=>{const d=document.createElement('div');d.className='member-row';const img=document.createElement('img');img.src=x.avatar||DEFAULT_AVATAR;const c=document.createElement('div');c.innerHTML=`<strong>${escText(x.name||'Usuário')}</strong><small>${escText(x.role||'Participante')}</small>`;d.append(img,c);list.appendChild(d)});$('watchMediaInput').disabled=!isWatchHost();$('watchMediaForm').querySelector('button').disabled=!isWatchHost();$('watchPlayBtn').disabled=!isWatchHost();renderWatchMedia(r.media||{})}
-function youtubeEmbed(url){try{const u=new URL(url);let id='';if(u.hostname.includes('youtu.be'))id=u.pathname.slice(1);else id=u.searchParams.get('v')||u.pathname.split('/').filter(Boolean).pop();return id?`https://www.youtube.com/embed/${encodeURIComponent(id)}?enablejsapi=1&playsinline=1`:''}catch{return''}}
+function renderWatchRoom(){const r=state.watchRoom||{},m=r.meta||{};$('watchRoomName').textContent=m.name||'Watch Party';$('watchCode').textContent=state.watchCode||'------';$('watchHostPill').textContent=isWatchHost()?'Host':'Participante';$('watchMemberCount').textContent=String(Object.keys(r.members||{}).length);const list=$('watchMemberList');list.innerHTML='';Object.values(r.members||{}).forEach(x=>{const d=document.createElement('div');d.className='member-item watch-member-item';const img=document.createElement('img');img.src=x.avatar||DEFAULT_AVATAR;const c=document.createElement('div');c.innerHTML=`<strong>${escText(x.name||'Usuário')}</strong><small>${escText(x.role||'Participante')}</small>`;d.append(img,c);list.appendChild(d)});$('watchMediaInput').disabled=!isWatchHost();$('watchMediaForm').querySelector('button').disabled=!isWatchHost();$('watchPlayBtn').disabled=!isWatchHost();renderWatchMedia(r.media||{});watchVoiceUi();if(!state.watchRtc.joined)ensureWatchRtcSession().catch(()=>{})}
+function youtubeEmbed(url){try{const u=new URL(url);let id='';if(u.hostname.includes('youtu.be'))id=u.pathname.slice(1);else if(u.hostname.includes('youtube.com')){id=u.searchParams.get('v')||u.pathname.split('/').filter(Boolean).pop()}if(!id)return'';const origin=encodeURIComponent(location.origin);return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?enablejsapi=1&playsinline=1&origin=${origin}&rel=0`}catch{return''}}
 function watchMediaPosition(media={}){return Number(media.position||0)+(media.playing?Math.max(0,(Date.now()-Number(media.updatedAt||Date.now()))/1000):0)}
 function youtubeCommand(iframe,func,args=[]){try{iframe?.contentWindow?.postMessage(JSON.stringify({event:'command',func,args}),'*')}catch{}}
 function applyYoutubeWatchState(iframe,media={}){const target=watchMediaPosition(media);youtubeCommand(iframe,'seekTo',[target,true]);youtubeCommand(iframe,media.playing?'playVideo':'pauseVideo',[])}
-function renderWatchMedia(media){const shell=$('watchPlayerShell');const url=String(media.url||'');if(!url){shell.innerHTML='<div class="empty-state">Cole um link de vídeo ou compartilhe sua tela.</div>';return}const yt=youtubeEmbed(url);if(yt){let f=shell.querySelector('iframe');if(!f||shell.dataset.url!==url){shell.innerHTML='';f=document.createElement('iframe');f.className='watch-iframe';f.src=yt;f.allow='autoplay; encrypted-media; picture-in-picture';f.allowFullscreen=true;shell.appendChild(f);shell.dataset.url=url;f.addEventListener('load',()=>setTimeout(()=>applyYoutubeWatchState(f,state.watchRoom?.media||media),350))}else setTimeout(()=>applyYoutubeWatchState(f,media),40);return}let v=shell.querySelector('video');if(!v||shell.dataset.url!==url){shell.innerHTML='';v=document.createElement('video');v.className='watch-video';v.src=url;v.controls=isWatchHost();v.playsInline=true;shell.appendChild(v);shell.dataset.url=url;v.addEventListener('play',()=>{if(isWatchHost()&&!state.watchApplying)publishWatchPlayer(true)});v.addEventListener('pause',()=>{if(isWatchHost()&&!state.watchApplying)publishWatchPlayer(false)});v.addEventListener('seeked',()=>{if(isWatchHost()&&!state.watchApplying)publishWatchPlayer(!v.paused)})}if(!isWatchHost()){const target=watchMediaPosition(media);if(Math.abs((v.currentTime||0)-target)>2){state.watchApplying=true;try{v.currentTime=target}catch{}setTimeout(()=>state.watchApplying=false,200)}if(media.playing&&v.paused)v.play().catch(()=>{});if(!media.playing&&!v.paused)v.pause()}}
+function renderWatchMedia(media){const shell=$('watchPlayerShell');const url=String(media.url||'');if(!url){shell.innerHTML='<div class="empty-state">Cole um link de vídeo ou compartilhe sua tela.</div>';return}const yt=youtubeEmbed(url);if(yt){let f=shell.querySelector('iframe');if(!f||shell.dataset.url!==url){shell.innerHTML='';f=document.createElement('iframe');f.className='watch-iframe';f.src=yt;f.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';f.allowFullscreen=true;shell.appendChild(f);shell.dataset.url=url;f.addEventListener('load',()=>setTimeout(()=>applyYoutubeWatchState(f,state.watchRoom?.media||media),350))}else setTimeout(()=>applyYoutubeWatchState(f,media),40);return}let v=shell.querySelector('video');if(!v||shell.dataset.url!==url){shell.innerHTML='';v=document.createElement('video');v.className='watch-video';v.src=url;v.controls=isWatchHost();v.playsInline=true;shell.appendChild(v);shell.dataset.url=url;v.addEventListener('play',()=>{if(isWatchHost()&&!state.watchApplying)publishWatchPlayer(true)});v.addEventListener('pause',()=>{if(isWatchHost()&&!state.watchApplying)publishWatchPlayer(false)});v.addEventListener('seeked',()=>{if(isWatchHost()&&!state.watchApplying)publishWatchPlayer(!v.paused)})}if(!isWatchHost()){const target=watchMediaPosition(media);if(Math.abs((v.currentTime||0)-target)>2){state.watchApplying=true;try{v.currentTime=target}catch{}setTimeout(()=>state.watchApplying=false,200)}if(media.playing&&v.paused)v.play().catch(()=>{});if(!media.playing&&!v.paused)v.pause()}}
 async function setWatchMedia(ev){ev.preventDefault();if(!isWatchHost())return;const url=$('watchMediaInput').value.trim();if(!/^https?:\/\//i.test(url))return toast('Use um link http/https.');await set(ref(db,`watchRooms/${state.watchCode}/media`),{url,type:youtubeEmbed(url)?'youtube':'video',playing:false,position:0,updatedAt:Date.now()}).catch(e=>toast(permissionMessage(e)))}
 async function publishWatchPlayer(playing){if(!isWatchHost())return;const shell=$('watchPlayerShell'),v=shell.querySelector('video'),media=state.watchRoom?.media||{};const position=v?Number(v.currentTime||0):watchMediaPosition(media);await update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:!!playing,position,updatedAt:Date.now()}).catch(()=>{})}
 async function toggleWatchPlayback(){if(!isWatchHost())return;const shell=$('watchPlayerShell'),v=shell.querySelector('video'),media=state.watchRoom?.media||{};if(v){if(v.paused)v.play().catch(()=>{});else v.pause();return}const iframe=shell.querySelector('iframe');if(iframe){const next=!media.playing;await update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:next,position:watchMediaPosition(media),updatedAt:Date.now()}).catch(()=>{});return}toast('Carregue um vídeo primeiro.')}
@@ -455,19 +455,147 @@ async function exitWatchRoom(){if(!state.user||!state.watchCode)return;const cod
 async function deleteWatchRoom(code,name='Sala'){if(!state.user||!code||!confirm(`Apagar "${name||code}" para todos?`))return;try{const sn=await get(ref(db,`watchRooms/${code}`));const room=sn.val()||{};if(room.meta?.ownerUid!==state.user.uid)throw new Error('Só o host pode apagar.');await Promise.all(Object.keys(room.members||{}).map(uid=>remove(ref(db,`watchUserRooms/${uid}/${code}`)).catch(()=>{})));await remove(ref(db,`watchRooms/${code}`));await remove(ref(db,`watchVoice/${code}`)).catch(()=>{});await remove(ref(db,`watchRtc/${code}`)).catch(()=>{});await closeWatchRoom(false);toast('Sala apagada.')}catch(e){toast(permissionMessage(e,e.message))}}
 
 // WebRTC da Watch Party (separado do RPG)
-function watchVoiceUi(){const joined=state.watchRtc.joined;$('watchJoinVoiceBtn').hidden=joined;$('watchMicBtn').hidden=!joined;$('watchShareBtn').hidden=!joined;$('watchLeaveVoiceBtn').hidden=!joined;if(joined)$('watchMicBtn').textContent=state.watchRtc.micEnabled?'Silenciar':'Ativar microfone'}
-function attachWatchRemote(uid,stream){state.watchRtc.remoteStreams.set(uid,stream);let card=document.querySelector(`[data-watch-peer="${uid}"]`);if(!card){card=document.createElement('div');card.className='remote-media-card';card.dataset.watchPeer=uid;const video=document.createElement('video');video.autoplay=true;video.playsInline=true;const label=document.createElement('small');label.textContent=state.watchRoom?.members?.[uid]?.name||'Participante';card.append(video,label);$('watchRemoteMedia').appendChild(card)}card.querySelector('video').srcObject=stream}
-function removeWatchPeer(uid){const pc=state.watchRtc.peers.get(uid);try{pc?.close()}catch{}state.watchRtc.peers.delete(uid);state.watchRtc.remoteStreams.delete(uid);document.querySelector(`[data-watch-peer="${uid}"]`)?.remove()}
+function watchVoiceUi(){
+  const rtc=state.watchRtc,session=rtc.joined,audio=rtc.audioJoined;
+  if($('watchJoinVoiceBtn'))$('watchJoinVoiceBtn').hidden=audio;
+  if($('watchMicBtn')){$('watchMicBtn').hidden=!audio;$('watchMicBtn').textContent=rtc.micEnabled?'Silenciar':'Ativar microfone'}
+  if($('watchShareBtn')){$('watchShareBtn').hidden=!state.watchCode;$('watchShareBtn').textContent=rtc.screenStream?'Parar compartilhamento':'Compartilhar tela';$('watchShareBtn').classList.toggle('active',!!rtc.screenStream)}
+  if($('watchLeaveVoiceBtn'))$('watchLeaveVoiceBtn').hidden=!audio;
+}
+function watchPeerName(uid){return state.watchRoom?.members?.[uid]?.name||'Participante'}
+function ensureWatchCallCard(uid){
+  const grid=$('watchRemoteMedia');if(!grid)return null;
+  let card=grid.querySelector(`[data-watch-peer="${CSS.escape(uid)}"]`);
+  if(!card){
+    card=document.createElement('div');card.className='watch-call-card';card.dataset.watchPeer=uid;
+    const avatar=document.createElement('img');avatar.src=state.watchRoom?.members?.[uid]?.avatar||DEFAULT_AVATAR;avatar.alt='';
+    const copy=document.createElement('div');const name=document.createElement('strong');name.textContent=watchPeerName(uid);const status=document.createElement('small');status.textContent='Conectado';copy.append(name,status);
+    const audio=document.createElement('audio');audio.autoplay=true;audio.muted=!state.watchRtc.audioJoined;card.append(avatar,copy,audio);grid.appendChild(card)
+  }
+  return card;
+}
+function watchRemoteHasScreen(stream){
+  return !!stream?.getVideoTracks?.().some(t=>t.readyState==='live'&&!t.muted);
+}
+function refreshWatchScreenStage(){
+  const stage=$('watchScreenStage'),video=$('watchScreenVideo'),label=$('watchScreenLabel');if(!stage||!video)return;
+  let stream=null,uid=null,isLocal=false;
+  const localTrack=state.watchRtc.screenStream?.getVideoTracks?.()[0];
+  if(localTrack&&localTrack.readyState==='live'){stream=state.watchRtc.screenStream;uid=state.user?.uid;isLocal=true}
+  if(!stream){
+    for(const [peerUid,remote] of state.watchRtc.remoteStreams.entries()){
+      if(watchRemoteHasScreen(remote)){stream=remote;uid=peerUid;break}
+    }
+  }
+  state.watchRtc.activeScreenUid=uid||null;
+  if(!stream){video.srcObject=null;stage.hidden=true;return}
+  stage.hidden=false;
+  if(video.srcObject!==stream)video.srcObject=stream;
+  video.muted=isLocal;
+  if(label)label.textContent=isLocal?'Você está compartilhando':`${watchPeerName(uid)} está compartilhando`;
+}
+function attachWatchRemote(uid,stream){
+  state.watchRtc.remoteStreams.set(uid,stream);
+  const card=ensureWatchCallCard(uid),status=card?.querySelector('small'),audio=card?.querySelector('audio');
+  if(audio&&audio.srcObject!==stream)audio.srcObject=stream;if(audio)audio.muted=!state.watchRtc.audioJoined;
+  if(status)status.textContent=watchRemoteHasScreen(stream)?'Compartilhando tela':'Conectado';
+  for(const track of stream?.getVideoTracks?.()||[]){const refresh=()=>{if(status)status.textContent=watchRemoteHasScreen(stream)?'Compartilhando tela':'Conectado';refreshWatchScreenStage()};track.onmute=refresh;track.onunmute=refresh;track.onended=refresh}
+  refreshWatchScreenStage();
+}
+function removeWatchPeer(uid){
+  const pc=state.watchRtc.peers.get(uid);try{pc?.close()}catch{}state.watchRtc.peers.delete(uid);state.watchRtc.remoteStreams.delete(uid);
+  $('watchRemoteMedia')?.querySelector(`[data-watch-peer="${CSS.escape(uid)}"]`)?.remove();refreshWatchScreenStage()
+}
 async function sendWatchRtc(targetUid,payload){if(!state.user||!state.watchCode)return;await push(ref(db,`watchRtc/${state.watchCode}/${targetUid}`),{fromUid:state.user.uid,at:Date.now(),...payload})}
-async function createWatchPeer(peerUid,initiator=false){if(state.watchRtc.peers.has(peerUid))return state.watchRtc.peers.get(peerUid);const pc=new RTCPeerConnection(RTC_CONFIG);state.watchRtc.peers.set(peerUid,pc);const remote=new MediaStream();attachWatchRemote(peerUid,remote);for(const track of state.watchRtc.localStream?.getAudioTracks?.()||[])pc.addTrack(track,state.watchRtc.localStream);const tr=pc.addTransceiver('video',{direction:'sendrecv'});pc.ontrack=ev=>{const stream=state.watchRtc.remoteStreams.get(peerUid)||remote;if(!stream.getTracks().some(t=>t.id===ev.track.id))stream.addTrack(ev.track);attachWatchRemote(peerUid,stream)};pc.onicecandidate=ev=>{if(ev.candidate)sendWatchRtc(peerUid,{type:'candidate',candidate:ev.candidate.toJSON()}).catch(()=>{})};pc.onconnectionstatechange=()=>{if(['failed','closed','disconnected'].includes(pc.connectionState))setTimeout(()=>{if(pc.connectionState!=='connected')removeWatchPeer(peerUid)},1800)};if(state.watchRtc.screenStream?.getVideoTracks?.()[0])await tr.sender.replaceTrack(state.watchRtc.screenStream.getVideoTracks()[0]);if(initiator){const offer=await pc.createOffer();await pc.setLocalDescription(offer);await sendWatchRtc(peerUid,{type:'offer',sdp:offer.sdp})}return pc}
-async function handleWatchRtc(id,msg){if(!msg||state.watchRtc.processed.has(id)||!state.watchRtc.joined||!state.user)return;state.watchRtc.processed.add(id);const from=String(msg.fromUid||'');if(!from||from===state.user.uid)return;try{const pc=await createWatchPeer(from,false);if(msg.type==='offer'){await pc.setRemoteDescription({type:'offer',sdp:msg.sdp});const a=await pc.createAnswer();await pc.setLocalDescription(a);await sendWatchRtc(from,{type:'answer',sdp:a.sdp})}else if(msg.type==='answer'){if(!pc.currentRemoteDescription)await pc.setRemoteDescription({type:'answer',sdp:msg.sdp})}else if(msg.type==='candidate'&&msg.candidate){try{await pc.addIceCandidate(msg.candidate)}catch{}}}finally{remove(ref(db,`watchRtc/${state.watchCode}/${state.user.uid}/${id}`)).catch(()=>{})}}
+async function createWatchPeer(peerUid,initiator=false){
+  if(state.watchRtc.peers.has(peerUid))return state.watchRtc.peers.get(peerUid);
+  const pc=new RTCPeerConnection(RTC_CONFIG);state.watchRtc.peers.set(peerUid,pc);
+  const remote=new MediaStream();state.watchRtc.remoteStreams.set(peerUid,remote);ensureWatchCallCard(peerUid);
+  const audioTr=pc.addTransceiver('audio',{direction:'sendrecv'}),videoTr=pc.addTransceiver('video',{direction:'sendrecv'});
+  const audioTrack=state.watchRtc.localStream?.getAudioTracks?.()[0];if(audioTrack)await audioTr.sender.replaceTrack(audioTrack);
+  const screenTrack=state.watchRtc.screenStream?.getVideoTracks?.()[0];if(screenTrack)await videoTr.sender.replaceTrack(screenTrack);
+  pc.ontrack=ev=>{const stream=state.watchRtc.remoteStreams.get(peerUid)||remote;if(!stream.getTracks().some(t=>t.id===ev.track.id))stream.addTrack(ev.track);attachWatchRemote(peerUid,stream)};
+  pc.onicecandidate=ev=>{if(ev.candidate)sendWatchRtc(peerUid,{type:'candidate',candidate:ev.candidate.toJSON()}).catch(()=>{})};
+  pc.onconnectionstatechange=()=>{if(['failed','closed','disconnected'].includes(pc.connectionState))setTimeout(()=>{if(pc.connectionState!=='connected')removeWatchPeer(peerUid)},1800)};
+  if(initiator){const offer=await pc.createOffer();await pc.setLocalDescription(offer);await sendWatchRtc(peerUid,{type:'offer',sdp:offer.sdp})}
+  return pc
+}
+async function flushWatchCandidates(uid,pc){const queued=state.watchRtc.pendingCandidates.get(uid)||[];state.watchRtc.pendingCandidates.delete(uid);for(const c of queued){try{await pc.addIceCandidate(c)}catch{}}}
+async function handleWatchRtc(id,msg){
+  if(!msg||state.watchRtc.processed.has(id)||!state.watchRtc.joined||!state.user)return;
+  state.watchRtc.processed.add(id);const from=String(msg.fromUid||'');if(!from||from===state.user.uid)return;
+  try{
+    const pc=await createWatchPeer(from,false);
+    if(msg.type==='offer'){
+      await pc.setRemoteDescription({type:'offer',sdp:msg.sdp});await flushWatchCandidates(from,pc);const a=await pc.createAnswer();await pc.setLocalDescription(a);await sendWatchRtc(from,{type:'answer',sdp:a.sdp})
+    }else if(msg.type==='answer'){
+      if(!pc.currentRemoteDescription){await pc.setRemoteDescription({type:'answer',sdp:msg.sdp});await flushWatchCandidates(from,pc)}
+    }else if(msg.type==='candidate'&&msg.candidate){
+      if(pc.remoteDescription)try{await pc.addIceCandidate(msg.candidate)}catch{}else{const q=state.watchRtc.pendingCandidates.get(from)||[];q.push(msg.candidate);state.watchRtc.pendingCandidates.set(from,q)}
+    }
+  }finally{remove(ref(db,`watchRtc/${state.watchCode}/${state.user.uid}/${id}`)).catch(()=>{})}
+}
 function watchWatchRtcInbox(){try{state.watchRtc.inboxUnsub?.()}catch{}state.watchRtc.inboxUnsub=onValue(ref(db,`watchRtc/${state.watchCode}/${state.user.uid}`),sn=>{const all=sn.exists()?sn.val():{};Object.entries(all).sort((a,b)=>(a[1]?.at||0)-(b[1]?.at||0)).forEach(([id,msg])=>handleWatchRtc(id,msg).catch(()=>{}))})}
-function watchWatchPresence(){try{state.watchRtc.presenceUnsub?.()}catch{}state.watchRtc.presenceUnsub=onValue(ref(db,`watchVoice/${state.watchCode}`),sn=>{const p=sn.exists()?sn.val():{},ids=Object.keys(p).filter(uid=>uid!==state.user.uid);$('watchVoiceCount').textContent=String(ids.length+1);for(const uid of ids)if(!state.watchRtc.peers.has(uid)&&state.user.uid.localeCompare(uid)<0)createWatchPeer(uid,true).catch(()=>{});for(const uid of [...state.watchRtc.peers.keys()])if(!p[uid])removeWatchPeer(uid)})}
-async function joinWatchVoice(){if(state.watchRtc.joined)return;if(!state.user||!state.watchCode)return toast('Entre numa sala primeiro.');try{const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true},video:false});state.watchRtc.localStream=stream;state.watchRtc.joined=true;state.watchRtc.micEnabled=true;state.watchRtc.processed.clear();await set(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{uid:state.user.uid,name:displayName(),joinedAt:Date.now()});watchWatchRtcInbox();watchWatchPresence();watchVoiceUi()}catch(e){toast(e?.name==='NotAllowedError'?'Permita o microfone para entrar na chamada.':'Não foi possível abrir o microfone.')}}
-async function toggleWatchMic(){state.watchRtc.micEnabled=!state.watchRtc.micEnabled;state.watchRtc.localStream?.getAudioTracks?.().forEach(t=>t.enabled=state.watchRtc.micEnabled);watchVoiceUi()}
-async function toggleWatchScreen(){if(!state.watchRtc.joined)return;if(state.watchRtc.screenStream){state.watchRtc.screenStream.getTracks().forEach(t=>t.stop());state.watchRtc.screenStream=null;await Promise.all([...state.watchRtc.peers.values()].map(async pc=>{const sender=pc.getTransceivers().find(t=>t.receiver?.track?.kind==='video')?.sender;if(sender)await sender.replaceTrack(null)}));return}try{const stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});state.watchRtc.screenStream=stream;const track=stream.getVideoTracks()[0];await Promise.all([...state.watchRtc.peers.values()].map(async pc=>{const tr=pc.getTransceivers().find(t=>t.receiver?.track?.kind==='video');if(tr)await tr.sender.replaceTrack(track)}));track.onended=()=>{if(state.watchRtc.screenStream)toggleWatchScreen().catch(()=>{})}}catch(e){if(e?.name!=='NotAllowedError')toast('Não foi possível compartilhar a tela.')}}
-async function leaveWatchVoice(silent=false){if(!state.watchRtc.joined&&!state.watchRtc.localStream&&!state.watchRtc.peers.size)return;const code=state.watchCode,uid=state.user?.uid;try{state.watchRtc.presenceUnsub?.()}catch{}try{state.watchRtc.inboxUnsub?.()}catch{}state.watchRtc.presenceUnsub=null;state.watchRtc.inboxUnsub=null;for(const pc of state.watchRtc.peers.values()){try{pc.close()}catch{}}state.watchRtc.peers.clear();state.watchRtc.remoteStreams.clear();state.watchRtc.localStream?.getTracks?.().forEach(t=>t.stop());state.watchRtc.screenStream?.getTracks?.().forEach(t=>t.stop());state.watchRtc.localStream=null;state.watchRtc.screenStream=null;state.watchRtc.joined=false;state.watchRtc.micEnabled=true;state.watchRtc.processed.clear();if(code&&uid){await remove(ref(db,`watchVoice/${code}/${uid}`)).catch(()=>{});await remove(ref(db,`watchRtc/${code}/${uid}`)).catch(()=>{})}$('watchRemoteMedia').innerHTML='';$('watchVoiceCount').textContent='0';watchVoiceUi();if(!silent)toast('Você saiu da chamada.')}
-$('watchJoinVoiceBtn')?.addEventListener('click',joinWatchVoice);$('watchMicBtn')?.addEventListener('click',toggleWatchMic);$('watchShareBtn')?.addEventListener('click',toggleWatchScreen);$('watchLeaveVoiceBtn')?.addEventListener('click',()=>leaveWatchVoice(false));watchVoiceUi();
+function watchWatchPresence(){
+  try{state.watchRtc.presenceUnsub?.()}catch{}
+  state.watchRtc.presenceUnsub=onValue(ref(db,`watchVoice/${state.watchCode}`),sn=>{
+    const p=sn.exists()?sn.val():{},ids=Object.keys(p).filter(uid=>uid!==state.user.uid),voiceCount=Object.values(p).filter(x=>x?.audio===true).length;$('watchVoiceCount').textContent=String(voiceCount);
+    for(const uid of ids){if(!state.watchRtc.peers.has(uid)&&state.user.uid.localeCompare(uid)<0)createWatchPeer(uid,true).catch(()=>{})}
+    for(const uid of [...state.watchRtc.peers.keys()])if(!p[uid])removeWatchPeer(uid)
+  })
+}
+async function ensureWatchRtcSession(){
+  if(state.watchRtc.joined)return true;if(!state.user||!state.watchCode)return false;
+  state.watchRtc.joined=true;state.watchRtc.processed.clear();
+  try{const presenceRef=ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`);await set(presenceRef,{uid:state.user.uid,name:displayName(),joinedAt:Date.now(),audio:false});try{state.watchRtc.disconnectRef=onDisconnect(presenceRef);await state.watchRtc.disconnectRef.remove()}catch{}watchWatchRtcInbox();watchWatchPresence();watchVoiceUi();return true}
+  catch(e){state.watchRtc.joined=false;watchVoiceUi();toast(permissionMessage(e,'Não foi possível entrar na chamada.'));return false}
+}
+async function joinWatchVoice(){
+  if(!state.user||!state.watchCode)return toast('Entre numa sala primeiro.');if(state.watchRtc.audioJoined)return;
+  if(!navigator.mediaDevices?.getUserMedia)return toast('Seu navegador não oferece suporte ao microfone.');
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true},video:false});
+    state.watchRtc.localStream=stream;state.watchRtc.audioJoined=true;state.watchRtc.micEnabled=true;
+    if(!await ensureWatchRtcSession()){stream.getTracks().forEach(t=>t.stop());state.watchRtc.localStream=null;state.watchRtc.audioJoined=false;return}
+    const track=stream.getAudioTracks()[0];
+    await Promise.all([...state.watchRtc.peers.values()].map(async pc=>{const tr=pc.getTransceivers().find(t=>t.receiver?.track?.kind==='audio');if(tr)await tr.sender.replaceTrack(track)}));
+    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:true}).catch(()=>{});$$('.watch-call-card audio').forEach(a=>a.muted=false);watchVoiceUi()
+  }catch(e){toast(e?.name==='NotAllowedError'?'Permita o microfone para entrar na chamada.':'Não foi possível abrir o microfone.')}
+}
+async function toggleWatchMic(){if(!state.watchRtc.audioJoined)return joinWatchVoice();state.watchRtc.micEnabled=!state.watchRtc.micEnabled;state.watchRtc.localStream?.getAudioTracks?.().forEach(t=>t.enabled=state.watchRtc.micEnabled);watchVoiceUi()}
+async function leaveWatchAudio(silent=false){
+  if(!state.watchRtc.audioJoined)return;state.watchRtc.localStream?.getTracks?.().forEach(t=>t.stop());state.watchRtc.localStream=null;state.watchRtc.audioJoined=false;state.watchRtc.micEnabled=true;
+  await Promise.all([...state.watchRtc.peers.values()].map(async pc=>{const tr=pc.getTransceivers().find(t=>t.receiver?.track?.kind==='audio');if(tr)await tr.sender.replaceTrack(null)}));
+  if(state.watchCode&&state.user)await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:false}).catch(()=>{});$$('.watch-call-card audio').forEach(a=>a.muted=true);watchVoiceUi();if(!silent)toast('Você saiu da voz.')
+}
+async function toggleWatchScreen(){
+  if(!state.user||!state.watchCode)return toast('Entre numa sala primeiro.');
+  if(state.watchRtc.screenStream){
+    const old=state.watchRtc.screenStream;state.watchRtc.screenStream=null;old.getTracks().forEach(t=>{t.onended=null;t.stop()});
+    await Promise.all([...state.watchRtc.peers.values()].map(async pc=>{const tr=pc.getTransceivers().find(t=>t.receiver?.track?.kind==='video');if(tr)await tr.sender.replaceTrack(null)}));
+    refreshWatchScreenStage();watchVoiceUi();return
+  }
+  if(!navigator.mediaDevices?.getDisplayMedia)return toast('Compartilhamento de tela não é suportado neste navegador.');
+  if(!await ensureWatchRtcSession())return;
+  try{
+    const stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:30,max:30}},audio:false});state.watchRtc.screenStream=stream;const track=stream.getVideoTracks()[0];
+    await Promise.all([...state.watchRtc.peers.values()].map(async pc=>{const tr=pc.getTransceivers().find(t=>t.receiver?.track?.kind==='video');if(tr)await tr.sender.replaceTrack(track)}));
+    track.onended=()=>{if(state.watchRtc.screenStream)toggleWatchScreen().catch(()=>{})};refreshWatchScreenStage();watchVoiceUi();toast('Tela compartilhada com a sala.')
+  }catch(e){if(e?.name!=='NotAllowedError')toast('Não foi possível compartilhar a tela.');watchVoiceUi()}
+}
+async function fullscreenWatchScreen(){
+  const stage=$('watchScreenStage'),video=$('watchScreenVideo');if(!stage||stage.hidden)return toast('Nenhuma tela está sendo compartilhada.');
+  try{if(stage.requestFullscreen)await stage.requestFullscreen();else if(video?.webkitEnterFullscreen)video.webkitEnterFullscreen();else toast('Tela cheia não é suportada neste navegador.')}catch{toast('Não foi possível abrir em tela cheia.')}
+}
+async function leaveWatchVoice(silent=false){
+  if(!state.watchRtc.joined&&!state.watchRtc.localStream&&!state.watchRtc.peers.size)return;
+  const code=state.watchCode,uid=state.user?.uid;try{state.watchRtc.presenceUnsub?.()}catch{}try{state.watchRtc.inboxUnsub?.()}catch{}try{await state.watchRtc.disconnectRef?.cancel?.()}catch{}state.watchRtc.presenceUnsub=null;state.watchRtc.inboxUnsub=null;state.watchRtc.disconnectRef=null;
+  for(const pc of state.watchRtc.peers.values()){try{pc.close()}catch{}}state.watchRtc.peers.clear();state.watchRtc.remoteStreams.clear();state.watchRtc.localStream?.getTracks?.().forEach(t=>t.stop());state.watchRtc.screenStream?.getTracks?.().forEach(t=>t.stop());
+  state.watchRtc.localStream=null;state.watchRtc.screenStream=null;state.watchRtc.joined=false;state.watchRtc.audioJoined=false;state.watchRtc.activeScreenUid=null;state.watchRtc.micEnabled=true;state.watchRtc.processed.clear();state.watchRtc.pendingCandidates.clear();
+  if(code&&uid){await remove(ref(db,`watchVoice/${code}/${uid}`)).catch(()=>{});await remove(ref(db,`watchRtc/${code}/${uid}`)).catch(()=>{})}
+  $('watchRemoteMedia').innerHTML='';$('watchVoiceCount').textContent='0';refreshWatchScreenStage();watchVoiceUi();if(!silent)toast('Você saiu da chamada.')
+}
+$('watchJoinVoiceBtn')?.addEventListener('click',joinWatchVoice);$('watchMicBtn')?.addEventListener('click',toggleWatchMic);$('watchShareBtn')?.addEventListener('click',toggleWatchScreen);$('watchScreenFullscreenBtn')?.addEventListener('click',fullscreenWatchScreen);$('watchLeaveVoiceBtn')?.addEventListener('click',()=>leaveWatchAudio(false));watchVoiceUi();
 
 // RPG
 $('createRoomOpen').addEventListener('click',()=>openModal('createRoomModal'));$('refreshRoomsBtn').addEventListener('click',loadMyRooms);$('joinRoomForm').addEventListener('submit',async ev=>{ev.preventDefault();const code=$('joinRoomCode').value.trim().toUpperCase();if(code)await joinRoom(code)});$('createRoomForm').addEventListener('submit',createRoom);$('leaveTableView').addEventListener('click',closeTableView);$('exitRoomBtn').addEventListener('click',exitRoom);$('copyInviteBtn').addEventListener('click',copyInvite);$('characterBtn').addEventListener('click',openCharacter);$('characterForm').addEventListener('submit',saveCharacter);$('editSceneBtn').addEventListener('click',()=>{if(!isRoomOwner())return toast('Só o mestre pode editar a cena.');const s=state.room?.scene||{};$('sceneTitleInput').value=s.title||'';$('sceneDescriptionInput').value=s.description||'';$('sceneImageInput').value=s.image||'';openModal('sceneModal')});$('sceneForm').addEventListener('submit',saveScene);$('saveRulesBtn').addEventListener('click',saveRules);$('rollInitiativeBtn').addEventListener('click',rollInitiative);$('chatForm').addEventListener('submit',sendChat);$('customRollForm').addEventListener('submit',ev=>{ev.preventDefault();rollDice($('customRollInput').value.trim())});$$('[data-die]').forEach(btn=>btn.addEventListener('click',()=>rollDice(`1d${btn.dataset.die}`)));$$('[data-table-tab]').forEach(btn=>btn.addEventListener('click',()=>{const tab=btn.dataset.tableTab;$$('[data-table-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tableTab===tab));$$('[data-table-pane]').forEach(p=>p.classList.toggle('active',p.dataset.tablePane===tab))}));
