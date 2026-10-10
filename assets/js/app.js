@@ -28,6 +28,7 @@ const DEFAULT_AVATAR = '/assets/img/profile.jpg';
 const WHATSAPP_NUMBER = '5521973747709';
 const ADMIN_EMAIL = 'losermodder@gmail.com';
 const USERNAME_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+const CHARLOTTE_MUSIC_AVATAR = '/assets/img/profile.jpg';
 let RTC_CONFIG={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
 
 const state = {
@@ -46,6 +47,7 @@ const state = {
   watchCode:null,watchRoom:null,watchUnsubs:[],watchApplying:false,
   watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set()},
   watchYoutube:{lastTime:0,lastState:-1,lastPublishAt:0},
+  watchMusic:{currentId:'',volume:Number(localStorage.getItem('gremory:watchMusicVolume')||65),muted:localStorage.getItem('gremory:watchMusicMuted')==='1',engineReady:false,lastAdvanceId:''},
   rtc:{joined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true},premiumPoll:null
 };
 
@@ -843,7 +845,7 @@ function renderWatchRoom(){
   const r=state.watchRoom||{},m=r.meta||{};$('watchRoomName').textContent=m.name||'Watch Party';$('watchCode').textContent=state.watchCode||'------';$('watchHostPill').textContent=isWatchHost()?'Host':'Participante';$('watchMemberCount').textContent=String(Object.keys(r.members||{}).length);
   const list=$('watchMemberList');list.innerHTML='';Object.values(r.members||{}).forEach(x=>{const d=document.createElement('div');d.className='member-item watch-member-item';const img=document.createElement('img');img.src=x.avatar||DEFAULT_AVATAR;const c=document.createElement('div');c.innerHTML=`<strong>${escText(x.name||'Usuário')}</strong><small>${escText(x.role||'Participante')}</small>`;d.append(img,c);list.appendChild(d)});
   $('watchMediaInput').disabled=!isWatchHost();$('watchMediaForm').querySelector('button').disabled=!isWatchHost();$('watchPlayBtn').disabled=!isWatchHost();if($('watchMusicSkipBtn'))$('watchMusicSkipBtn').disabled=!isWatchHost();
-  renderWatchMedia(r.media||{});renderWatchMusic(r.musicQueue||{});watchVoiceUi();if(!state.watchRtc.joined)ensureWatchRtcSession().catch(()=>{})
+  renderWatchMedia(r.media||{});renderWatchMusic(r.musicQueue||{},r.musicAccess||{});watchVoiceUi();if(!state.watchRtc.joined)ensureWatchRtcSession().catch(()=>{})
 }
 function youtubeEmbed(url,viewerLocked=false){
   try{
@@ -889,8 +891,20 @@ async function publishYoutubeStateFromEvent(playing){
 }
 window.addEventListener('message',ev=>{
   if(!/^https:\/\/(?:www\.)?(?:youtube\.com|youtube-nocookie\.com)$/i.test(String(ev.origin||'')))return;
-  const iframe=$('watchMediaStage')?.querySelector('iframe[data-watch-youtube="1"]');if(!iframe||ev.source!==iframe.contentWindow)return;
   let data=ev.data;try{if(typeof data==='string')data=JSON.parse(data)}catch{return}if(!data||typeof data!=='object')return;
+
+  const musicFrame=watchMusicEngine();
+  if(musicFrame&&ev.source===musicFrame.contentWindow){
+    if(data.event==='onReady'){state.watchMusic.engineReady=true;musicYoutubeCommand('playVideo',[]);applyLocalMusicVolume()}
+    if(data.event==='onStateChange'){
+      const code=Number(data.info);
+      if(code===0){const current=currentWatchMusic();if(current)autoAdvanceWatchMusic(current.id)}
+      if(code===1)applyLocalMusicVolume()
+    }
+    return;
+  }
+
+  const iframe=$('watchMediaStage')?.querySelector('iframe[data-watch-youtube="1"]');if(!iframe||ev.source!==iframe.contentWindow)return;
   if(data.event==='infoDelivery'&&data.info&&typeof data.info==='object'){
     if(Number.isFinite(Number(data.info.currentTime)))state.watchYoutube.lastTime=Number(data.info.currentTime);
     if(Number.isFinite(Number(data.info.playerState)))state.watchYoutube.lastState=Number(data.info.playerState);
@@ -949,16 +963,136 @@ function syncWatchPlayer(){
   const media=state.watchRoom?.media||{};if(media.type==='drive')return toast('Google Drive não expõe sincronização de reprodução.');
   const iframe=$('watchMediaStage')?.querySelector('iframe[data-watch-youtube="1"]');if(iframe)applyYoutubeWatchState(iframe,media);else renderWatchMedia(media);toast('Player sincronizado.')
 }
-function renderWatchMusic(queueObj={}){
-  const rows=Object.entries(queueObj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0));const now=$('watchMusicNow'),box=$('watchMusicQueue');if(!now||!box)return;now.innerHTML='';box.innerHTML='';
-  if(!rows.length){now.innerHTML='<div class="empty-state small">Nenhuma música na fila.</div>';return}
-  const current=rows[0],card=document.createElement('div');card.className='watch-music-current';const copy=document.createElement('div');const st=document.createElement('strong');st.textContent=current.title||'Música';const sm=document.createElement('small');sm.textContent=`Pedido por ${current.requestedName||'participante'} • ₹${current.cost||0}`;copy.append(st,sm);const iframe=document.createElement('iframe');iframe.className='watch-music-player';iframe.src=`https://www.youtube-nocookie.com/embed/${encodeURIComponent(current.videoId||'')}?autoplay=1&playsinline=1&rel=0`;iframe.allow='autoplay; encrypted-media';iframe.title='Música da sala';card.append(copy,iframe);now.appendChild(card);
-  rows.slice(1,10).forEach((x,i)=>{const row=document.createElement('div');row.className='watch-music-row';row.innerHTML=`<span>${i+1}</span><div><strong>${escText(x.title||'Música')}</strong><small>${escText(x.requestedName||'Participante')}</small></div>`;box.appendChild(row)})
+function watchMusicRows(queueObj={}){
+  return Object.entries(queueObj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0))
 }
-$('watchMusicForm')?.addEventListener('submit',async ev=>{ev.preventDefault();const query=$('watchMusicInput').value.trim();if(!query)return;try{const r=await bridgeRequest('watch_music_add',{roomCode:state.watchCode,query},30000);$('watchMusicInput').value='';toast(`Música adicionada por ₹${r.cost||0}.`)}catch(e){toast(e.message)}});
-$('watchMusicSkipBtn')?.addEventListener('click',async()=>{if(!isWatchHost())return toast('Somente o host pode pular.');try{const r=await bridgeRequest('watch_music_skip',{roomCode:state.watchCode},20000);toast(r.skipped?'Música pulada.':'A fila está vazia.')}catch(e){toast(e.message)}});
+function currentWatchMusic(){return watchMusicRows(state.watchRoom?.musicQueue||{})[0]||null}
+function watchMusicAccessForMe(accessObj=state.watchRoom?.musicAccess||{}){return state.user?accessObj?.[state.user.uid]||null:null}
+function watchMusicCanHear(){return !!state.watchRtc.audioJoined}
+function watchMusicElapsed(item){
+  const started=Number(item?.startedAt||item?.createdAt||Date.now());
+  return Math.max(0,Math.floor((Date.now()-started)/1000))
+}
+function watchMusicEngine(){
+  return $('watchMusicEngine')
+}
+function musicYoutubeCommand(func,args=[]){
+  const iframe=watchMusicEngine();
+  try{iframe?.contentWindow?.postMessage(JSON.stringify({event:'command',func,args}),'*')}catch{}
+}
+function applyLocalMusicVolume(){
+  const vol=Math.max(0,Math.min(100,Number(state.watchMusic.volume||0)));
+  localStorage.setItem('gremory:watchMusicVolume',String(vol));
+  localStorage.setItem('gremory:watchMusicMuted',state.watchMusic.muted?'1':'0');
+  musicYoutubeCommand('setVolume',[vol]);
+  musicYoutubeCommand(state.watchMusic.muted?'mute':'unMute',[]);
+  const slider=$('watchMusicVolumeRange');if(slider)slider.value=String(vol);
+  const label=$('watchMusicVolumeValue');if(label)label.textContent=`${vol}%`;
+  const mute=$('watchMusicMuteBtn');if(mute)mute.textContent=state.watchMusic.muted?'Ativar som':'Silenciar'
+}
+function destroyWatchMusicPlayback(){
+  const iframe=watchMusicEngine();if(iframe){iframe.removeAttribute('src');iframe.dataset.videoId='';}
+  state.watchMusic.currentId='';state.watchMusic.engineReady=false;
+  $('watchRemoteMedia')?.querySelector('[data-watch-music-bot="1"]')?.remove()
+}
+function ensureCharlotteMusicCard(current){
+  const grid=$('watchRemoteMedia');if(!grid||!watchMusicCanHear()||!current)return null;
+  let card=grid.querySelector('[data-watch-music-bot="1"]');
+  if(!card){
+    card=document.createElement('div');card.className='watch-call-card watch-music-bot-card';card.dataset.watchMusicBot='1';
+    const avatar=document.createElement('img');avatar.src=CHARLOTTE_MUSIC_AVATAR;avatar.alt='Charlotte';
+    const copy=document.createElement('div');copy.className='watch-call-copy';
+    const name=document.createElement('strong');name.textContent='Charlotte';
+    const status=document.createElement('small');status.id='watchMusicBotStatus';copy.append(name,status);
+    const controls=document.createElement('div');controls.className='watch-music-local-controls';
+    const mute=document.createElement('button');mute.type='button';mute.className='mini-btn';mute.id='watchMusicMuteBtn';mute.onclick=()=>{state.watchMusic.muted=!state.watchMusic.muted;applyLocalMusicVolume()};
+    const range=document.createElement('input');range.type='range';range.min='0';range.max='100';range.step='1';range.id='watchMusicVolumeRange';range.value=String(state.watchMusic.volume);range.setAttribute('aria-label','Volume da Charlotte');
+    range.oninput=()=>{state.watchMusic.volume=Number(range.value||0);state.watchMusic.muted=false;applyLocalMusicVolume()};
+    const value=document.createElement('span');value.id='watchMusicVolumeValue';controls.append(mute,range,value);
+    card.append(avatar,copy,controls);grid.prepend(card)
+  }
+  const status=card.querySelector('#watchMusicBotStatus');if(status)status.textContent=current.title||'Tocando música';
+  applyLocalMusicVolume();return card
+}
+function loadWatchMusicPlayback(current){
+  if(!current||!watchMusicCanHear()){destroyWatchMusicPlayback();return}
+  ensureCharlotteMusicCard(current);
+  const iframe=watchMusicEngine();if(!iframe||!current.videoId)return;
+  const elapsed=watchMusicElapsed(current),videoId=String(current.videoId);
+  const changed=iframe.dataset.videoId!==videoId||state.watchMusic.currentId!==current.id;
+  if(changed){
+    state.watchMusic.currentId=current.id;state.watchMusic.engineReady=false;state.watchMusic.lastAdvanceId='';
+    iframe.dataset.videoId=videoId;
+    const origin=encodeURIComponent(location.origin);
+    iframe.src=`https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?enablejsapi=1&autoplay=1&playsinline=1&controls=0&disablekb=1&rel=0&origin=${origin}&start=${elapsed}`;
+    iframe.onload=()=>setTimeout(()=>{
+      try{iframe.contentWindow?.postMessage(JSON.stringify({event:'listening',id:'gremory-music'}),'*')}catch{}
+      musicYoutubeCommand('addEventListener',['onStateChange']);
+      musicYoutubeCommand('addEventListener',['onReady']);
+      musicYoutubeCommand('seekTo',[elapsed,true]);musicYoutubeCommand('playVideo',[]);applyLocalMusicVolume()
+    },220)
+  }else{
+    musicYoutubeCommand('playVideo',[]);applyLocalMusicVolume()
+  }
+}
+async function autoAdvanceWatchMusic(currentId){
+  if(!currentId||state.watchMusic.lastAdvanceId===currentId||!watchMusicCanHear())return;
+  state.watchMusic.lastAdvanceId=currentId;
+  try{await bridgeRequest('watch_music_advance',{roomCode:state.watchCode,currentId},20000)}
+  catch(e){state.watchMusic.lastAdvanceId='';console.warn('[WATCH MUSIC ADVANCE]',e)}
+}
+function renderWatchMusic(queueObj={},accessObj={}){
+  const rows=watchMusicRows(queueObj),current=rows[0],now=$('watchMusicNow'),box=$('watchMusicQueue'),form=$('watchMusicForm'),activate=$('watchMusicActivateBtn');
+  if(!now||!box||!form)return;now.innerHTML='';box.innerHTML='';
+  const audioJoined=watchMusicCanHear(),access=watchMusicAccessForMe(accessObj),premium=Boolean(state.charlotteSync?.account?.premium);
+  const title=$('watchMusicAccessTitle'),txt=$('watchMusicAccessText');
+  if(!audioJoined){
+    if(title)title.textContent='Entre na voz para usar música';
+    if(txt)txt.textContent='Som e fila ficam disponíveis somente para quem estiver dentro da chamada de voz.';
+  }else if(!access){
+    if(title)title.textContent='Ative a música nesta sala por ₹50';
+    if(txt)txt.textContent=premium?'Premium: depois da taxa, músicas ilimitadas sem cobrança extra.':'Free: 10 músicas inclusas; depois, ₹5 por música.';
+  }else{
+    const used=Number(access.used||0);
+    if(title)title.textContent=premium?'Música ativa • Premium ilimitado':`Música ativa • ${Math.max(0,10-used)} inclusa${Math.max(0,10-used)===1?'':'s'} restante${Math.max(0,10-used)===1?'':'s'}`;
+    if(txt)txt.textContent=premium?'Você não paga mais nada para adicionar músicas nesta sala.':used<10?`Você usou ${used}/10 músicas incluídas na taxa.`:`As 10 inclusas acabaram. Cada nova música custa ₹5.`;
+  }
+  if(activate){activate.hidden=!!access;activate.disabled=!audioJoined}
+  const input=$('watchMusicInput'),submit=form.querySelector('button[type="submit"]');
+  if(input)input.disabled=!audioJoined||!access;if(submit)submit.disabled=!audioJoined||!access;
+  if(!rows.length){
+    now.innerHTML='<div class="empty-state small">Nenhuma música tocando.</div>';destroyWatchMusicPlayback()
+  }else{
+    const card=document.createElement('div');card.className='watch-music-current compact';
+    const art=document.createElement('div');art.className='watch-music-note';art.textContent='♪';
+    const copy=document.createElement('div');const st=document.createElement('strong');st.textContent=current.title||'Música';
+    const sm=document.createElement('small');sm.textContent=`Pedido por ${current.requestedName||'participante'}`;copy.append(st,sm);card.append(art,copy);now.appendChild(card);
+    if(audioJoined)loadWatchMusicPlayback(current);else destroyWatchMusicPlayback()
+  }
+  rows.slice(1,11).forEach((x,i)=>{const row=document.createElement('div');row.className='watch-music-row';const badge=document.createElement('span');badge.textContent=String(i+1);const c=document.createElement('div');const st=document.createElement('strong');st.textContent=x.title||'Música';const sm=document.createElement('small');sm.textContent=x.requestedName||'Participante';c.append(st,sm);row.append(badge,c);box.appendChild(row)})
+}
+$('watchMusicActivateBtn')?.addEventListener('click',async()=>{
+  if(!watchMusicCanHear())return toast('Entre na chamada de voz primeiro.');
+  try{
+    const r=await bridgeRequest('watch_music_activate',{roomCode:state.watchCode},20000);
+    toast(r.alreadyActive?'Música já estava ativa nesta sala.':`Música ativada por ₹${r.cost||50}.`)
+  }catch(e){toast(e.message)}
+});
+$('watchMusicForm')?.addEventListener('submit',async ev=>{
+  ev.preventDefault();if(!watchMusicCanHear())return toast('Entre na chamada de voz primeiro.');
+  const query=$('watchMusicInput').value.trim();if(!query)return;
+  try{
+    const r=await bridgeRequest('watch_music_add',{roomCode:state.watchCode,query},30000);
+    $('watchMusicInput').value='';
+    toast(r.cost>0?`Música adicionada por ₹${r.cost}.`:'Música adicionada sem custo extra.')
+  }catch(e){toast(e.message)}
+});
+$('watchMusicSkipBtn')?.addEventListener('click',async()=>{
+  if(!isWatchHost())return toast('Somente o host pode pular.');
+  try{const r=await bridgeRequest('watch_music_skip',{roomCode:state.watchCode},20000);toast(r.skipped?'Música pulada.':'A fila está vazia.')}catch(e){toast(e.message)}
+});
 
-async function closeWatchRoom(silent=false){await leaveWatchVoice(true);clearUnsubs(state.watchUnsubs);state.watchCode=null;state.watchRoom=null;$('watchRoom').hidden=true;$('watchLobby').hidden=false;if(!silent)loadWatchRooms()}
+async function closeWatchRoom(silent=false){await leaveWatchVoice(true);destroyWatchMusicPlayback();clearUnsubs(state.watchUnsubs);state.watchCode=null;state.watchRoom=null;$('watchRoom').hidden=true;$('watchLobby').hidden=false;if(!silent)loadWatchRooms()}
 async function exitWatchRoom(){if(!state.user||!state.watchCode)return;const code=state.watchCode;if(isWatchHost())return deleteWatchRoom(code,state.watchRoom?.meta?.name);try{await remove(ref(db,`watchRooms/${code}/members/${state.user.uid}`));await remove(ref(db,`watchUserRooms/${state.user.uid}/${code}`));await closeWatchRoom(false)}catch(e){toast(permissionMessage(e))}}
 async function deleteWatchRoom(code,name='Sala'){if(!state.user||!code||!confirm(`Apagar "${name||code}" para todos?`))return;try{const sn=await get(ref(db,`watchRooms/${code}`));const room=sn.val()||{};if(room.meta?.ownerUid!==state.user.uid)throw new Error('Só o host pode apagar.');await Promise.all(Object.keys(room.members||{}).map(uid=>remove(ref(db,`watchUserRooms/${uid}/${code}`)).catch(()=>{})));await remove(ref(db,`watchRooms/${code}`));await remove(ref(db,`watchVoice/${code}`)).catch(()=>{});await remove(ref(db,`watchRtc/${code}`)).catch(()=>{});await closeWatchRoom(false);toast('Sala apagada.')}catch(e){toast(permissionMessage(e,e.message))}}
 
@@ -969,6 +1103,7 @@ function watchVoiceUi(){
   if($('watchMicBtn')){$('watchMicBtn').hidden=!audio;$('watchMicBtn').textContent=rtc.micEnabled?'Silenciar':'Ativar microfone'}
   if($('watchShareBtn')){$('watchShareBtn').hidden=!state.watchCode;$('watchShareBtn').textContent=rtc.screenStream?'Parar compartilhamento':'Compartilhar tela';$('watchShareBtn').classList.toggle('active',!!rtc.screenStream)}
   if($('watchLeaveVoiceBtn'))$('watchLeaveVoiceBtn').hidden=!audio;
+  if(state.watchRoom)renderWatchMusic(state.watchRoom.musicQueue||{},state.watchRoom.musicAccess||{});
 }
 function watchPeerName(uid){return state.watchRoom?.members?.[uid]?.name||'Participante'}
 function ensureWatchCallCard(uid){
@@ -1060,14 +1195,14 @@ async function joinWatchVoice(){
     if(!await ensureWatchRtcSession()){stream.getTracks().forEach(t=>t.stop());state.watchRtc.localStream=null;state.watchRtc.audioJoined=false;return}
     const track=stream.getAudioTracks()[0];
     await Promise.all([...state.watchRtc.peers.values()].map(async pc=>{const tr=pc.getTransceivers().find(t=>t.receiver?.track?.kind==='audio');if(tr)await tr.sender.replaceTrack(track)}));
-    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:true}).catch(()=>{});$$('.watch-call-card audio').forEach(a=>a.muted=false);watchVoiceUi()
+    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:true}).catch(()=>{});$$('.watch-call-card audio').forEach(a=>a.muted=false);watchVoiceUi();renderWatchMusic(state.watchRoom?.musicQueue||{},state.watchRoom?.musicAccess||{})
   }catch(e){toast(e?.name==='NotAllowedError'?'Permita o microfone para entrar na chamada.':'Não foi possível abrir o microfone.')}
 }
 async function toggleWatchMic(){if(!state.watchRtc.audioJoined)return joinWatchVoice();state.watchRtc.micEnabled=!state.watchRtc.micEnabled;state.watchRtc.localStream?.getAudioTracks?.().forEach(t=>t.enabled=state.watchRtc.micEnabled);watchVoiceUi()}
 async function leaveWatchAudio(silent=false){
   if(!state.watchRtc.audioJoined)return;state.watchRtc.localStream?.getTracks?.().forEach(t=>t.stop());state.watchRtc.localStream=null;state.watchRtc.audioJoined=false;state.watchRtc.micEnabled=true;
   await Promise.all([...state.watchRtc.peers.values()].map(async pc=>{const tr=pc.getTransceivers().find(t=>t.receiver?.track?.kind==='audio');if(tr)await tr.sender.replaceTrack(null)}));
-  if(state.watchCode&&state.user)await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:false}).catch(()=>{});$$('.watch-call-card audio').forEach(a=>a.muted=true);watchVoiceUi();if(!silent)toast('Você saiu da voz.')
+  if(state.watchCode&&state.user)await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:false}).catch(()=>{});$$('.watch-call-card audio').forEach(a=>a.muted=true);destroyWatchMusicPlayback();watchVoiceUi();if(!silent)toast('Você saiu da voz.')
 }
 async function toggleWatchScreen(){
   if(!state.user||!state.watchCode)return toast('Entre numa sala primeiro.');

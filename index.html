@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#09090d">
   <meta name="color-scheme" content="dark">
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261010-v9-4-admin-rpg">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261010-v9-5-watch-music">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -354,10 +354,26 @@
                 <div class="remote-media-grid watch-remote-media" id="watchRemoteMedia"></div>
                 <div class="divider"></div><div class="panel-head"><h3>Na sala</h3><span class="pill" id="watchMemberCount">0</span></div><div class="member-list" id="watchMemberList"></div>
                 <div class="divider"></div>
-                <div class="panel-head"><div><h3>Música da sala</h3><small class="muted">₹10 • Premium ₹5</small></div><button class="text-button" id="watchMusicSkipBtn" type="button">Pular</button></div>
-                <form class="watch-music-form" id="watchMusicForm"><input id="watchMusicInput" maxlength="160" placeholder="Pesquisar música"><button class="btn" type="submit">Adicionar</button></form>
+                <div class="panel-head watch-music-head">
+                  <div>
+                    <h3>Charlotte Music</h3>
+                    <small class="muted">Ativação ₹50 • Free: 10 músicas inclusas, depois ₹5 cada • Premium: ilimitado</small>
+                  </div>
+                  <button class="text-button" id="watchMusicSkipBtn" type="button">Pular</button>
+                </div>
+                <div class="watch-music-access" id="watchMusicAccessBox">
+                  <div><strong id="watchMusicAccessTitle">Entre na voz para usar música</strong><small id="watchMusicAccessText">Você só escuta e adiciona músicas quando estiver dentro da chamada.</small></div>
+                  <button class="btn primary" id="watchMusicActivateBtn" type="button">Ativar por ₹50</button>
+                </div>
+                <form class="watch-music-form" id="watchMusicForm">
+                  <input id="watchMusicInput" maxlength="160" placeholder="Pesquisar música ou colar link">
+                  <button class="btn" type="submit">Adicionar</button>
+                </form>
                 <div class="watch-music-now" id="watchMusicNow"></div>
                 <div class="watch-music-queue" id="watchMusicQueue"></div>
+                <div class="watch-music-engine" id="watchMusicEngineShell" aria-hidden="true">
+                  <iframe id="watchMusicEngine" title="Player de áudio da Charlotte" allow="autoplay; encrypted-media"></iframe>
+                </div>
               </aside>
             </div>
           </div>
@@ -540,6 +556,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261010-v9-4-admin-rpg"></script>
+  <script type="module" src="/assets/js/app.js?v=20261010-v9-5-watch-music"></script>
 </body>
 </html>

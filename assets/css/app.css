@@ -239,3 +239,43 @@ body.fx-badge-demon #profileNameView::after,body.fx-badge-demon #sideName::after
   .update-card-media{padding:6px}
   .update-card-media img{max-height:58vh}
 }
+
+
+/* ==========================================================
+   V9.4 — Charlotte Music na chamada
+   ========================================================== */
+.watch-music-head{align-items:flex-start}
+.watch-music-head small{display:block;max-width:260px;line-height:1.45;margin-top:3px}
+.watch-music-access{display:flex;align-items:center;gap:10px;padding:11px;border:1px solid #282e38;border-radius:14px;background:linear-gradient(135deg,#11141b,#0b0e13);margin:10px 0}
+.watch-music-access>div{display:grid;gap:3px;min-width:0;flex:1}
+.watch-music-access strong{font-size:12px}
+.watch-music-access small{font-size:10px;color:var(--muted);line-height:1.45}
+.watch-music-form{display:flex;gap:8px;margin-top:9px}
+.watch-music-form input{min-width:0;flex:1;border:1px solid #292f39;background:#0d1016;color:#fff;border-radius:12px;padding:10px 12px}
+.watch-music-form input:disabled,.watch-music-form button:disabled{opacity:.45;cursor:not-allowed}
+.watch-music-now{margin-top:9px}
+.watch-music-current.compact{display:grid;grid-template-columns:38px minmax(0,1fr);align-items:center;gap:9px;border:1px solid #272d37;background:#0d1016;border-radius:13px;padding:9px}
+.watch-music-current.compact>div:nth-child(2){display:grid;gap:3px;min-width:0}
+.watch-music-current.compact strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.watch-music-current.compact small{color:var(--muted);font-size:10px}
+.watch-music-note{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:radial-gradient(circle at 40% 25%,#e1718a,#6d1f32 60%,#241017);font-size:19px;font-weight:900}
+.watch-music-queue{display:grid;gap:6px;margin-top:7px;max-height:220px;overflow:auto}
+.watch-music-row{display:grid;grid-template-columns:24px minmax(0,1fr);gap:8px;align-items:center;border:1px solid #222833;background:#0a0d12;border-radius:11px;padding:7px 8px}
+.watch-music-row>span{width:24px;height:24px;border-radius:8px;background:#171b22;display:grid;place-items:center;font-size:10px;color:#c8cdd5}
+.watch-music-row>div{display:grid;min-width:0}
+.watch-music-row strong{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.watch-music-row small{font-size:9px;color:var(--muted)}
+.watch-music-engine{position:fixed!important;left:-10000px!important;top:-10000px!important;width:2px!important;height:2px!important;overflow:hidden!important;opacity:.001!important;pointer-events:none!important}
+.watch-music-engine iframe{width:2px!important;height:2px!important;border:0!important}
+.watch-music-bot-card{grid-template-columns:38px minmax(0,1fr)!important;border-color:#5c2937!important;background:linear-gradient(135deg,#161017,#0d1016)!important;box-shadow:inset 0 0 0 1px rgba(213,69,95,.08)}
+.watch-music-bot-card>img{box-shadow:0 0 0 2px #63283a}
+.watch-music-local-controls{grid-column:1/-1;display:grid!important;grid-template-columns:auto minmax(80px,1fr) 36px;align-items:center;gap:7px;margin-top:4px}
+.watch-music-local-controls input[type="range"]{width:100%;accent-color:#d5455f}
+.watch-music-local-controls span{font-size:9px;color:var(--muted);text-align:right}
+
+@media(max-width:820px){
+  .watch-music-access{align-items:stretch;flex-direction:column}
+  .watch-music-access .btn{width:100%}
+  .watch-music-form{display:grid;grid-template-columns:1fr}
+  .watch-music-form .btn{width:100%}
+}
