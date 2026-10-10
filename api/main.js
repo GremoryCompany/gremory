@@ -1261,6 +1261,25 @@ module.exports = async (req, res) => {
   const rapidKey = process.env.RAPIDAPI_KEY || '';
   const action = (qp(req, 'action') || '').toLowerCase();
 
+  if (action === 'rtc_config') {
+    if (req.method !== 'GET') return sendJson(res, 405, { erro: 'Método inválido' });
+    const iceServers = [
+      { urls:'stun:stun.l.google.com:19302' },
+      { urls:'stun:stun1.l.google.com:19302' }
+    ];
+    const turnUrl = String(process.env.TURN_URL || '').trim();
+    if (turnUrl) {
+      const urls = turnUrl.split(',').map(x => x.trim()).filter(Boolean);
+      const turn = { urls: urls.length === 1 ? urls[0] : urls };
+      const username = String(process.env.TURN_USERNAME || '').trim();
+      const credential = String(process.env.TURN_CREDENTIAL || '').trim();
+      if (username) turn.username = username;
+      if (credential) turn.credential = credential;
+      iceServers.push(turn);
+    }
+    return sendJson(res, 200, { ok:true, iceServers });
+  }
+
   if (action === 'proxy') {
     if (req.method !== 'GET') return sendJson(res, 405, { erro: 'Método inválido' });
     const url = qp(req, 'url');
@@ -1492,7 +1511,7 @@ module.exports = async (req, res) => {
 
   if (action === 'youtube_info' || action === 'youtube') {
     return sendJson(res, 409, {
-      erro: 'YouTube é processado pela Charlotte usando yt-dlp + cookies.txt do bot. Vincule sua conta no site e use a aba YouTube.'
+      erro: 'Para baixar do YouTube, vincule sua conta à Charlotte e use a opção YouTube no site.'
     });
   }
 

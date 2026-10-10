@@ -6,26 +6,13 @@
   <meta name="theme-color" content="#09090d">
   <meta name="color-scheme" content="dark">
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261010-v5-1">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261010-v9-2">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
-    <div class="auth-media" aria-hidden="true">
-      <img id="authGif" src="/assets/video/login.gif" data-src="/assets/video/login.gif" alt="">
-      <div class="auth-media-shade"></div>
-      <div class="auth-media-brand">
-        <div class="brand-seal">G</div>
-        <div>
-          <strong>Gremory</strong>
-          <span>Charlotte • Pokémon • RPG</span>
-        </div>
-      </div>
-    </div>
     <div class="auth-panel">
       <div class="auth-panel-inner">
-        <div class="auth-mobile-brand"><span>G</span><strong>Gremory</strong></div>
         <div class="auth-heading">
-          <span class="eyebrow">CONTA GREMORY</span>
           <h1 id="authHeading">Bem-vindo</h1>
         </div>
         <div class="auth-tabs">
@@ -66,6 +53,8 @@
         <button class="nav-item" data-route="charlotte"><span>✦</span><b>Charlotte</b></button>
         <button class="nav-item" data-route="pokemon"><span>◉</span><b>Pokémon</b></button>
         <button class="nav-item" data-route="friends"><span>◇</span><b>Amigos</b></button>
+        <button class="nav-item" data-route="tinder"><span>♥</span><b>Tinder</b></button>
+        <button class="nav-item" data-route="updates"><span>◌</span><b>Atualizações</b></button>
         <button class="nav-item" data-route="downloads"><span>↓</span><b>Downloads</b></button>
         <button class="nav-item" data-route="games"><span>✕</span><b>Jogos</b></button>
         <button class="nav-item" data-route="watch"><span>▶</span><b>Watch Party</b></button>
@@ -88,6 +77,7 @@
           <h1 id="pageTitle">Início</h1>
         </div>
         <div class="top-actions">
+          <button class="notification-button" id="notificationBtn" type="button" aria-label="Notificações">🔔<span id="notificationBadge" hidden>0</span></button>
           <button class="top-pill" id="topCharlotteStatus" data-route="charlotte" type="button"><span class="status-dot"></span><b>Charlotte</b></button>
           <button class="avatar-button" id="topAccountBtn" type="button" aria-label="Abrir conta"><img id="topAvatar" src="/assets/img/profile.jpg" alt=""></button>
         </div>
@@ -117,6 +107,8 @@
             <button class="home-card" data-route="charlotte"><span class="home-card-icon">✦</span><div><strong>Charlotte</strong><small id="homeCharlotteText">Não vinculada</small></div><b>›</b></button>
             <button class="home-card" data-route="pokemon"><span class="home-card-icon">◉</span><div><strong>Pokémon</strong><small id="homePokemonText">Abrir centro</small></div><b>›</b></button>
             <button class="home-card" data-route="friends"><span class="home-card-icon">◇</span><div><strong>Amigos</strong><small id="homeFriendsText">Ver pessoas</small></div><b>›</b></button>
+            <button class="home-card" data-route="tinder"><span class="home-card-icon">♥</span><div><strong>Tinder</strong><small>Perfis sincronizados com a Charlotte</small></div><b>›</b></button>
+            <button class="home-card" data-route="updates"><span class="home-card-icon">◌</span><div><strong>Atualizações</strong><small>Novidades do projeto</small></div><b>›</b></button>
             <button class="home-card" data-route="games"><span class="home-card-icon">✕</span><div><strong>Jogos</strong><small>Jogo da velha com amigos</small></div><b>›</b></button>
             <button class="home-card" data-route="watch"><span class="home-card-icon">▶</span><div><strong>Watch Party</strong><small id="homeWatchRecent">Assistir e conversar</small></div><b>›</b></button>
             <button class="home-card" data-route="rpg"><span class="home-card-icon">⚄</span><div><strong>RPG</strong><small id="homeRpgRecent">Suas mesas</small></div><b>›</b></button>
@@ -225,7 +217,7 @@
           </article>
 
           <article class="panel hospital-panel">
-            <div class="panel-head"><div><span class="tag">CENTRO</span><h3>Hospital Pokémon</h3></div><span class="pill">₹100 • 10 min</span></div>
+            <div class="panel-head"><div><span class="tag">CENTRO</span><h3>Hospital Pokémon</h3></div><span class="pill">₹100 • 5 min • Premium 2 min</span></div>
             <p class="panel-help">Pokémon desmaiados não entram em batalha. A recuperação é processada pelo bot e continua mesmo se você fechar o site.</p>
             <div id="pokemonHealingList" class="healing-list"><div class="empty-state small">Nenhum Pokémon em recuperação.</div></div>
           </article>
@@ -270,6 +262,20 @@
               <div class="people-list" id="friendList"><div class="empty-state small">Nenhum amigo ainda.</div></div>
             </article>
           </div>
+        </section>
+
+        <section class="view" data-view="tinder">
+          <div class="section-head"><div><span class="tag">TINDER</span><h2>Descobrir pessoas</h2></div><button class="btn" id="tinderRefreshBtn" type="button">Próximo perfil</button></div>
+          <article class="panel tinder-site-panel">
+            <div class="tinder-site-note"><strong>Mesmo perfil da Charlotte.</strong><span>Seu cadastro, likes e matches continuam sincronizados com o bot. Somente maiores de 18 anos.</span></div>
+            <div class="tinder-site-card" id="tinderSiteCard">
+              <div class="empty-state">Vincule a Charlotte e use /rgtinder no WhatsApp para criar seu perfil.</div>
+            </div>
+            <div class="tinder-site-actions" id="tinderSiteActions" hidden>
+              <button class="btn" id="tinderSkipBtn" type="button">Passar</button>
+              <button class="btn primary" id="tinderLikeBtn" type="button">Curtir ♥</button>
+            </div>
+          </article>
         </section>
 
         <section class="view" data-view="downloads">
@@ -319,10 +325,12 @@
             <div class="table-topbar watch-topbar"><div><button class="back-button" id="watchBackBtn" type="button">← Salas</button><h2 id="watchRoomName">Watch Party</h2><div class="room-meta"><span>Convite</span><button id="watchCopyBtn" class="inline-copy" type="button"><b id="watchCode">------</b></button></div></div><div class="table-top-actions"><button class="btn danger-ghost" id="watchExitBtn" type="button">Sair</button></div></div>
             <div class="watch-layout">
               <section class="panel watch-main">
-                <div class="watch-player-shell" id="watchPlayerShell"><div class="empty-state">Cole um link de vídeo ou compartilhe sua tela.</div></div>
-                <div class="watch-screen-stage" id="watchScreenStage" hidden>
-                  <div class="watch-screen-head"><div><span class="status-dot"></span><strong id="watchScreenLabel">Tela compartilhada</strong></div><button class="btn" id="watchScreenFullscreenBtn" type="button">Tela cheia</button></div>
-                  <video id="watchScreenVideo" autoplay playsinline></video>
+                <div class="watch-player-shell" id="watchPlayerShell">
+                  <div class="watch-media-stage" id="watchMediaStage"><div class="empty-state">Cole um link de vídeo ou compartilhe sua tela.</div></div>
+                  <div class="watch-screen-stage" id="watchScreenStage" hidden>
+                    <div class="watch-screen-head"><div><span class="status-dot"></span><strong id="watchScreenLabel">Tela compartilhada</strong></div><button class="btn" id="watchScreenFullscreenBtn" type="button">Tela cheia</button></div>
+                    <video id="watchScreenVideo" autoplay playsinline></video>
+                  </div>
                 </div>
                 <form class="watch-media-form" id="watchMediaForm"><input id="watchMediaInput" placeholder="YouTube, Google Drive ou link de vídeo direto"><button class="btn primary" type="submit">Carregar</button></form>
                 <div class="watch-controls"><button class="btn" id="watchPlayBtn" type="button">Play/Pause</button><button class="btn" id="watchSyncBtn" type="button">Sincronizar</button><button class="btn screen-share-btn" id="watchShareBtn" type="button">Compartilhar tela</button><span class="pill" id="watchHostPill">Participante</span></div>
@@ -332,6 +340,11 @@
                 <div class="voice-actions watch-voice-actions"><button class="btn primary" id="watchJoinVoiceBtn" type="button">Entrar na voz</button><button class="btn" id="watchMicBtn" type="button" hidden>Microfone</button><button class="btn danger-ghost" id="watchLeaveVoiceBtn" type="button" hidden>Sair da voz</button></div>
                 <div class="remote-media-grid watch-remote-media" id="watchRemoteMedia"></div>
                 <div class="divider"></div><div class="panel-head"><h3>Na sala</h3><span class="pill" id="watchMemberCount">0</span></div><div class="member-list" id="watchMemberList"></div>
+                <div class="divider"></div>
+                <div class="panel-head"><div><h3>Música da sala</h3><small class="muted">₹10 • Premium ₹5</small></div><button class="text-button" id="watchMusicSkipBtn" type="button">Pular</button></div>
+                <form class="watch-music-form" id="watchMusicForm"><input id="watchMusicInput" maxlength="160" placeholder="Pesquisar música"><button class="btn" type="submit">Adicionar</button></form>
+                <div class="watch-music-now" id="watchMusicNow"></div>
+                <div class="watch-music-queue" id="watchMusicQueue"></div>
               </aside>
             </div>
           </div>
@@ -396,7 +409,20 @@
             <article class="store-item" data-store-item="scale_dragon"><div class="store-preview scale-dragon">◇</div><div><small>EFEITO</small><strong>Escamas Gremory</strong><span>₹600</span></div><button class="btn" data-buy-customization="scale_dragon">Comprar</button></article>
             <article class="store-item" data-store-item="name_gold"><div class="store-preview name-gold">G</div><div><small>PERFIL</small><strong>Nome Dourado</strong><span>₹900</span></div><button class="btn" data-buy-customization="name_gold">Comprar</button></article>
             <article class="store-item" data-store-item="aura_rose"><div class="store-preview aura-rose">✦</div><div><small>AURA</small><strong>Rosa Demoníaca</strong><span>₹1200</span></div><button class="btn" data-buy-customization="aura_rose">Comprar</button></article>
+            <article class="store-item" data-store-item="frame_obsidian"><div class="store-preview frame-obsidian">G</div><div><small>MOLDURA</small><strong>Obsidiana</strong><span>₹1650</span></div><button class="btn" data-buy-customization="frame_obsidian">Comprar</button></article>
+            <article class="store-item" data-store-item="frame_royal"><div class="store-preview frame-royal">♛</div><div><small>MOLDURA</small><strong>Imperial</strong><span>₹3200</span></div><button class="btn" data-buy-customization="frame_royal">Comprar</button></article>
+            <article class="store-item" data-store-item="effect_stars"><div class="store-preview effect-stars">✦</div><div><small>EFEITO</small><strong>Estrelas Demoníacas</strong><span>₹1450</span></div><button class="btn" data-buy-customization="effect_stars">Comprar</button></article>
+            <article class="store-item" data-store-item="effect_embers"><div class="store-preview effect-embers">✧</div><div><small>EFEITO</small><strong>Brasas Carmesim</strong><span>₹2800</span></div><button class="btn" data-buy-customization="effect_embers">Comprar</button></article>
+            <article class="store-item" data-store-item="name_rose"><div class="store-preview name-rose">G</div><div><small>NOME</small><strong>Nome Rosa</strong><span>₹1350</span></div><button class="btn" data-buy-customization="name_rose">Comprar</button></article>
+            <article class="store-item" data-store-item="name_ice"><div class="store-preview name-ice">G</div><div><small>NOME</small><strong>Nome Glacial</strong><span>₹2100</span></div><button class="btn" data-buy-customization="name_ice">Comprar</button></article>
+            <article class="store-item" data-store-item="aura_void"><div class="store-preview aura-void">◉</div><div><small>AURA</small><strong>Aura do Vazio</strong><span>₹2600</span></div><button class="btn" data-buy-customization="aura_void">Comprar</button></article>
+            <article class="store-item" data-store-item="badge_demon"><div class="store-preview badge-demon">♛</div><div><small>SELO</small><strong>Selo Demoníaco</strong><span>₹4200</span></div><button class="btn" data-buy-customization="badge_demon">Comprar</button></article>
           </div>
+        </section>
+
+        <section class="view" data-view="updates">
+          <div class="section-head"><div><span class="tag">ATUALIZAÇÕES</span><h2>Novidades</h2></div></div>
+          <div class="updates-feed" id="updatesFeed"><div class="empty-state">Nenhuma atualização publicada.</div></div>
         </section>
 
         <section class="view" data-view="support">
@@ -414,6 +440,8 @@
       <button data-route="charlotte"><span>✦</span><small>Charlotte</small></button>
       <button data-route="pokemon"><span>◉</span><small>Pokémon</small></button>
       <button data-route="friends"><span>◇</span><small>Amigos</small></button>
+      <button data-route="tinder"><span>♥</span><small>Tinder</small></button>
+      <button data-route="updates"><span>◌</span><small>Novidades</small></button>
       <button data-route="downloads"><span>⇩</span><small>Downloads</small></button>
       <button data-route="games"><span>▦</span><small>Jogos</small></button>
       <button data-route="watch"><span>▶</span><small>Watch</small></button>
@@ -444,11 +472,17 @@
 
   <div class="modal" id="sceneModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="sceneModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="sceneModal">×</button><span class="tag">CENA</span><h2>Editar cena</h2><form id="sceneForm" class="stack-form"><label>Título<input id="sceneTitleInput" maxlength="80"></label><label>Descrição<textarea id="sceneDescriptionInput" rows="3" maxlength="300"></textarea></label><label>Imagem (URL)<input id="sceneImageInput" type="url" placeholder="https://..."></label><button class="btn primary full" type="submit">Salvar cena</button></form></div></div>
 
-  <div class="modal" id="publicProfileModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="publicProfileModal"></button><div class="modal-card profile-public-card"><button class="modal-close" data-close-modal="publicProfileModal">×</button><div class="public-profile-hero"><img id="publicProfileAvatar" src="/assets/img/profile.jpg" alt=""><div><span class="tag">PERFIL GREMORY</span><h2 id="publicProfileName">Usuário</h2><p id="publicProfileBio">Conta Gremory</p></div></div><div class="public-profile-details"><div><span>Anime favorito</span><strong id="publicProfileAnime">—</strong></div><div><span>Na Gremory desde</span><strong id="publicProfileSince">—</strong></div></div><div class="modal-actions"><button class="btn primary" id="publicProfileActionBtn" type="button">Adicionar amigo</button><button class="btn" id="publicProfileDuelBtn" type="button">Desafiar Pokémon</button></div></div></div>
+  <div class="modal" id="publicProfileModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="publicProfileModal"></button><div class="modal-card profile-public-card"><button class="modal-close" data-close-modal="publicProfileModal">×</button><div class="public-profile-hero"><img id="publicProfileAvatar" src="/assets/img/profile.jpg" alt=""><div><span class="tag">PERFIL GREMORY</span><h2 id="publicProfileName">Usuário</h2><p id="publicProfileBio">Conta Gremory</p></div></div><div class="public-profile-details"><div><span>Anime favorito</span><strong id="publicProfileAnime">—</strong></div><div><span>Na Gremory desde</span><strong id="publicProfileSince">—</strong></div></div><div class="modal-actions"><button class="btn primary" id="publicProfileActionBtn" type="button">Adicionar amigo</button><button class="btn" id="publicProfileDuelBtn" type="button">Desafiar Pokémon</button><button class="btn danger-ghost" id="publicProfileReportBtn" type="button">Denunciar</button></div></div></div>
 
   <div class="modal" id="watchCreateModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="watchCreateModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="watchCreateModal">×</button><span class="tag">WATCH PARTY</span><h2>Criar sala</h2><form id="watchCreateForm" class="stack-form"><label>Nome da sala<input id="watchNameInput" maxlength="60" placeholder="Ex: Noite de filmes" required></label><button class="btn primary full" type="submit">Criar sala</button></form></div></div>
 
+  <div class="modal" id="gameResultModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="gameResultModal"></button><div class="modal-card result-card"><button class="modal-close" data-close-modal="gameResultModal">×</button><div class="result-icon" id="gameResultIcon">★</div><span class="tag">RESULTADO</span><h2 id="gameResultTitle">Vitória!</h2><p id="gameResultText"></p><button class="btn primary full" data-close-modal="gameResultModal">Continuar</button></div></div>
+
+  <div class="modal" id="notificationModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="notificationModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="notificationModal">×</button><span class="tag">CAIXA DE ENTRADA</span><h2>Notificações</h2><div class="notification-list" id="notificationList"></div></div></div>
+
+  <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
+
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261010-v5-1"></script>
+  <script type="module" src="/assets/js/app.js?v=20261010-v9-2"></script>
 </body>
 </html>

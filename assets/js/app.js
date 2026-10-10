@@ -26,6 +26,7 @@ const $ = (id) => document.getElementById(id);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 const DEFAULT_AVATAR = '/assets/img/profile.jpg';
 const WHATSAPP_NUMBER = '5521973747709';
+let RTC_CONFIG={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
 
 const state = {
   user:null, profile:null, privateData:null, route:'home',
@@ -36,7 +37,8 @@ const state = {
   userUnsubs:[], duel:null, duelUnsub:null,
   bridgeResults:{}, siteInventory:{}, siteCustomization:{},
   teamDraft:[], pokemonEncounter:null, pokemonHealing:{},
-  ttt:{game:null,unsub:null,index:{}},
+  ttt:{game:null,unsub:null,index:{},lastResultId:''},
+  tinder:{current:null,seen:[]},updates:{},notifications:{},ban:null,
   watchCode:null,watchRoom:null,watchUnsubs:[],watchApplying:false,
   watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set()},
   watchYoutube:{lastTime:0,lastState:-1,lastPublishAt:0},
@@ -68,7 +70,7 @@ function permissionMessage(err, fallback='Acesso negado pelo Firebase.'){
 }
 
 const routeMeta={
-  home:['GREMORY','Início'],charlotte:['CHARLOTTE','Charlotte'],pokemon:['POKÉMON','Centro Pokémon'],friends:['AMIGOS','Pessoas'],downloads:['DOWNLOADS','Downloads'],games:['JOGOS','Jogos'],watch:['WATCH PARTY','Assistir com amigos'],rpg:['RPG','Mesas'],premium:['PREMIUM','Gremory Premium'],personalize:['PERSONALIZAR','Loja de rúpias'],support:['SUPORTE','Gremory oficial']
+  home:['GREMORY','Início'],charlotte:['CHARLOTTE','Charlotte'],pokemon:['POKÉMON','Centro Pokémon'],friends:['AMIGOS','Pessoas'],tinder:['TINDER','Descobrir pessoas'],updates:['ATUALIZAÇÕES','Novidades'],downloads:['DOWNLOADS','Downloads'],games:['JOGOS','Jogos'],watch:['WATCH PARTY','Assistir com amigos'],rpg:['RPG','Mesas'],premium:['PREMIUM','Gremory Premium'],personalize:['PERSONALIZAR','Loja de rúpias'],support:['SUPORTE','Gremory oficial']
 };
 function navigate(route){
   if(!routeMeta[route]) route='home'; state.route=route;
@@ -80,6 +82,8 @@ function navigate(route){
   history.replaceState(null,'',`#${route}`); window.scrollTo({top:0,behavior:'auto'});
   if(route==='pokemon') {loadPokemonSources(); renderDuelFriendSelect();}
   if(route==='friends') loadDirectory();
+  if(route==='tinder') loadTinderProfile();
+  if(route==='updates') renderUpdates();
   if(route==='games') renderTttFriendSelect();
   if(route==='watch'&&state.user&&!state.watchCode) loadWatchRooms();
   if(route==='rpg'&&state.user&&!state.roomCode) loadMyRooms();
@@ -150,7 +154,7 @@ function renderAccount(){
 $('profileAvatar').addEventListener('input',()=>{$('profileAvatarPreview').src=$('profileAvatar').value.trim()||DEFAULT_AVATAR});
 $('profileForm').addEventListener('submit',async ev=>{ev.preventDefault();if(!state.user)return;const payload={uid:state.user.uid,nome:$('profileName').value.trim().slice(0,40)||'Usuário',avatar:$('profileAvatar').value.trim(),bio:$('profileBio').value.trim().slice(0,180),favoriteAnime:$('profileFavoriteAnime').value.trim().slice(0,80),createdAt:state.profile?.createdAt||nowIso(),updatedAt:nowIso()};try{await set(ref(db,`profiles/${state.user.uid}`),payload);await set(ref(db,`directory/${state.user.uid}`),publicProfile(payload));if(state.user.displayName!==payload.nome)await updateProfile(state.user,{displayName:payload.nome});state.profile=payload;renderAccount();toast('Perfil salvo.')}catch(e){toast(permissionMessage(e,'Não foi possível salvar o perfil.'))}});
 
-function clearUserSubscriptions(){if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonHealing={};state.ttt.game=null;state.ttt.index={};state.watchCode=null;state.watchRoom=null}
+function clearUserSubscriptions(){if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonHealing={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.ban=null;state.watchCode=null;state.watchRoom=null}
 function startUserSubscriptions(){
   clearUserSubscriptions();const uid=state.user.uid;
   state.userUnsubs.push(onValue(ref(db,`friends/${uid}`),s=>{state.friends=s.exists()?s.val():{};renderFriends();renderDuelFriendSelect();$('homeFriendsText').textContent=`${Object.keys(state.friends).length} amigo${Object.keys(state.friends).length===1?'':'s'}`}));
@@ -165,16 +169,86 @@ function startUserSubscriptions(){
   state.userUnsubs.push(onValue(ref(db,`pokemonSiteEncounter/${uid}`),s=>{state.pokemonEncounter=s.exists()?s.val():null;renderWildEncounter()}));
   state.userUnsubs.push(onValue(ref(db,`pokemonHealing/${uid}`),s=>{state.pokemonHealing=s.exists()?s.val():{};renderHealingList();renderCollection()}));
   state.userUnsubs.push(onValue(ref(db,`ticTacToeIndex/${uid}`),s=>{state.ttt.index=s.exists()?s.val():{};handleTttIndex(state.ttt.index)}));
+  state.userUnsubs.push(onValue(ref(db,'siteUpdates'),s=>{state.updates=s.exists()?s.val():{};renderUpdates()}));
+  let notificationBoot=true;
+  state.userUnsubs.push(onValue(ref(db,`siteNotifications/${uid}`),s=>{
+    const previousCount=Object.keys(state.notifications||{}).length;state.notifications=s.exists()?s.val():{};renderNotifications();
+    const nextCount=Object.keys(state.notifications||{}).length;if(!notificationBoot&&nextCount>previousCount)playNotificationTone();notificationBoot=false;
+  }));
+  state.userUnsubs.push(onValue(ref(db,`siteBans/${uid}`),s=>{state.ban=s.exists()?s.val():null;applySiteBan()}));
 }
 
 await initialAuthPolicy();
 onAuthStateChanged(auth,async user=>{
   document.body.classList.remove('auth-loading');state.user=user||null;
-  if(!user){document.body.classList.remove('authenticated');$('appShell').setAttribute('aria-hidden','true');const gif=$('authGif');if(gif&&!gif.getAttribute('src'))gif.setAttribute('src',gif.dataset.src||'/assets/video/login.gif');clearUserSubscriptions();return}
+  if(!user){document.body.classList.remove('authenticated');$('appShell').setAttribute('aria-hidden','true');const reason=sessionStorage.getItem('gremory:banReason');if(reason){$('authStatus').textContent=`Conta suspensa: ${reason}`;sessionStorage.removeItem('gremory:banReason')}clearUserSubscriptions();return}
   try{await readUserData(user)}catch{}
   document.body.classList.add('authenticated');$('appShell').setAttribute('aria-hidden','false');setTimeout(()=>{const gif=$('authGif');if(gif)gif.removeAttribute('src')},250);startUserSubscriptions();await loadPokemonSources();
-  const inviteCode=new URLSearchParams(location.search).get('rpg');if(inviteCode){navigate('rpg');await joinRoom(inviteCode.toUpperCase())}
+  const params=new URLSearchParams(location.search);
+  const watchInvite=params.get('watch');
+  const rpgInvite=params.get('rpg');
+  if(watchInvite){navigate('watch');await joinWatchRoom(watchInvite.toUpperCase())}
+  else if(rpgInvite){navigate('rpg');await joinRoom(rpgInvite.toUpperCase())}
 });
+
+
+function generatedTone(freq=720,duration=.12){
+  try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;const ctx=new Ctx(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.frequency.value=freq;gain.gain.value=.035;osc.connect(gain);gain.connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+duration);setTimeout(()=>ctx.close().catch(()=>{}),Math.ceil((duration+.15)*1000))}catch{}
+}
+function playSiteSound(name,fallbackFreq=720){
+  try{const audio=new Audio(`/assets/audio/${name}.mp3`);audio.volume=.35;audio.play().catch(()=>generatedTone(fallbackFreq))}catch{generatedTone(fallbackFreq)}
+}
+function playNotificationTone(){playSiteSound('notification',720)}
+function playVictoryTone(){playSiteSound('victory',920)}
+function notificationLastSeen(){return Number(localStorage.getItem('gremory:notifSeen')||0)}
+function renderNotifications(){
+  const rows=Object.entries(state.notifications||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
+  const unseen=rows.filter(x=>Number(x.createdAt||0)>notificationLastSeen()).length,badge=$('notificationBadge');
+  if(badge){badge.hidden=!unseen;badge.textContent=String(Math.min(99,unseen))}
+  const box=$('notificationList');if(!box)return;box.innerHTML='';
+  if(!rows.length){box.innerHTML='<div class="empty-state small">Sua caixa de entrada está vazia.</div>';return}
+  rows.slice(0,40).forEach(n=>{
+    const d=document.createElement('button');d.type='button';d.className='notification-row';const st=document.createElement('strong');st.textContent=n.title||'Notificação';const sm=document.createElement('span');sm.textContent=n.text||'';const time=document.createElement('small');time.textContent=shortDateTime(n.createdAt);d.append(st,sm,time);
+    d.onclick=()=>{if(n.link?.startsWith('#')){closeModal('notificationModal');navigate(n.link.slice(1))}};box.appendChild(d)
+  })
+}
+$('notificationBtn')?.addEventListener('click',()=>{localStorage.setItem('gremory:notifSeen',String(Date.now()));renderNotifications();openModal('notificationModal')});
+function renderUpdates(){
+  const box=$('updatesFeed');if(!box)return;const rows=Object.entries(state.updates||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));box.innerHTML='';
+  if(!rows.length){box.innerHTML='<div class="empty-state">Nenhuma atualização publicada.</div>';return}
+  rows.slice(0,60).forEach(post=>{const art=document.createElement('article');art.className='panel update-card';if(post.imageUrl){const img=document.createElement('img');img.src=post.imageUrl;img.alt='';img.loading='lazy';art.appendChild(img)}const copy=document.createElement('div');const meta=document.createElement('small');meta.textContent=`${post.author||'Gremory'} • ${shortDateTime(post.createdAt)}`;const text=document.createElement('p');text.textContent=post.text||'';copy.append(meta,text);art.appendChild(copy);box.appendChild(art)})
+}
+function applySiteBan(){
+  if(!state.ban||!state.user)return;
+  const reason=String(state.ban.reason||'Violação das regras');
+  sessionStorage.setItem('gremory:banReason',reason);
+  signOut(auth).catch(()=>{});
+}
+async function submitReport(ev){
+  ev.preventDefault();if(!state.user||!currentPublicProfile)return;
+  const targetUid=currentPublicProfile.uid;if(!targetUid||targetUid===state.user.uid)return toast('Você não pode denunciar seu próprio perfil.');
+  const category=$('reportCategory').value,details=$('reportDetails').value.trim();
+  try{
+    const rr=push(ref(db,'siteReports'));
+    await set(rr,{id:rr.key,reporterUid:state.user.uid,targetUid,category,details:details.slice(0,500),createdAt:Date.now(),status:'open'});
+    closeModal('reportModal');$('reportForm').reset();toast('Denúncia enviada para análise.')
+  }catch(e){toast(permissionMessage(e,'Não foi possível enviar a denúncia.'))}
+}
+$('reportForm')?.addEventListener('submit',submitReport);
+
+// Tinder sincronizado com o perfil já existente da Charlotte
+function renderTinderCard(profile){
+  const box=$('tinderSiteCard'),actions=$('tinderSiteActions');if(!box||!actions)return;box.innerHTML='';
+  if(!profile){box.innerHTML='<div class="empty-state">Não encontrei outro perfil disponível agora.</div>';actions.hidden=true;return}
+  const card=document.createElement('article');card.className='tinder-profile-card';const img=document.createElement('img');img.className='tinder-profile-photo';img.src=profile.photo||DEFAULT_AVATAR;img.alt='';const copy=document.createElement('div');copy.className='tinder-profile-copy';const h=document.createElement('h3');h.textContent=`${profile.nome||'Usuário'}${profile.idade?`, ${profile.idade}`:''}`;const bio=document.createElement('p');bio.textContent=profile.bio||'Sem bio.';const stats=document.createElement('small');stats.textContent=`${profile.likes||0} curtidas • ${profile.matches||0} matches`;copy.append(h,bio,stats);card.append(img,copy);box.appendChild(card);actions.hidden=false
+}
+async function loadTinderProfile(){
+  if(!state.user)return;const box=$('tinderSiteCard');if(box)box.innerHTML='<div class="loading-line">Procurando perfil...</div>';
+  if(!linkedCharlotte()){renderTinderCard(null);if(box)box.innerHTML='<div class="empty-state">Vincule a Charlotte primeiro. O cadastro do Tinder continua sendo o mesmo do bot.</div>';return}
+  try{const r=await bridgeRequest('tinder_feed',{skipUids:state.tinder.seen},25000);state.tinder.current=r.profile||null;if(r.profile&&!state.tinder.seen.includes(r.profile.uid))state.tinder.seen.push(r.profile.uid);renderTinderCard(state.tinder.current)}catch(e){if(box)box.innerHTML=`<div class="empty-state">${escText(e.message)}</div>`;$('tinderSiteActions').hidden=true}
+}
+$('tinderRefreshBtn')?.addEventListener('click',loadTinderProfile);$('tinderSkipBtn')?.addEventListener('click',loadTinderProfile);
+$('tinderLikeBtn')?.addEventListener('click',async()=>{const p=state.tinder.current;if(!p)return;try{const r=await bridgeRequest('tinder_like',{targetUid:p.uid},25000);if(r.match){toast(r.contact?`Deu match! Contato: ${r.contact}`:'Deu match! Confira suas notificações.',5500);playNotificationTone()}else toast('Curtida enviada.');await loadTinderProfile()}catch(e){toast(e.message)}});
 
 // Amigos
 async function loadDirectory(){if(!state.user)return;const box=$('peopleSearchResults');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const s=await get(ref(db,'directory'));state.directory=s.exists()?s.val():{};renderPeople('')}catch(e){box.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
@@ -247,9 +321,23 @@ function renderDuelFriendSelect(){const sel=$('duelFriendSelect');if(!sel)return
 $('sendDuelChallengeBtn').addEventListener('click',async()=>{const targetUid=$('duelFriendSelect').value;if(!targetUid)return toast('Escolha um amigo.');if(state.charlottePublic?.status!=='linked')return toast('Vincule a Charlotte primeiro.');try{await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type:'duel_challenge',targetUid,createdAt:nowIso()});toast('Desafio 6x6 enviado.')}catch(e){toast(permissionMessage(e))}});
 function renderDuelInbox(obj){const box=$('duelInbox');box.innerHTML='';const rows=Object.entries(obj||{});if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhum desafio.</div>';return}rows.forEach(([id,c])=>{const r=document.createElement('div');r.className='duel-request';const cp=document.createElement('div');const st=document.createElement('strong');st.textContent=c.fromName||'Desafiante';const sm=document.createElement('small');sm.textContent='quer batalhar 6x6';cp.append(st,sm);const acts=document.createElement('div');acts.className='person-actions';const a=document.createElement('button');a.className='mini-btn primary';a.textContent='Aceitar';a.onclick=()=>duelJob('duel_accept',{challengeId:id});const d=document.createElement('button');d.className='mini-btn';d.textContent='Recusar';d.onclick=()=>duelJob('duel_decline',{challengeId:id});acts.append(a,d);r.append(cp,acts);box.appendChild(r)})}
 async function duelJob(type,data){try{await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type,...data,createdAt:nowIso()});toast(type==='duel_move'?'Golpe enviado.':type==='duel_switch'?'Troca enviada.':'Processando...')}catch(e){toast(permissionMessage(e))}}
-function handleDuelIndex(obj){const entries=Object.entries(obj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));const latest=entries.find(x=>x.status==='active');if(!latest){setActiveDuel(null);return}if(state.duel?.id===latest.id)return;subscribeDuel(latest.id)}
+function handleDuelIndex(obj){
+  const entries=Object.entries(obj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0));
+  const active=entries.find(x=>x.status==='active');
+  if(active){if(state.duel?.id!==active.id)subscribeDuel(active.id);return}
+  const finished=entries.find(x=>x.status==='finished');
+  if(finished&&state.duel?.id!==finished.id)subscribeDuel(finished.id);else if(!finished)setActiveDuel(null)
+}
 function subscribeDuel(id){if(state.duelUnsub){try{state.duelUnsub()}catch{}}state.duelUnsub=onValue(ref(db,`pokemonSiteDuels/${id}`),s=>setActiveDuel(s.exists()?{id,...s.val()}:null))}
-function setActiveDuel(duel){state.duel=duel;const arena=$('duelArena');const lobby=$('duelLobby');if(!duel||duel.status!=='active'){arena.hidden=true;lobby.hidden=false;$('duelStatusPill').textContent=duel?.winnerUid===state.user?.uid?'Vitória':duel?'Encerrado':'Aguardando';return}arena.hidden=false;lobby.hidden=true;$('duelStatusPill').textContent=duel.turnUid===state.user?.uid?'Sua vez':'Vez do rival';renderDuel(duel)}
+function setActiveDuel(duel){
+  const previous=state.duel;state.duel=duel;const arena=$('duelArena');const lobby=$('duelLobby');
+  if(!duel||duel.status!=='active'){
+    arena.hidden=true;lobby.hidden=false;const won=!!duel&&duel.winnerUid===state.user?.uid;$('duelStatusPill').textContent=won?'Vitória':duel?'Encerrado':'Aguardando';
+    if(duel?.status==='finished'&&duel.id&&sessionStorage.getItem('gremory:duelResult')!==duel.id){sessionStorage.setItem('gremory:duelResult',duel.id);const reward=duel.reward||{};showGameResult({title:won?'Vitória Pokémon!':'Batalha encerrada',text:won?(reward.rupias?`Você ganhou ₹${reward.rupias}, ${reward.trainerXp||0} XP e ${reward.pokemonXp||0} XP Pokémon.`:'Você venceu a batalha.'):'A batalha foi encerrada.',win:won,icon:won?'⚡':'◉'})}
+    return
+  }
+  arena.hidden=false;lobby.hidden=true;$('duelStatusPill').textContent=duel.turnUid===state.user?.uid?'Sua vez':'Vez do rival';renderDuel(duel)
+}
 function duelTeam(player){if(Array.isArray(player?.team)&&player.team.length)return player.team.map(normalizeMon);return player?.pokemon?[normalizeMon(player.pokemon)]:[]}
 function duelCurrent(player){const team=duelTeam(player);return team.find(x=>String(x.uid)===String(player?.currentUid))||team[Math.max(0,Number(player?.activeIndex||0))]||team[0]||normalizeMon({})}
 function renderDuelTeamStrip(id,player){const box=$(id);if(!box)return;box.innerHTML='';const cur=duelCurrent(player);duelTeam(player).forEach(p=>{const d=document.createElement('div');d.className='duel-team-ball'+(String(p.uid)===String(cur.uid)?' active':'')+(p.fainted||p.hp<=0?' fainted':'');d.title=`${p.name} • ${Math.max(0,p.hp)}/${p.maxHp}`;const img=document.createElement('img');img.src=p.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`;img.alt='';d.appendChild(img);box.appendChild(d)})}
@@ -321,7 +409,7 @@ async function prepareApkSearch(input){
 async function prepareYoutube(input){
   const box=$('downloadResult');box.innerHTML='';
   const row=document.createElement('div');row.className='download-youtube-card bot-youtube-card';
-  const copy=document.createElement('div');copy.className='download-youtube-copy';const st=document.createElement('strong');st.textContent='YouTube pela Charlotte';const sm=document.createElement('small');sm.textContent='Usa o yt-dlp e o cookies.txt do bot para evitar o bloqueio “Sign in to confirm you’re not a bot”.';
+  const copy=document.createElement('div');copy.className='download-youtube-copy';const st=document.createElement('strong');st.textContent='YouTube pela Charlotte';const sm=document.createElement('small');sm.textContent='O download é processado pela Charlotte e enviado direto no WhatsApp.';
   const query=document.createElement('div');query.className='youtube-query';query.textContent=input;
   const acts=document.createElement('div');acts.className='download-ready-actions';
   const makeBtn=(mode,label)=>{const b=document.createElement('button');b.type='button';b.className=mode==='video'?'btn primary':'btn';b.textContent=label;b.onclick=async()=>{try{if(!linkedCharlotte())throw new Error('Vincule a Charlotte para usar o YouTube com os cookies do bot.');b.disabled=true;const r=await bridgeRequest('youtube_bot_download',{input,mode},120000);box.innerHTML=`<div class="download-ready"><div><strong>${escText(r.title||'YouTube')}</strong><small>${escText(r.message||'Enviado para seu WhatsApp pela Charlotte.')}</small></div></div>`;toast('YouTube processado pela Charlotte.')}catch(e){toast(e.message)}finally{b.disabled=false}};return b};
@@ -356,19 +444,34 @@ $('refreshStoreBtn')?.addEventListener('click',async()=>{try{await requestAccoun
 
 // Personalizações
 const STORE_CATALOG={
-  frame_crimson:{name:'Carmesim',price:350,className:'fx-frame-crimson'},
-  scale_dragon:{name:'Escamas Gremory',price:600,className:'fx-scale-dragon'},
-  name_gold:{name:'Nome Dourado',price:900,className:'fx-name-gold'},
-  aura_rose:{name:'Rosa Demoníaca',price:1200,className:'fx-aura-rose'}
+  frame_crimson:{name:'Carmesim',price:350,className:'fx-frame-crimson',slot:'frame'},
+  frame_obsidian:{name:'Obsidiana',price:1650,className:'fx-frame-obsidian',slot:'frame'},
+  frame_royal:{name:'Imperial',price:3200,className:'fx-frame-royal',slot:'frame'},
+  scale_dragon:{name:'Escamas Gremory',price:600,className:'fx-scale-dragon',slot:'effect'},
+  effect_stars:{name:'Estrelas Demoníacas',price:1450,className:'fx-effect-stars',slot:'effect'},
+  effect_embers:{name:'Brasas Carmesim',price:2800,className:'fx-effect-embers',slot:'effect'},
+  name_gold:{name:'Nome Dourado',price:900,className:'fx-name-gold',slot:'name'},
+  name_rose:{name:'Nome Rosa',price:1350,className:'fx-name-rose',slot:'name'},
+  name_ice:{name:'Nome Glacial',price:2100,className:'fx-name-ice',slot:'name'},
+  aura_rose:{name:'Rosa Demoníaca',price:1200,className:'fx-aura-rose',slot:'aura'},
+  aura_void:{name:'Aura do Vazio',price:2600,className:'fx-aura-void',slot:'aura'},
+  badge_demon:{name:'Selo Demoníaco',price:4200,className:'fx-badge-demon',slot:'badge'}
 };
 function ownedCustomization(id){return !!state.siteInventory?.items?.[id]}
+function equippedCustomizationIds(){
+  const equipped=state.siteCustomization?.equipped||{};
+  const ids=Object.values(equipped).filter(Boolean).map(String);
+  const legacy=String(state.siteCustomization?.active||'');if(legacy&&!ids.includes(legacy))ids.push(legacy);
+  return ids;
+}
 function applyCustomization(){
   Object.values(STORE_CATALOG).forEach(x=>document.body.classList.remove(x.className));
-  const active=state.siteCustomization?.active||'';if(STORE_CATALOG[active]&&ownedCustomization(active))document.body.classList.add(STORE_CATALOG[active].className);
+  equippedCustomizationIds().forEach(id=>{if(STORE_CATALOG[id]&&ownedCustomization(id))document.body.classList.add(STORE_CATALOG[id].className)});
 }
 function renderStore(){
   if($('storeBalance'))$('storeBalance').textContent=`₹ ${formatNumber(accountSnapshot().balance)}`;
-  $$('[data-store-item]').forEach(card=>{const id=card.dataset.storeItem;const owned=ownedCustomization(id);const equipped=state.siteCustomization?.active===id;card.classList.toggle('owned',owned);card.classList.toggle('equipped',equipped);const b=card.querySelector('[data-buy-customization]');if(!b)return;b.textContent=equipped?'Equipado':owned?'Equipar':'Comprar';b.classList.toggle('primary',!owned||!equipped)})
+  const equipped=new Set(equippedCustomizationIds());
+  $$('[data-store-item]').forEach(card=>{const id=card.dataset.storeItem;const owned=ownedCustomization(id);const isEquipped=equipped.has(id);card.classList.toggle('owned',owned);card.classList.toggle('equipped',isEquipped);const b=card.querySelector('[data-buy-customization]');if(!b)return;b.textContent=isEquipped?'Equipado':owned?'Equipar':'Comprar';b.classList.toggle('primary',!owned||!isEquipped)})
 }
 $$('[data-buy-customization]').forEach(btn=>btn.addEventListener('click',async()=>{
   const itemId=btn.dataset.buyCustomization;try{btn.disabled=true;if(!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');if(ownedCustomization(itemId)){await bridgeRequest('equip_customization',{itemId});toast('Personalização equipada.')}else{const r=await bridgeRequest('buy_customization',{itemId},25000);toast(`${STORE_CATALOG[itemId]?.name||'Item'} comprado por ₹${formatNumber(r.price||0)}.`);await requestAccountSync().catch(()=>{})}}catch(e){toast(e.message)}finally{btn.disabled=false}
@@ -416,13 +519,35 @@ async function openPublicProfile(uid,fallback={}){
 }
 $('publicProfileActionBtn')?.addEventListener('click',()=>{if(currentPublicProfile)sendFriendRequest(currentPublicProfile.uid,currentPublicProfile)});
 $('publicProfileDuelBtn')?.addEventListener('click',()=>{if(!currentPublicProfile)return;closeModal('publicProfileModal');navigate('pokemon');$('duelFriendSelect').value=currentPublicProfile.uid;setTimeout(()=>$('sendDuelChallengeBtn')?.scrollIntoView({behavior:'smooth',block:'center'}),80)});
+$('publicProfileReportBtn')?.addEventListener('click',()=>{if(!currentPublicProfile)return;closeModal('publicProfileModal');openModal('reportModal')});
+
+function burstConfetti(){
+  const root=document.createElement('div');root.className='confetti-root';
+  for(let i=0;i<34;i++){const bit=document.createElement('i');bit.className='confetti-piece';bit.style.setProperty('--x',`${Math.random()*100}%`);bit.style.setProperty('--delay',`${Math.random()*.45}s`);bit.style.setProperty('--spin',`${Math.round(Math.random()*720+180)}deg`);bit.style.setProperty('--dur',`${1.2+Math.random()*.9}s`);bit.style.background=`hsl(${Math.floor(Math.random()*360)} 78% 62%)`;root.appendChild(bit)}
+  document.body.appendChild(root);setTimeout(()=>root.remove(),2600)
+}
+function showGameResult({title='Partida encerrada',text='',win=false,icon='★'}={}){
+  if($('gameResultTitle'))$('gameResultTitle').textContent=title;if($('gameResultText'))$('gameResultText').textContent=text;if($('gameResultIcon'))$('gameResultIcon').textContent=icon;openModal('gameResultModal');if(win){burstConfetti();playVictoryTone()}
+}
 
 // Jogo da velha seguro pelo bridge
 function renderTttFriendSelect(){const sel=$('tttFriendSelect');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';sel.appendChild(o)});if(state.friends[cur])sel.value=cur}
 $('tttCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('tttFriendSelect').value;if(!targetUid)return toast('Escolha um amigo.');try{await bridgeRequest('ttt_create',{targetUid},25000,false);toast('Partida criada.')}catch(e){toast(e.message)}});
-function handleTttIndex(obj){const rows=Object.entries(obj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0));const active=rows.find(x=>x.status==='active');if(!active){setTttGame(null);return}if(state.ttt.game?.id===active.id)return;subscribeTtt(active.id)}
+function handleTttIndex(obj){
+  const rows=Object.entries(obj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0));
+  const active=rows.find(x=>x.status==='active');if(active){if(state.ttt.game?.id!==active.id)subscribeTtt(active.id);return}
+  const finished=rows.find(x=>x.status==='finished');if(finished&&state.ttt.game?.id!==finished.id)subscribeTtt(finished.id);else if(!finished)setTttGame(null)
+}
 function subscribeTtt(id){if(state.ttt.unsub){try{state.ttt.unsub()}catch{}}state.ttt.unsub=onValue(ref(db,`ticTacToeGames/${id}`),sn=>setTttGame(sn.exists()?{id,...sn.val()}:null))}
-function setTttGame(g){state.ttt.game=g;const panel=$('tttGamePanel');if(!g||g.status!=='active'){panel.hidden=true;$('tttStatus').textContent=g?.winnerUid===state.user?.uid?'Você venceu':g?'Encerrada':'Livre';return}panel.hidden=false;$('tttStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderTtt(g)}
+function setTttGame(g){
+  state.ttt.game=g;const panel=$('tttGamePanel');
+  if(!g||g.status!=='active'){
+    panel.hidden=true;const won=!!g&&g.winnerUid===state.user?.uid;const draw=!!g&&!g.winnerUid;$('tttStatus').textContent=won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';
+    if(g?.status==='finished'&&g.id&&state.ttt.lastResultId!==g.id){state.ttt.lastResultId=g.id;const reward=g.reward||{};showGameResult({title:draw?'Empate!':won?'Vitória!':'Partida encerrada',text:draw?'Ninguém venceu essa rodada.':won?(reward.rupias?`Você ganhou ₹${reward.rupias}.`:'Você venceu. O limite diário de recompensa pode ter sido atingido.'):'Seu amigo venceu esta rodada.',win:won,icon:draw?'＝':won?'✦':'✕'})}
+    return
+  }
+  panel.hidden=false;$('tttStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderTtt(g)
+}
 function renderTtt(g){const me=g.players?.[state.user.uid],other=Object.values(g.players||{}).find(x=>x.uid!==state.user.uid);$('tttTitle').textContent=`${me?.name||'Você'} × ${other?.name||'Amigo'}`;$('tttTurnText').textContent=g.turnUid===state.user.uid?`Sua vez • você é ${me?.symbol||'X'}`:`Vez de ${other?.name||'amigo'}`;const board=$('tttBoard');board.innerHTML='';const cells=Array.isArray(g.board)?g.board:Array.from({length:9},(_,i)=>g.board?.[i]||'');cells.forEach((v,i)=>{const b=document.createElement('button');b.type='button';b.className='ttt-cell';b.textContent=v||'';b.disabled=!!v||g.turnUid!==state.user.uid||g.status!=='active';b.onclick=async()=>{try{await bridgeRequest('ttt_move',{gameId:g.id,index:i},20000,false)}catch(e){toast(e.message)}};board.appendChild(b)});const log=$('tttLog');log.innerHTML=Object.values(g.log||{}).slice(-8).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
 $('tttExitBtn')?.addEventListener('click',async()=>{if(!state.ttt.game)return;try{await bridgeRequest('ttt_exit',{gameId:state.ttt.game.id},20000,false)}catch(e){toast(e.message)}});
 
@@ -433,7 +558,7 @@ $('watchJoinForm')?.addEventListener('submit',async ev=>{ev.preventDefault();con
 $('watchCreateForm')?.addEventListener('submit',createWatchRoom);
 $('watchBackBtn')?.addEventListener('click',()=>closeWatchRoom(false));
 $('watchExitBtn')?.addEventListener('click',exitWatchRoom);
-$('watchCopyBtn')?.addEventListener('click',()=>navigator.clipboard?.writeText(state.watchCode||'').then(()=>toast('Código copiado.')).catch(()=>{}));
+$('watchCopyBtn')?.addEventListener('click',()=>{const code=state.watchCode||'';if(!code)return;const invite=`${location.origin}${location.pathname}?watch=${encodeURIComponent(code)}#watch`;navigator.clipboard?.writeText(invite).then(()=>toast('Link de convite copiado.')).catch(()=>toast(`Código da sala: ${code}`))});
 $('watchMediaForm')?.addEventListener('submit',setWatchMedia);
 $('watchPlayBtn')?.addEventListener('click',toggleWatchPlayback);
 $('watchSyncBtn')?.addEventListener('click',syncWatchPlayer);
@@ -443,8 +568,13 @@ async function loadWatchRooms(){if(!state.user)return;const box=$('watchRoomsLis
 async function joinWatchRoom(code){if(!state.user)return;try{const sn=await get(ref(db,`watchRooms/${code}`));if(!sn.exists())throw new Error('Sala não encontrada.');const room=sn.val(),member={uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:room.meta?.ownerUid===state.user.uid?'Host':'Participante',joinedAt:nowIso()};await set(ref(db,`watchRooms/${code}/members/${state.user.uid}`),member);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name:room.meta?.name||code,role:member.role,joinedAt:nowIso()});$('watchJoinCode').value='';await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível entrar.'))}}
 async function openWatchRoom(code){clearUnsubs(state.watchUnsubs);state.watchCode=code;$('watchLobby').hidden=true;$('watchRoom').hidden=false;state.watchUnsubs.push(onValue(ref(db,`watchRooms/${code}`),sn=>{if(!sn.exists()){toast('Essa sala não existe mais.');closeWatchRoom(false);return}state.watchRoom=sn.val();renderWatchRoom()}));navigate('watch')}
 function isWatchHost(){return !!state.user&&state.watchRoom?.meta?.ownerUid===state.user.uid}
-function renderWatchRoom(){const r=state.watchRoom||{},m=r.meta||{};$('watchRoomName').textContent=m.name||'Watch Party';$('watchCode').textContent=state.watchCode||'------';$('watchHostPill').textContent=isWatchHost()?'Host':'Participante';$('watchMemberCount').textContent=String(Object.keys(r.members||{}).length);const list=$('watchMemberList');list.innerHTML='';Object.values(r.members||{}).forEach(x=>{const d=document.createElement('div');d.className='member-item watch-member-item';const img=document.createElement('img');img.src=x.avatar||DEFAULT_AVATAR;const c=document.createElement('div');c.innerHTML=`<strong>${escText(x.name||'Usuário')}</strong><small>${escText(x.role||'Participante')}</small>`;d.append(img,c);list.appendChild(d)});$('watchMediaInput').disabled=!isWatchHost();$('watchMediaForm').querySelector('button').disabled=!isWatchHost();$('watchPlayBtn').disabled=!isWatchHost();renderWatchMedia(r.media||{});watchVoiceUi();if(!state.watchRtc.joined)ensureWatchRtcSession().catch(()=>{})}
-function youtubeEmbed(url){
+function renderWatchRoom(){
+  const r=state.watchRoom||{},m=r.meta||{};$('watchRoomName').textContent=m.name||'Watch Party';$('watchCode').textContent=state.watchCode||'------';$('watchHostPill').textContent=isWatchHost()?'Host':'Participante';$('watchMemberCount').textContent=String(Object.keys(r.members||{}).length);
+  const list=$('watchMemberList');list.innerHTML='';Object.values(r.members||{}).forEach(x=>{const d=document.createElement('div');d.className='member-item watch-member-item';const img=document.createElement('img');img.src=x.avatar||DEFAULT_AVATAR;const c=document.createElement('div');c.innerHTML=`<strong>${escText(x.name||'Usuário')}</strong><small>${escText(x.role||'Participante')}</small>`;d.append(img,c);list.appendChild(d)});
+  $('watchMediaInput').disabled=!isWatchHost();$('watchMediaForm').querySelector('button').disabled=!isWatchHost();$('watchPlayBtn').disabled=!isWatchHost();if($('watchMusicSkipBtn'))$('watchMusicSkipBtn').disabled=!isWatchHost();
+  renderWatchMedia(r.media||{});renderWatchMusic(r.musicQueue||{});watchVoiceUi();if(!state.watchRtc.joined)ensureWatchRtcSession().catch(()=>{})
+}
+function youtubeEmbed(url,viewerLocked=false){
   try{
     const u=new URL(url);let id='';
     if(u.hostname.includes('youtu.be'))id=u.pathname.slice(1).split('/')[0];
@@ -455,7 +585,7 @@ function youtubeEmbed(url){
     }
     if(!id)return'';
     const origin=encodeURIComponent(location.origin);
-    return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?enablejsapi=1&playsinline=1&origin=${origin}&rel=0`;
+    return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?enablejsapi=1&playsinline=1&origin=${origin}&rel=0${viewerLocked?'&controls=0&disablekb=1':''}`;
   }catch{return''}
 }
 function googleDriveFileId(url){
@@ -488,7 +618,7 @@ async function publishYoutubeStateFromEvent(playing){
 }
 window.addEventListener('message',ev=>{
   if(!/^https:\/\/(?:www\.)?(?:youtube\.com|youtube-nocookie\.com)$/i.test(String(ev.origin||'')))return;
-  const iframe=$('watchPlayerShell')?.querySelector('iframe[data-watch-youtube="1"]');if(!iframe||ev.source!==iframe.contentWindow)return;
+  const iframe=$('watchMediaStage')?.querySelector('iframe[data-watch-youtube="1"]');if(!iframe||ev.source!==iframe.contentWindow)return;
   let data=ev.data;try{if(typeof data==='string')data=JSON.parse(data)}catch{return}if(!data||typeof data!=='object')return;
   if(data.event==='infoDelivery'&&data.info&&typeof data.info==='object'){
     if(Number.isFinite(Number(data.info.currentTime)))state.watchYoutube.lastTime=Number(data.info.currentTime);
@@ -501,39 +631,30 @@ window.addEventListener('message',ev=>{
   }
 });
 function renderWatchMedia(media){
-  const shell=$('watchPlayerShell'),url=String(media.url||'');
-  const playBtn=$('watchPlayBtn'),syncBtn=$('watchSyncBtn');
+  const stage=$('watchMediaStage'),url=String(media.url||'');if(!stage)return;
+  const playBtn=$('watchPlayBtn'),syncBtn=$('watchSyncBtn'),host=isWatchHost();
   if(playBtn)playBtn.textContent=media.playing?'Pausar':'Reproduzir';
-  if(!url){shell.innerHTML='<div class="empty-state">Cole um link do YouTube, Google Drive ou vídeo direto; ou compartilhe sua tela.</div>';if(playBtn)playBtn.disabled=true;if(syncBtn)syncBtn.disabled=true;return}
-  const yt=youtubeEmbed(url),drive=googleDriveEmbed(url);
+  if(!url){if(!state.watchRtc.activeScreenUid&&!state.watchRtc.screenStream)stage.innerHTML='<div class="empty-state">Cole um link do YouTube, Google Drive ou vídeo direto; ou compartilhe sua tela.</div>';if(playBtn)playBtn.disabled=true;if(syncBtn)syncBtn.disabled=true;return}
+  const yt=youtubeEmbed(url,!host),drive=googleDriveEmbed(url);
   if(yt){
-    if(playBtn)playBtn.disabled=!isWatchHost();if(syncBtn)syncBtn.disabled=false;
-    let f=shell.querySelector('iframe[data-watch-youtube="1"]');
-    if(!f||shell.dataset.url!==url){
-      shell.innerHTML='';f=document.createElement('iframe');f.className='watch-iframe';f.dataset.watchYoutube='1';f.src=yt;f.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';f.allowFullscreen=true;shell.appendChild(f);shell.dataset.url=url;
-      f.addEventListener('load',()=>setTimeout(()=>{startYoutubeListening(f);applyYoutubeWatchState(f,state.watchRoom?.media||media)},300));
-    }else setTimeout(()=>{startYoutubeListening(f);applyYoutubeWatchState(f,media)},35);
+    if(playBtn)playBtn.disabled=!host;if(syncBtn)syncBtn.disabled=false;
+    let f=stage.querySelector('iframe[data-watch-youtube="1"]');
+    if(!f||stage.dataset.url!==url){stage.innerHTML='';f=document.createElement('iframe');f.className='watch-iframe'+(host?'':' watch-viewer-locked');f.dataset.watchYoutube='1';f.src=yt;f.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';f.allowFullscreen=true;stage.appendChild(f);stage.dataset.url=url;f.addEventListener('load',()=>setTimeout(()=>{startYoutubeListening(f);applyYoutubeWatchState(f,state.watchRoom?.media||media)},300))}
+    else setTimeout(()=>{startYoutubeListening(f);applyYoutubeWatchState(f,media)},35);
     return
   }
   if(drive){
     if(playBtn){playBtn.disabled=true;playBtn.textContent='Controles no Drive'}if(syncBtn)syncBtn.disabled=true;
-    let f=shell.querySelector('iframe[data-watch-drive="1"]');
-    if(!f||shell.dataset.url!==url){shell.innerHTML='';f=document.createElement('iframe');f.className='watch-iframe drive-iframe';f.dataset.watchDrive='1';f.src=drive;f.allow='autoplay; fullscreen';f.allowFullscreen=true;shell.appendChild(f);shell.dataset.url=url}
-    return
+    let f=stage.querySelector('iframe[data-watch-drive="1"]');if(!f||stage.dataset.url!==url){stage.innerHTML='';f=document.createElement('iframe');f.className='watch-iframe drive-iframe';f.dataset.watchDrive='1';f.src=drive;f.allow='autoplay; fullscreen';f.allowFullscreen=true;stage.appendChild(f);stage.dataset.url=url}return
   }
-  if(playBtn)playBtn.disabled=!isWatchHost();if(syncBtn)syncBtn.disabled=false;
-  let v=shell.querySelector('video');
-  if(!v||shell.dataset.url!==url){
-    shell.innerHTML='';v=document.createElement('video');v.className='watch-video';v.src=url;v.controls=true;v.playsInline=true;shell.appendChild(v);shell.dataset.url=url;
-    v.addEventListener('play',()=>{if(isWatchHost()&&!state.watchApplying)publishWatchPlayer(true)});
-    v.addEventListener('pause',()=>{if(isWatchHost()&&!state.watchApplying)publishWatchPlayer(false)});
-    v.addEventListener('seeked',()=>{if(isWatchHost()&&!state.watchApplying)publishWatchPlayer(!v.paused)});
-  }
-  const target=watchMediaPosition(media);
+  if(playBtn)playBtn.disabled=!host;if(syncBtn)syncBtn.disabled=false;
+  let v=stage.querySelector('video');if(!v||stage.dataset.url!==url){stage.innerHTML='';v=document.createElement('video');v.className='watch-video';v.src=url;v.controls=host;v.playsInline=true;stage.appendChild(v);stage.dataset.url=url;v.addEventListener('play',()=>{if(host&&!state.watchApplying)publishWatchPlayer(true)});v.addEventListener('pause',()=>{if(host&&!state.watchApplying)publishWatchPlayer(false)});v.addEventListener('seeked',()=>{if(host&&!state.watchApplying)publishWatchPlayer(!v.paused)})}
+  v.controls=host;v.classList.toggle('watch-viewer-locked',!host);const target=watchMediaPosition(media);
   if(Math.abs((v.currentTime||0)-target)>2){state.watchApplying=true;try{v.currentTime=target}catch{}setTimeout(()=>state.watchApplying=false,250)}
   if(media.playing&&v.paused){state.watchApplying=true;v.play().catch(()=>{}).finally(()=>setTimeout(()=>state.watchApplying=false,250))}
   if(!media.playing&&!v.paused){state.watchApplying=true;v.pause();setTimeout(()=>state.watchApplying=false,250)}
 }
+
 async function setWatchMedia(ev){
   ev.preventDefault();if(!isWatchHost())return;const url=$('watchMediaInput').value.trim();if(!/^https?:\/\//i.test(url))return toast('Use um link http/https.');
   const type=youtubeEmbed(url)?'youtube':googleDriveEmbed(url)?'drive':'video';
@@ -541,12 +662,12 @@ async function setWatchMedia(ev){
   if(type==='drive')toast('Google Drive carregado. O Drive não permite sincronizar Play/Pause por API; cada pessoa usa os controles do player.');
 }
 async function publishWatchPlayer(playing){
-  if(!isWatchHost())return;const shell=$('watchPlayerShell'),v=shell.querySelector('video'),media=state.watchRoom?.media||{};
+  if(!isWatchHost())return;const shell=$('watchMediaStage'),v=shell?.querySelector('video'),media=state.watchRoom?.media||{};
   const position=v?Number(v.currentTime||0):(media.type==='youtube'?Number(state.watchYoutube.lastTime||watchMediaPosition(media)):watchMediaPosition(media));
   await update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:!!playing,position,updatedAt:Date.now()}).catch(()=>{})
 }
 async function toggleWatchPlayback(){
-  if(!isWatchHost())return;const shell=$('watchPlayerShell'),v=shell.querySelector('video'),media=state.watchRoom?.media||{};
+  if(!isWatchHost())return;const shell=$('watchMediaStage'),v=shell?.querySelector('video'),media=state.watchRoom?.media||{};
   if(media.type==='drive')return toast('No Google Drive, Play/Pause usa os controles do próprio player.');
   if(v){if(v.paused)v.play().catch(()=>{});else v.pause();return}
   const iframe=shell.querySelector('iframe[data-watch-youtube="1"]');
@@ -555,8 +676,17 @@ async function toggleWatchPlayback(){
 }
 function syncWatchPlayer(){
   const media=state.watchRoom?.media||{};if(media.type==='drive')return toast('Google Drive não expõe sincronização de reprodução.');
-  const iframe=$('watchPlayerShell').querySelector('iframe[data-watch-youtube="1"]');if(iframe)applyYoutubeWatchState(iframe,media);else renderWatchMedia(media);toast('Player sincronizado.')
+  const iframe=$('watchMediaStage')?.querySelector('iframe[data-watch-youtube="1"]');if(iframe)applyYoutubeWatchState(iframe,media);else renderWatchMedia(media);toast('Player sincronizado.')
 }
+function renderWatchMusic(queueObj={}){
+  const rows=Object.entries(queueObj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0));const now=$('watchMusicNow'),box=$('watchMusicQueue');if(!now||!box)return;now.innerHTML='';box.innerHTML='';
+  if(!rows.length){now.innerHTML='<div class="empty-state small">Nenhuma música na fila.</div>';return}
+  const current=rows[0],card=document.createElement('div');card.className='watch-music-current';const copy=document.createElement('div');const st=document.createElement('strong');st.textContent=current.title||'Música';const sm=document.createElement('small');sm.textContent=`Pedido por ${current.requestedName||'participante'} • ₹${current.cost||0}`;copy.append(st,sm);const iframe=document.createElement('iframe');iframe.className='watch-music-player';iframe.src=`https://www.youtube-nocookie.com/embed/${encodeURIComponent(current.videoId||'')}?autoplay=1&playsinline=1&rel=0`;iframe.allow='autoplay; encrypted-media';iframe.title='Música da sala';card.append(copy,iframe);now.appendChild(card);
+  rows.slice(1,10).forEach((x,i)=>{const row=document.createElement('div');row.className='watch-music-row';row.innerHTML=`<span>${i+1}</span><div><strong>${escText(x.title||'Música')}</strong><small>${escText(x.requestedName||'Participante')}</small></div>`;box.appendChild(row)})
+}
+$('watchMusicForm')?.addEventListener('submit',async ev=>{ev.preventDefault();const query=$('watchMusicInput').value.trim();if(!query)return;try{const r=await bridgeRequest('watch_music_add',{roomCode:state.watchCode,query},30000);$('watchMusicInput').value='';toast(`Música adicionada por ₹${r.cost||0}.`)}catch(e){toast(e.message)}});
+$('watchMusicSkipBtn')?.addEventListener('click',async()=>{if(!isWatchHost())return toast('Somente o host pode pular.');try{const r=await bridgeRequest('watch_music_skip',{roomCode:state.watchCode},20000);toast(r.skipped?'Música pulada.':'A fila está vazia.')}catch(e){toast(e.message)}});
+
 async function closeWatchRoom(silent=false){await leaveWatchVoice(true);clearUnsubs(state.watchUnsubs);state.watchCode=null;state.watchRoom=null;$('watchRoom').hidden=true;$('watchLobby').hidden=false;if(!silent)loadWatchRooms()}
 async function exitWatchRoom(){if(!state.user||!state.watchCode)return;const code=state.watchCode;if(isWatchHost())return deleteWatchRoom(code,state.watchRoom?.meta?.name);try{await remove(ref(db,`watchRooms/${code}/members/${state.user.uid}`));await remove(ref(db,`watchUserRooms/${state.user.uid}/${code}`));await closeWatchRoom(false)}catch(e){toast(permissionMessage(e))}}
 async function deleteWatchRoom(code,name='Sala'){if(!state.user||!code||!confirm(`Apagar "${name||code}" para todos?`))return;try{const sn=await get(ref(db,`watchRooms/${code}`));const room=sn.val()||{};if(room.meta?.ownerUid!==state.user.uid)throw new Error('Só o host pode apagar.');await Promise.all(Object.keys(room.members||{}).map(uid=>remove(ref(db,`watchUserRooms/${uid}/${code}`)).catch(()=>{})));await remove(ref(db,`watchRooms/${code}`));await remove(ref(db,`watchVoice/${code}`)).catch(()=>{});await remove(ref(db,`watchRtc/${code}`)).catch(()=>{});await closeWatchRoom(false);toast('Sala apagada.')}catch(e){toast(permissionMessage(e,e.message))}}
@@ -571,47 +701,34 @@ function watchVoiceUi(){
 }
 function watchPeerName(uid){return state.watchRoom?.members?.[uid]?.name||'Participante'}
 function ensureWatchCallCard(uid){
-  const grid=$('watchRemoteMedia');if(!grid)return null;
-  let card=grid.querySelector(`[data-watch-peer="${CSS.escape(uid)}"]`);
+  const grid=$('watchRemoteMedia');if(!grid)return null;let card=grid.querySelector(`[data-watch-peer="${CSS.escape(uid)}"]`);
   if(!card){
     card=document.createElement('div');card.className='watch-call-card';card.dataset.watchPeer=uid;
     const avatar=document.createElement('img');avatar.src=state.watchRoom?.members?.[uid]?.avatar||DEFAULT_AVATAR;avatar.alt='';
-    const copy=document.createElement('div');const name=document.createElement('strong');name.textContent=watchPeerName(uid);const status=document.createElement('small');status.textContent='Conectado';copy.append(name,status);
-    const audio=document.createElement('audio');audio.autoplay=true;audio.muted=!state.watchRtc.audioJoined;card.append(avatar,copy,audio);grid.appendChild(card)
+    const copy=document.createElement('div');copy.className='watch-call-copy';const name=document.createElement('strong');name.textContent=watchPeerName(uid);const status=document.createElement('small');status.textContent='Conectado';copy.append(name,status);
+    const view=document.createElement('button');view.type='button';view.className='mini-btn watch-view-screen';view.textContent='Assistir tela';view.hidden=true;view.onclick=()=>{const stream=state.watchRtc.remoteStreams.get(uid);if(!watchRemoteHasScreen(uid,stream))return toast('A tela ainda está conectando.');state.watchRtc.activeScreenUid=uid;refreshWatchScreenStage()};
+    const audio=document.createElement('audio');audio.autoplay=true;audio.muted=!state.watchRtc.audioJoined;card.append(avatar,copy,view,audio);grid.appendChild(card)
   }
-  return card;
+  return card
 }
-function watchRemoteHasScreen(uid,stream){
-  return state.watchRtc.screenSharers.has(String(uid||''))&&!!stream?.getVideoTracks?.().some(t=>t.readyState==='live');
-}
-
+function watchRemoteHasScreen(uid,stream){return state.watchRtc.screenSharers.has(String(uid||''))&&!!stream?.getVideoTracks?.().some(t=>t.readyState==='live')}
+function updateWatchPeerScreenButton(uid){const card=ensureWatchCallCard(uid),btn=card?.querySelector('.watch-view-screen'),stream=state.watchRtc.remoteStreams.get(uid),sharing=state.watchRtc.screenSharers.has(String(uid));if(btn)btn.hidden=!sharing;const status=card?.querySelector('small');if(status)status.textContent=sharing?(watchRemoteHasScreen(uid,stream)?'Compartilhando tela':'Conectando tela...'):'Conectado'}
 function refreshWatchScreenStage(){
-  const stage=$('watchScreenStage'),video=$('watchScreenVideo'),label=$('watchScreenLabel');if(!stage||!video)return;
-  let stream=null,uid=null,isLocal=false;
-  const localTrack=state.watchRtc.screenStream?.getVideoTracks?.()[0];
-  if(localTrack&&localTrack.readyState==='live'){stream=state.watchRtc.screenStream;uid=state.user?.uid;isLocal=true}
-  if(!stream){
-    for(const [peerUid,remote] of state.watchRtc.remoteStreams.entries()){
-      if(watchRemoteHasScreen(peerUid,remote)){stream=remote;uid=peerUid;break}
-    }
-  }
-  state.watchRtc.activeScreenUid=uid||null;
-  if(!stream){video.srcObject=null;stage.hidden=true;return}
-  stage.hidden=false;
-  const screenTrack=stream.getVideoTracks?.()[0]||null;
-  const currentTrack=video.srcObject?.getVideoTracks?.()[0]||null;
-  if(screenTrack&&currentTrack?.id!==screenTrack.id)video.srcObject=new MediaStream([screenTrack]);
-  video.muted=true;video.play?.().catch(()=>{});
-  if(label)label.textContent=isLocal?'Você está compartilhando':`${watchPeerName(uid)} está compartilhando`;
+  const stage=$('watchScreenStage'),video=$('watchScreenVideo'),label=$('watchScreenLabel'),mediaStage=$('watchMediaStage');if(!stage||!video)return;
+  let stream=null,uid=null,isLocal=false;const localUid=String(state.user?.uid||''),localTrack=state.watchRtc.screenStream?.getVideoTracks?.()[0];
+  if(state.watchRtc.activeScreenUid&&state.watchRtc.activeScreenUid!==localUid){const remote=state.watchRtc.remoteStreams.get(state.watchRtc.activeScreenUid);if(watchRemoteHasScreen(state.watchRtc.activeScreenUid,remote)){stream=remote;uid=state.watchRtc.activeScreenUid}}
+  if(!stream&&localTrack&&localTrack.readyState==='live'){stream=state.watchRtc.screenStream;uid=localUid;isLocal=true}
+  if(!stream){for(const [peerUid,remote] of state.watchRtc.remoteStreams.entries()){if(watchRemoteHasScreen(peerUid,remote)){stream=remote;uid=peerUid;break}}}
+  if(!stream){state.watchRtc.activeScreenUid=null;video.srcObject=null;stage.hidden=true;if(mediaStage)mediaStage.hidden=false;return}
+  state.watchRtc.activeScreenUid=uid;stage.hidden=false;if(mediaStage)mediaStage.hidden=true;
+  const screenTrack=stream.getVideoTracks?.()[0]||null,currentTrack=video.srcObject?.getVideoTracks?.()[0]||null;if(screenTrack&&currentTrack?.id!==screenTrack.id)video.srcObject=new MediaStream([screenTrack]);video.muted=true;video.play?.().catch(()=>{});if(label)label.textContent=isLocal?'Sua tela compartilhada':`${watchPeerName(uid)} está compartilhando`
 }
 function attachWatchRemote(uid,stream){
-  state.watchRtc.remoteStreams.set(uid,stream);
-  const card=ensureWatchCallCard(uid),status=card?.querySelector('small'),audio=card?.querySelector('audio');
-  if(audio&&audio.srcObject!==stream)audio.srcObject=stream;if(audio)audio.muted=!state.watchRtc.audioJoined;
-  if(status)status.textContent=watchRemoteHasScreen(uid,stream)?'Compartilhando tela':'Conectado';
-  for(const track of stream?.getVideoTracks?.()||[]){const refresh=()=>{if(status)status.textContent=watchRemoteHasScreen(uid,stream)?'Compartilhando tela':'Conectado';refreshWatchScreenStage()};track.onmute=refresh;track.onunmute=refresh;track.onended=refresh}
-  refreshWatchScreenStage();
+  state.watchRtc.remoteStreams.set(uid,stream);const card=ensureWatchCallCard(uid),audio=card?.querySelector('audio');if(audio&&audio.srcObject!==stream)audio.srcObject=stream;if(audio)audio.muted=!state.watchRtc.audioJoined;updateWatchPeerScreenButton(uid);
+  for(const track of stream?.getVideoTracks?.()||[]){const refresh=()=>{updateWatchPeerScreenButton(uid);refreshWatchScreenStage()};track.onmute=refresh;track.onunmute=refresh;track.onended=refresh}
+  if(state.watchRtc.screenSharers.has(String(uid))&&!state.watchRtc.activeScreenUid)state.watchRtc.activeScreenUid=uid;refreshWatchScreenStage()
 }
+
 function removeWatchPeer(uid){
   const pc=state.watchRtc.peers.get(uid);try{pc?.close()}catch{}state.watchRtc.peers.delete(uid);state.watchRtc.remoteStreams.delete(uid);
   $('watchRemoteMedia')?.querySelector(`[data-watch-peer="${CSS.escape(uid)}"]`)?.remove();refreshWatchScreenStage()
@@ -626,7 +743,7 @@ async function createWatchPeer(peerUid,initiator=false){
   const screenTrack=state.watchRtc.screenStream?.getVideoTracks?.()[0];if(screenTrack)await videoTr.sender.replaceTrack(screenTrack);
   pc.ontrack=ev=>{const stream=state.watchRtc.remoteStreams.get(peerUid)||remote;if(!stream.getTracks().some(t=>t.id===ev.track.id))stream.addTrack(ev.track);attachWatchRemote(peerUid,stream)};
   pc.onicecandidate=ev=>{if(ev.candidate)sendWatchRtc(peerUid,{type:'candidate',candidate:ev.candidate.toJSON()}).catch(()=>{})};
-  pc.onconnectionstatechange=()=>{if(['failed','closed','disconnected'].includes(pc.connectionState))setTimeout(()=>{if(pc.connectionState!=='connected')removeWatchPeer(peerUid)},1800)};
+  pc.onconnectionstatechange=()=>{if(pc.connectionState==='failed'){try{pc.restartIce?.()}catch{}}if(['failed','closed','disconnected'].includes(pc.connectionState))setTimeout(()=>{if(!['connected','connecting'].includes(pc.connectionState))removeWatchPeer(peerUid)},8000)};
   if(initiator){const offer=await pc.createOffer();await pc.setLocalDescription(offer);await sendWatchRtc(peerUid,{type:'offer',sdp:offer.sdp})}
   return pc
 }
@@ -653,7 +770,7 @@ function watchWatchPresence(){
     state.watchRtc.screenSharers=new Set(Object.entries(p).filter(([,x])=>x?.screen===true).map(([uid])=>String(uid)));
     for(const uid of ids){if(!state.watchRtc.peers.has(uid)&&state.user.uid.localeCompare(uid)<0)createWatchPeer(uid,true).catch(()=>{})}
     for(const uid of [...state.watchRtc.peers.keys()])if(!p[uid])removeWatchPeer(uid);
-    for(const [uid,stream] of state.watchRtc.remoteStreams.entries()){const card=ensureWatchCallCard(uid),status=card?.querySelector('small');if(status)status.textContent=watchRemoteHasScreen(uid,stream)?'Compartilhando tela':'Conectado'}
+    for(const uid of ids)updateWatchPeerScreenButton(uid);
     refreshWatchScreenStage()
   })
 }
@@ -686,7 +803,7 @@ async function toggleWatchScreen(){
   if(state.watchRtc.screenStream){
     const old=state.watchRtc.screenStream;state.watchRtc.screenStream=null;old.getTracks().forEach(t=>{t.onended=null;t.stop()});
     await Promise.all([...state.watchRtc.peers.values()].map(async pc=>{const tr=pc.getTransceivers().find(t=>t.receiver?.track?.kind==='video');if(tr)await tr.sender.replaceTrack(null)}));
-    state.watchRtc.screenSharers.delete(String(state.user.uid));await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:false}).catch(()=>{});
+    state.watchRtc.screenSharers.delete(String(state.user.uid));state.watchRtc.activeScreenUid=null;await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:false}).catch(()=>{});
     refreshWatchScreenStage();watchVoiceUi();return
   }
   if(!navigator.mediaDevices?.getDisplayMedia)return toast('Compartilhamento de tela não é suportado neste navegador.');
@@ -748,7 +865,8 @@ async function copyInvite(){if(!state.roomCode)return;const url=`${location.orig
 
 
 // Voz + compartilhamento de tela (WebRTC P2P, Firebase apenas para sinalização)
-const RTC_CONFIG={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
+async function loadRtcConfig(){try{const r=await fetch('/api/main?action=rtc_config',{cache:'no-store'});if(!r.ok)return;const j=await r.json();if(Array.isArray(j.iceServers)&&j.iceServers.length)RTC_CONFIG={iceServers:j.iceServers}}catch{}}
+loadRtcConfig();
 function voiceUi(){
   const joined=state.rtc.joined;$('voiceStrip')?.classList.toggle('connected',joined);
   if($('voiceStatusText'))$('voiceStatusText').textContent=joined?'Conectado à sala':'Fora da chamada';
