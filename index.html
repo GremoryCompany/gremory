@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#09090d">
   <meta name="color-scheme" content="dark">
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261009-v4">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261010-v5">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -67,6 +67,8 @@
         <button class="nav-item" data-route="pokemon"><span>◉</span><b>Pokémon</b></button>
         <button class="nav-item" data-route="friends"><span>◇</span><b>Amigos</b></button>
         <button class="nav-item" data-route="downloads"><span>↓</span><b>Downloads</b></button>
+        <button class="nav-item" data-route="games"><span>✕</span><b>Jogos</b></button>
+        <button class="nav-item" data-route="watch"><span>▶</span><b>Watch Party</b></button>
         <button class="nav-item" data-route="rpg"><span>⚄</span><b>RPG</b></button>
         <button class="nav-item" data-route="premium"><span>♛</span><b>Premium</b></button>
         <button class="nav-item" data-route="personalize"><span>✧</span><b>Personalizar</b></button>
@@ -101,6 +103,7 @@
               <div class="hero-actions">
                 <button class="btn primary" data-route="charlotte">Abrir Charlotte</button>
                 <button class="btn" data-route="pokemon">Pokémon</button>
+                <button class="btn" data-route="watch">Watch Party</button>
                 <button class="btn" data-route="rpg">Mesa RPG</button>
               </div>
             </div>
@@ -114,6 +117,8 @@
             <button class="home-card" data-route="charlotte"><span class="home-card-icon">✦</span><div><strong>Charlotte</strong><small id="homeCharlotteText">Não vinculada</small></div><b>›</b></button>
             <button class="home-card" data-route="pokemon"><span class="home-card-icon">◉</span><div><strong>Pokémon</strong><small id="homePokemonText">Abrir centro</small></div><b>›</b></button>
             <button class="home-card" data-route="friends"><span class="home-card-icon">◇</span><div><strong>Amigos</strong><small id="homeFriendsText">Ver pessoas</small></div><b>›</b></button>
+            <button class="home-card" data-route="games"><span class="home-card-icon">✕</span><div><strong>Jogos</strong><small>Jogo da velha com amigos</small></div><b>›</b></button>
+            <button class="home-card" data-route="watch"><span class="home-card-icon">▶</span><div><strong>Watch Party</strong><small id="homeWatchRecent">Assistir e conversar</small></div><b>›</b></button>
             <button class="home-card" data-route="rpg"><span class="home-card-icon">⚄</span><div><strong>RPG</strong><small id="homeRpgRecent">Suas mesas</small></div><b>›</b></button>
             <button class="home-card" data-route="personalize"><span class="home-card-icon">✧</span><div><strong>Personalizar</strong><small>Use suas rúpias</small></div><b>›</b></button>
             <button class="home-card" data-route="support"><span class="home-card-icon">?</span><div><strong>Suporte</strong><small>Grupo e comunidade</small></div><b>›</b></button>
@@ -193,12 +198,14 @@
         </section>
 
         <section class="view" data-view="pokemon">
-          <div class="section-head"><div><span class="tag">POKÉMON</span><h2>Centro Pokémon</h2></div><button class="btn primary" id="pokemonExploreBotBtn" type="button">Explorar na Charlotte</button></div>
+          <div class="section-head"><div><span class="tag">POKÉMON</span><h2>Centro Pokémon</h2></div><div class="section-actions"><button class="btn" id="pokemonSyncBtn" type="button">Sincronizar</button><button class="btn primary" id="pokemonExploreBotBtn" type="button">Explorar</button></div></div>
 
           <div class="pokemon-top-grid">
             <article class="panel team-panel">
-              <div class="panel-head"><div><h3>Minha equipe</h3><small id="teamSourceLabel" class="muted">Site</small></div><span class="pill" id="teamCount">0/6</span></div>
-              <div class="team-grid" id="pokemonTeam"></div>
+              <div class="panel-head"><div><h3>Equipe de batalha</h3><small id="teamSourceLabel" class="muted">Charlotte</small></div><span class="pill" id="teamCount">0/6</span></div>
+              <p class="panel-help">Monte até 6 Pokémon. A ordem salva aqui também vira sua equipe na Charlotte.</p>
+              <div class="team-grid team-grid-editor" id="pokemonTeam"></div>
+              <div class="team-editor-actions"><button class="btn primary" id="savePokemonTeamBtn" type="button">Salvar equipe</button><button class="btn" id="resetPokemonTeamBtn" type="button">Desfazer</button></div>
             </article>
             <article class="panel pokemon-search-panel">
               <div class="panel-head"><h3>Pokédex</h3><span class="muted">Nome ou número</span></div>
@@ -207,13 +214,24 @@
             </article>
           </div>
 
+          <article class="panel wild-panel" id="wildEncounterPanel">
+            <div class="panel-head"><div><span class="tag">EXPLORAÇÃO</span><h3>Encontro selvagem</h3></div><span class="pill" id="wildStatusPill">Pronto</span></div>
+            <div class="wild-stage" id="wildStage"><div class="empty-state small">Explore para encontrar um Pokémon selvagem.</div></div>
+          </article>
+
           <article class="panel collection-panel" id="pokemonCollectionPanel">
             <div class="panel-head"><div><span class="tag">COLEÇÃO</span><h3>PC Pokémon</h3></div><span class="pill" id="collectionCount">0</span></div>
             <div class="collection-grid" id="pokemonCollection"><div class="empty-state small">Sincronize a Charlotte para carregar sua coleção.</div></div>
           </article>
 
+          <article class="panel hospital-panel">
+            <div class="panel-head"><div><span class="tag">CENTRO</span><h3>Hospital Pokémon</h3></div><span class="pill">₹100 • 10 min</span></div>
+            <p class="panel-help">Pokémon desmaiados não entram em batalha. A recuperação é processada pelo bot e continua mesmo se você fechar o site.</p>
+            <div id="pokemonHealingList" class="healing-list"><div class="empty-state small">Nenhum Pokémon em recuperação.</div></div>
+          </article>
+
           <article class="panel duel-panel">
-            <div class="panel-head"><div><span class="tag">DUELO</span><h3>Batalha com amigos</h3></div><span class="pill" id="duelStatusPill">Aguardando</span></div>
+            <div class="panel-head"><div><span class="tag">DUELO 6×6</span><h3>Batalha com amigos</h3></div><span class="pill" id="duelStatusPill">Aguardando</span></div>
             <div id="duelLobby" class="duel-lobby">
               <div class="duel-create">
                 <label>Amigo<select id="duelFriendSelect"><option value="">Escolha um amigo</option></select></label>
@@ -221,11 +239,15 @@
               </div>
               <div class="duel-inbox" id="duelInbox"><div class="empty-state small">Nenhum desafio.</div></div>
             </div>
-            <div id="duelArena" class="duel-arena" hidden>
+            <div id="duelArena" class="duel-arena duel-arena-v5" hidden>
+              <div class="duel-team-strip" id="duelEnemyTeam"></div>
               <div class="duel-player enemy"><div class="duel-pokemon-copy"><strong id="duelEnemyName">Pokémon</strong><span id="duelEnemyOwner">Adversário</span></div><div class="hpbar"><i id="duelEnemyHpBar"></i></div><small id="duelEnemyHp">0 / 0</small><img id="duelEnemySprite" alt=""></div>
               <div class="duel-vs">VS</div>
               <div class="duel-player mine"><img id="duelMySprite" alt=""><div class="duel-pokemon-copy"><strong id="duelMyName">Pokémon</strong><span id="duelMyOwner">Você</span></div><div class="hpbar"><i id="duelMyHpBar"></i></div><small id="duelMyHp">0 / 0</small></div>
+              <div class="duel-team-strip mine" id="duelMyTeam"></div>
               <div class="duel-actions" id="duelMoveButtons"></div>
+              <div class="duel-secondary-actions"><button class="btn" id="duelSwitchBtn" type="button">Trocar Pokémon</button><button class="btn danger-ghost" id="duelExitBtn" type="button">Sair da luta</button></div>
+              <div class="duel-switcher" id="duelSwitcher" hidden></div>
               <div class="duel-log" id="duelLog"></div>
             </div>
           </article>
@@ -269,6 +291,46 @@
             </form>
             <div class="download-result" id="downloadResult"></div>
           </article>
+        </section>
+
+        <section class="view" data-view="games">
+          <div class="section-head"><div><span class="tag">JOGOS</span><h2>Jogo da velha</h2></div></div>
+          <div class="games-grid">
+            <article class="panel ttt-lobby" id="tttLobby">
+              <div class="panel-head"><div><h3>Desafiar um amigo</h3><small class="muted">Partida sincronizada em tempo real</small></div><span class="pill" id="tttStatus">Livre</span></div>
+              <div class="duel-create"><label>Amigo<select id="tttFriendSelect"><option value="">Escolha um amigo</option></select></label><button class="btn primary" id="tttCreateBtn" type="button">Jogar</button></div>
+              <div id="tttInvites" class="people-list"></div>
+            </article>
+            <article class="panel ttt-game" id="tttGamePanel" hidden>
+              <div class="panel-head"><div><h3 id="tttTitle">Partida</h3><small id="tttTurnText">Aguardando...</small></div><button class="btn danger-ghost" id="tttExitBtn" type="button">Sair</button></div>
+              <div class="ttt-board" id="tttBoard"></div>
+              <div class="duel-log" id="tttLog"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" data-view="watch">
+          <div class="section-head"><div><span class="tag">WATCH PARTY</span><h2>Assistir com amigos</h2></div><div class="section-actions"><button class="btn primary" id="watchCreateBtn" type="button">Criar sala</button></div></div>
+          <div class="watch-lobby" id="watchLobby">
+            <article class="panel join-panel"><div class="panel-head"><h3>Entrar por convite</h3></div><form id="watchJoinForm" class="join-form"><input id="watchJoinCode" maxlength="8" autocomplete="off" placeholder="Código da sala"><button class="btn" type="submit">Entrar</button></form></article>
+            <article class="panel rooms-panel"><div class="panel-head"><h3>Minhas salas</h3><button class="text-button" id="watchRefreshBtn" type="button">Atualizar</button></div><div id="watchRoomsList" class="room-list"><div class="empty-state small">Nenhuma sala.</div></div></article>
+          </div>
+          <div class="watch-room" id="watchRoom" hidden>
+            <div class="table-topbar watch-topbar"><div><button class="back-button" id="watchBackBtn" type="button">← Salas</button><h2 id="watchRoomName">Watch Party</h2><div class="room-meta"><span>Convite</span><button id="watchCopyBtn" class="inline-copy" type="button"><b id="watchCode">------</b></button></div></div><div class="table-top-actions"><button class="btn danger-ghost" id="watchExitBtn" type="button">Sair</button></div></div>
+            <div class="watch-layout">
+              <section class="panel watch-main">
+                <div class="watch-player-shell" id="watchPlayerShell"><div class="empty-state">Cole um link de vídeo ou compartilhe sua tela.</div></div>
+                <form class="watch-media-form" id="watchMediaForm"><input id="watchMediaInput" placeholder="Link de vídeo direto ou YouTube"><button class="btn primary" type="submit">Carregar</button></form>
+                <div class="watch-controls"><button class="btn" id="watchPlayBtn" type="button">Play/Pause</button><button class="btn" id="watchSyncBtn" type="button">Sincronizar</button><span class="pill" id="watchHostPill">Participante</span></div>
+              </section>
+              <aside class="panel watch-side">
+                <div class="panel-head"><h3>Chamada</h3><span class="pill" id="watchVoiceCount">0</span></div>
+                <div class="voice-actions watch-voice-actions"><button class="btn primary" id="watchJoinVoiceBtn" type="button">Entrar na voz</button><button class="btn" id="watchMicBtn" type="button" hidden>Microfone</button><button class="btn" id="watchShareBtn" type="button" hidden>Compartilhar tela</button><button class="btn danger-ghost" id="watchLeaveVoiceBtn" type="button" hidden>Sair da voz</button></div>
+                <div class="remote-media-grid watch-remote-media" id="watchRemoteMedia"></div>
+                <div class="divider"></div><div class="panel-head"><h3>Na sala</h3><span class="pill" id="watchMemberCount">0</span></div><div class="member-list" id="watchMemberList"></div>
+              </aside>
+            </div>
+          </div>
         </section>
 
         <section class="view" data-view="rpg">
@@ -343,10 +405,11 @@
       </main>
     </div>
 
-    <nav class="mobile-nav" aria-label="Navegação mobile">
+    <nav class="mobile-nav mobile-nav-v5" aria-label="Navegação mobile">
       <button class="active" data-route="home"><span>⌂</span><small>Início</small></button>
       <button data-route="pokemon"><span>◉</span><small>Pokémon</small></button>
-      <button data-route="charlotte"><span>✦</span><small>Charlotte</small></button>
+      <button data-route="friends"><span>◇</span><small>Amigos</small></button>
+      <button data-route="watch"><span>▶</span><small>Watch</small></button>
       <button data-route="rpg"><span>⚄</span><small>RPG</small></button>
       <button id="mobileAccountBtn"><span>●</span><small>Conta</small></button>
     </nav>
@@ -374,7 +437,11 @@
 
   <div class="modal" id="sceneModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="sceneModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="sceneModal">×</button><span class="tag">CENA</span><h2>Editar cena</h2><form id="sceneForm" class="stack-form"><label>Título<input id="sceneTitleInput" maxlength="80"></label><label>Descrição<textarea id="sceneDescriptionInput" rows="3" maxlength="300"></textarea></label><label>Imagem (URL)<input id="sceneImageInput" type="url" placeholder="https://..."></label><button class="btn primary full" type="submit">Salvar cena</button></form></div></div>
 
+  <div class="modal" id="publicProfileModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="publicProfileModal"></button><div class="modal-card profile-public-card"><button class="modal-close" data-close-modal="publicProfileModal">×</button><div class="public-profile-hero"><img id="publicProfileAvatar" src="/assets/img/profile.jpg" alt=""><div><span class="tag">PERFIL GREMORY</span><h2 id="publicProfileName">Usuário</h2><p id="publicProfileBio">Conta Gremory</p></div></div><div class="public-profile-details"><div><span>Anime favorito</span><strong id="publicProfileAnime">—</strong></div><div><span>Na Gremory desde</span><strong id="publicProfileSince">—</strong></div></div><div class="modal-actions"><button class="btn primary" id="publicProfileActionBtn" type="button">Adicionar amigo</button><button class="btn" id="publicProfileDuelBtn" type="button">Desafiar Pokémon</button></div></div></div>
+
+  <div class="modal" id="watchCreateModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="watchCreateModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="watchCreateModal">×</button><span class="tag">WATCH PARTY</span><h2>Criar sala</h2><form id="watchCreateForm" class="stack-form"><label>Nome da sala<input id="watchNameInput" maxlength="60" placeholder="Ex: Noite de filmes" required></label><button class="btn primary full" type="submit">Criar sala</button></form></div></div>
+
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261009-v4"></script>
+  <script type="module" src="/assets/js/app.js?v=20261010-v5"></script>
 </body>
 </html>

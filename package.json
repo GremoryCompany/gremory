@@ -1,12 +1,9 @@
 {
   "name": "gremory-site",
-  "version": "4.1.0",
+  "version": "5.0.0",
   "private": true,
   "engines": {
     "node": ">=20"
   },
-  "dependencies": {
-    "@distube/ytdl-core": "4.16.12",
-    "yt-search": "2.13.1"
-  }
+  "dependencies": {}
 }

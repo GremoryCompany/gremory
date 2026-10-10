@@ -134,32 +134,6 @@ function pickSocialMedia(mediaInfo, prefer='video'){
   const candidates = preferred.length ? preferred : rows;
   return [...candidates].sort((a,b) => qualityScore(b.quality) - qualityScore(a.quality))[0] || null;
 }
-async function resolveYoutubeInput(input=''){
-  const value = String(input || '').trim();
-  if (!value) throw new Error('Nome ou link do YouTube obrigatório.');
-  const ytdl = require('@distube/ytdl-core');
-  if (ytdl.validateURL(value)) return value;
-  const yts = require('yt-search');
-  const search = await yts(value);
-  const video = Array.isArray(search?.videos) ? search.videos[0] : null;
-  if (!video?.url) throw new Error('Nenhum vídeo encontrado no YouTube.');
-  return video.url;
-}
-function pickYoutubeFormat(formats=[], mode='video'){
-  const list = Array.isArray(formats) ? formats : [];
-  if (mode === 'audio'){
-    const m4a = list.filter(f => f?.hasAudio && !f?.hasVideo && (f.container === 'mp4' || f.container === 'm4a'));
-    const audioOnly = m4a.length ? m4a : list.filter(f => f?.hasAudio && !f?.hasVideo);
-    return [...audioOnly].sort((a,b) => Number(b.audioBitrate || b.bitrate || 0) - Number(a.audioBitrate || a.bitrate || 0))[0] || null;
-  }
-  const combinedMp4 = list.filter(f => f?.hasAudio && f?.hasVideo && f.container === 'mp4');
-  const combined = combinedMp4.length ? combinedMp4 : list.filter(f => f?.hasAudio && f?.hasVideo);
-  return [...combined].sort((a,b) => {
-    const ah = Number(a.height || String(a.qualityLabel || '').match(/\d+/)?.[0] || 0);
-    const bh = Number(b.height || String(b.qualityLabel || '').match(/\d+/)?.[0] || 0);
-    return bh - ah || Number(b.bitrate || 0) - Number(a.bitrate || 0);
-  })[0] || null;
-}
 function blockPrivateHost(host){
   const h = (host || '').toLowerCase();
   if (!h) return true;
@@ -1458,36 +1432,33 @@ module.exports = async (req, res) => {
   }
 
   if (action === 'tiktok') {
-    if (!rapidKey) return sendJson(res, 503, { erro: 'RAPIDAPI_KEY não configurada no servidor' });
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
     const body = await readJsonBody(req);
-    const url = body.url;
+    const url = String(body.url || '').trim();
     if (!url) return sendJson(res, 400, { erro: 'URL obrigatória' });
     try{
-      const form = new URLSearchParams({ url });
-      const r = await fetch('https://tiktok-video-no-watermark2.p.rapidapi.com/', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          'x-rapidapi-host': 'tiktok-video-no-watermark2.p.rapidapi.com',
-          'x-rapidapi-key': rapidKey
-        },
-        body: form.toString()
-      });
-      const data = await r.json().catch(()=>null);
-      if (!r.ok || !data || data.code !== 0 || !data.data?.play) return sendJson(res, 502, { erro: 'Não foi possível baixar esse TikTok' });
-      const title = safeFilename(data.data.title || 'tiktok-video');
-      const prox = signedProxyPath(data.data.play, title + '.mp4');
+      const key = pickDarkKey(body);
+      const endpoint = darkAnimeUrl('/api/download/tiktokV2', { url }, key);
+      const data = await fetchJsonTimeout(endpoint.toString(), {
+        headers: { 'user-agent':'Gremory/5.0' }
+      }, 25000);
+      const result = data?.resultado || data?.result || data?.data || {};
+      const mediaUrl = result.no_watermark || result.nowm || result.play || result.video || result.url || '';
+      if (!mediaUrl) return sendJson(res, 502, { erro: 'A DarkStars não retornou o vídeo desse TikTok.' });
+      const title = safeFilename(result.title || result.desc || 'tiktok-video');
+      const filename = `${title}.mp4`;
       return sendJson(res, 200, {
         ok:true,
-        downloadUrl: prox,
-        filename:`${title}.mp4`,
+        downloadUrl:signedProxyPath(mediaUrl, filename),
+        filename,
         mimetype:'video/mp4',
-        thumb:data.data.cover || '',
-        autor:data.data.author?.nickname || ''
+        title:result.title || 'TikTok',
+        thumb:result.cover || result.thumbnail || '',
+        autor:result.author?.nickname || result.author || '',
+        provider:'darkstars'
       });
-    }catch{
-      return sendJson(res, 500, { erro: 'Falha ao baixar TikTok' });
+    }catch(e){
+      return sendJson(res, 502, { erro:`Falha na DarkStars: ${e.message}` });
     }
   }
 
@@ -1519,69 +1490,10 @@ module.exports = async (req, res) => {
     }
   }
 
-  if (action === 'youtube_info') {
-    if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
-    const body = await readJsonBody(req);
-    const input = String(body.input || body.url || body.query || '').trim();
-    if (!input) return sendJson(res, 400, { erro: 'Nome ou link do YouTube obrigatório' });
-    try{
-      const ytdl = require('@distube/ytdl-core');
-      const url = await resolveYoutubeInput(input);
-      const info = await ytdl.getInfo(url);
-      const details = info?.videoDetails || {};
-      return sendJson(res, 200, {
-        ok:true,
-        url,
-        title:details.title || 'YouTube',
-        author:details.author?.name || details.ownerChannelName || '',
-        duration:Number(details.lengthSeconds || 0),
-        thumb:details.thumbnails?.slice?.(-1)?.[0]?.url || '',
-        videoId:details.videoId || ''
-      });
-    }catch(e){
-      return sendJson(res, 502, { erro:`Não foi possível localizar esse vídeo: ${e.message}` });
-    }
-  }
-
-  if (action === 'youtube') {
-    if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
-    const body = await readJsonBody(req);
-    const input = String(body.input || body.url || body.query || '').trim();
-    const mode = String(body.mode || 'video').toLowerCase() === 'audio' ? 'audio' : 'video';
-    if (!input) return sendJson(res, 400, { erro: 'Nome ou link do YouTube obrigatório' });
-    try{
-      const ytdl = require('@distube/ytdl-core');
-      const url = await resolveYoutubeInput(input);
-      const info = await ytdl.getInfo(url);
-      const details = info?.videoDetails || {};
-      const format = pickYoutubeFormat(info?.formats || [], mode);
-      if (!format?.url) {
-        return sendJson(res, 404, {
-          erro: mode === 'audio'
-            ? 'Não encontrei um formato de áudio compatível.'
-            : 'Não encontrei um formato de vídeo com áudio compatível.'
-        });
-      }
-      let ext = String(format.container || '').toLowerCase();
-      if (mode === 'audio' && ext === 'mp4') ext = 'm4a';
-      if (!ext) ext = mode === 'audio' ? 'm4a' : 'mp4';
-      const base = safeFilename(details.title || (mode === 'audio' ? 'youtube-audio' : 'youtube-video'));
-      const filename = `${base}.${ext}`;
-      return sendJson(res, 200, {
-        ok:true,
-        downloadUrl:signedProxyPath(format.url, filename),
-        filename,
-        mimetype:mimeFromExt(ext),
-        title:details.title || 'YouTube',
-        artist:details.author?.name || details.ownerChannelName || '',
-        thumb:details.thumbnails?.slice?.(-1)?.[0]?.url || '',
-        duration:Number(details.lengthSeconds || 0),
-        quality:format.qualityLabel || format.audioQuality || '',
-        mode
-      });
-    }catch(e){
-      return sendJson(res, 502, { erro:`Falha no YTDL: ${e.message}` });
-    }
+  if (action === 'youtube_info' || action === 'youtube') {
+    return sendJson(res, 409, {
+      erro: 'YouTube é processado pela Charlotte usando yt-dlp + cookies.txt do bot. Vincule sua conta no site e use a aba YouTube.'
+    });
   }
 
 
@@ -1744,19 +1656,32 @@ module.exports = async (req, res) => {
   if (action === 'apk_search' || action === 'apksearch') {
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
     const body = await readJsonBody(req);
-    const query = body.query || body.q || body.name;
+    const query = String(body.query || body.q || body.name || '').trim();
     if (!query) return sendJson(res, 400, { erro: 'Nome do APK obrigatório' });
     try{
-      const url = `https://ws75.aptoide.com/api/7/apps/search/query=${encodeURIComponent(query)}/limit=${Number(body.limit || 18) || 18}`;
-      const r = await fetch(url, { headers: { 'accept': 'application/json' } });
-      const data = await r.json().catch(()=>null);
-      const list = (data?.datalist?.list || data?.list || data?.data || []).map(normalizeAptoideApp).filter(x => x.name);
-      if (!r.ok || !data) return sendJson(res, 502, { erro: 'Falha ao pesquisar APK' });
-      return sendJson(res, 200, { ok:true, result:list, raw:data });
+      const key = pickDarkKey(body);
+      const endpoint = darkAnimeUrl('/api/download/aplicativos', { id: query }, key);
+      const data = await fetchJsonTimeout(endpoint.toString(), { headers:{'user-agent':'Gremory/5.0'} }, 30000);
+      const app = data?.resultado || data?.result || data?.data || {};
+      const downloadUrl = String(app.download || app.url || app.link || '').trim();
+      if (!downloadUrl) return sendJson(res, 404, { erro: 'Aplicativo não encontrado na DarkStars.' });
+      return sendJson(res, 200, {
+        ok:true,
+        provider:'darkstars',
+        result:[{
+          name:app.appName || app.name || query,
+          package:app.appPackage || app.package || app.appDeveloper || 'DarkStars',
+          version:app.version || '',
+          icon:app.image || app.icon || '',
+          downloadUrl,
+          developer:app.appDeveloper || app.developer || ''
+        }]
+      });
     }catch(e){
-      return sendJson(res, 500, { erro: 'Erro ao pesquisar APK' });
+      return sendJson(res, 502, { erro:`Falha ao buscar APK na DarkStars: ${e.message}` });
     }
   }
+
 
   if (action === 'apk_download' || action === 'apkdownload') {
     if (req.method !== 'POST') return sendJson(res, 405, { erro: 'Método inválido' });
