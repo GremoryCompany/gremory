@@ -1265,7 +1265,9 @@ module.exports = async (req, res) => {
     if (req.method !== 'GET') return sendJson(res, 405, { erro: 'Método inválido' });
     const iceServers = [
       { urls:'stun:stun.l.google.com:19302' },
-      { urls:'stun:stun1.l.google.com:19302' }
+      { urls:'stun:stun1.l.google.com:19302' },
+      { urls:'stun:stun2.l.google.com:19302' },
+      { urls:'stun:stun3.l.google.com:19302' }
     ];
     const turnUrl = String(process.env.TURN_URL || '').trim();
     if (turnUrl) {
@@ -1277,7 +1279,7 @@ module.exports = async (req, res) => {
       if (credential) turn.credential = credential;
       iceServers.push(turn);
     }
-    return sendJson(res, 200, { ok:true, iceServers });
+    return sendJson(res, 200, { ok:true, iceServers, turnConfigured: !!turnUrl });
   }
 
   if (action === 'proxy') {

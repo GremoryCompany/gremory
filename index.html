@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#09090d">
   <meta name="color-scheme" content="dark">
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261011-v9-6-site-fix">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261011-watch-v96">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -328,53 +328,118 @@
           </div>
         </section>
 
-        <section class="view" data-view="watch">
-          <div class="section-head"><div><span class="tag">WATCH PARTY</span><h2>Assistir com amigos</h2></div><div class="section-actions"><button class="btn primary" id="watchCreateBtn" type="button">Criar sala</button></div></div>
-          <div class="watch-lobby" id="watchLobby">
-            <article class="panel join-panel"><div class="panel-head"><h3>Entrar por convite</h3></div><form id="watchJoinForm" class="join-form"><input id="watchJoinCode" maxlength="8" autocomplete="off" placeholder="Código da sala"><button class="btn" type="submit">Entrar</button></form></article>
-            <article class="panel rooms-panel"><div class="panel-head"><h3>Minhas salas</h3><button class="text-button" id="watchRefreshBtn" type="button">Atualizar</button></div><div id="watchRoomsList" class="room-list"><div class="empty-state small">Nenhuma sala.</div></div></article>
+        <section class="view watch-view-v2" data-view="watch">
+          <div class="section-head watch-page-head">
+            <div>
+              <span class="tag">WATCH PARTY</span>
+              <h2>Assistir com amigos</h2>
+              <p class="muted">Vídeo, compartilhamento de tela, chamada e Charlotte Music na mesma sala.</p>
+            </div>
+            <div class="section-actions"><button class="btn primary" id="watchCreateBtn" type="button">+ Criar sala</button></div>
           </div>
-          <div class="watch-room" id="watchRoom" hidden>
-            <div class="table-topbar watch-topbar"><div><button class="back-button" id="watchBackBtn" type="button">← Salas</button><h2 id="watchRoomName">Watch Party</h2><div class="room-meta"><span>Convite</span><button id="watchCopyBtn" class="inline-copy" type="button"><b id="watchCode">------</b></button></div></div><div class="table-top-actions"><button class="btn danger-ghost" id="watchExitBtn" type="button">Sair</button></div></div>
-            <div class="watch-layout">
-              <section class="panel watch-main">
+
+          <div class="watch-lobby watch-lobby-v2" id="watchLobby">
+            <article class="panel watch-join-card">
+              <div class="watch-card-icon">↗</div>
+              <div class="panel-head"><div><span class="tag">CONVITE</span><h3>Entrar em uma sala</h3></div></div>
+              <p class="muted">Cole o código enviado por um amigo.</p>
+              <form id="watchJoinForm" class="join-form watch-join-form">
+                <input id="watchJoinCode" maxlength="8" autocomplete="off" placeholder="CÓDIGO">
+                <button class="btn primary" type="submit">Entrar</button>
+              </form>
+            </article>
+
+            <article class="panel rooms-panel watch-sessions-card">
+              <div class="panel-head">
+                <div><span class="tag">SESSÕES</span><h3>Minhas salas</h3></div>
+                <button class="text-button" id="watchRefreshBtn" type="button">Atualizar</button>
+              </div>
+              <div id="watchRoomsList" class="room-list watch-room-list"><div class="empty-state small">Nenhuma sala.</div></div>
+            </article>
+          </div>
+
+          <div class="watch-room watch-room-v2" id="watchRoom" hidden>
+            <header class="watch-room-hero">
+              <button class="back-button watch-room-back" id="watchBackBtn" type="button">← Salas</button>
+              <div class="watch-room-identity">
+                <span class="tag">SALA ATIVA</span>
+                <h2 id="watchRoomName">Watch Party</h2>
+                <div class="watch-room-subline"><span class="watch-live-dot"></span><span id="watchRtcStatus">Preparando sala...</span></div>
+              </div>
+              <div class="watch-invite-box">
+                <span>Convite</span>
+                <button id="watchCopyBtn" class="inline-copy watch-code-button" type="button"><b id="watchCode">------</b><small>copiar</small></button>
+              </div>
+              <button class="btn danger-ghost watch-exit-button" id="watchExitBtn" type="button">Sair</button>
+            </header>
+
+            <div class="watch-layout watch-layout-v2">
+              <section class="panel watch-main watch-main-v2">
                 <div class="watch-player-shell" id="watchPlayerShell">
-                  <div class="watch-media-stage" id="watchMediaStage"><div class="empty-state">Cole um link de vídeo ou compartilhe sua tela.</div></div>
+                  <div class="watch-media-stage" id="watchMediaStage"><div class="empty-state">Cole um vídeo abaixo ou compartilhe sua tela.</div></div>
                   <div class="watch-screen-stage" id="watchScreenStage" hidden>
                     <div class="watch-screen-head"><div><span class="status-dot"></span><strong id="watchScreenLabel">Tela compartilhada</strong></div><button class="btn" id="watchScreenFullscreenBtn" type="button">Tela cheia</button></div>
                     <video id="watchScreenVideo" autoplay playsinline></video>
                   </div>
                 </div>
-                <form class="watch-media-form" id="watchMediaForm"><input id="watchMediaInput" placeholder="YouTube, Google Drive ou link de vídeo direto"><button class="btn primary" type="submit">Carregar</button></form>
-                <div class="watch-controls"><button class="btn" id="watchPlayBtn" type="button">Play/Pause</button><button class="btn" id="watchSyncBtn" type="button">Sincronizar</button><button class="btn screen-share-btn" id="watchShareBtn" type="button">Compartilhar tela</button><span class="pill" id="watchHostPill">Participante</span></div>
-              </section>
-              <aside class="panel watch-side">
-                <div class="panel-head"><h3>Chamada</h3><span class="pill" id="watchVoiceCount">0</span></div>
-                <div class="voice-actions watch-voice-actions"><button class="btn primary" id="watchJoinVoiceBtn" type="button">Entrar na voz</button><button class="btn" id="watchMicBtn" type="button" hidden>Microfone</button><button class="btn danger-ghost" id="watchLeaveVoiceBtn" type="button" hidden>Sair da voz</button></div>
-                <div class="divider"></div>
-                <div class="panel-head watch-music-head">
-                  <div>
-                    <h3>Charlotte Music</h3>
-                    <small class="muted">Ativação ₹50 • Free: 10 músicas inclusas, depois ₹5 cada • Premium: ilimitado</small>
-                  </div>
-                  <button class="text-button" id="watchMusicSkipBtn" type="button">Pular</button>
-                </div>
-                <div class="watch-music-access" id="watchMusicAccessBox">
-                  <div><strong id="watchMusicAccessTitle">Entre na voz para usar música</strong><small id="watchMusicAccessText">Você só escuta e adiciona músicas quando estiver dentro da chamada.</small></div>
-                  <button class="btn primary" id="watchMusicActivateBtn" type="button">Ativar por ₹50</button>
-                </div>
-                <form class="watch-music-form" id="watchMusicForm">
-                  <input id="watchMusicInput" maxlength="160" placeholder="Pesquisar música ou colar link">
-                  <button class="btn" type="submit">Adicionar</button>
-                </form>
-                <div class="watch-music-now" id="watchMusicNow"></div>
-                <div class="watch-music-queue" id="watchMusicQueue"></div>
-                <div class="watch-music-engine" id="watchMusicEngineShell" aria-hidden="true">
-                  <iframe id="watchMusicEngine" title="Player de áudio da Charlotte" allow="autoplay; encrypted-media"></iframe>
-                </div>
-                <div class="remote-media-grid watch-remote-media" id="watchRemoteMedia"></div>
-                <div class="divider"></div><div class="panel-head"><h3>Na sala</h3><span class="pill" id="watchMemberCount">0</span></div><div class="member-list" id="watchMemberList"></div>
 
+                <div class="watch-source-card">
+                  <form class="watch-media-form" id="watchMediaForm">
+                    <input id="watchMediaInput" placeholder="YouTube, Google Drive ou link de vídeo">
+                    <button class="btn primary" type="submit">Carregar</button>
+                  </form>
+                  <div class="watch-controls">
+                    <button class="btn" id="watchPlayBtn" type="button">Play / Pause</button>
+                    <button class="btn" id="watchSyncBtn" type="button">Sincronizar</button>
+                    <button class="btn screen-share-btn" id="watchShareBtn" type="button">Compartilhar tela</button>
+                    <span class="pill" id="watchHostPill">Participante</span>
+                  </div>
+                </div>
+              </section>
+
+              <aside class="watch-side watch-side-stack">
+                <section class="panel watch-call-panel">
+                  <div class="panel-head">
+                    <div><span class="tag">CHAMADA</span><h3>Na ligação</h3></div>
+                    <span class="pill" id="watchVoiceCount">0</span>
+                  </div>
+                  <div class="voice-actions watch-voice-actions">
+                    <button class="btn primary" id="watchJoinVoiceBtn" type="button">Entrar na voz</button>
+                    <button class="btn" id="watchMicBtn" type="button" hidden>Microfone</button>
+                    <button class="btn danger-ghost" id="watchLeaveVoiceBtn" type="button" hidden>Sair da voz</button>
+                  </div>
+                  <div class="remote-media-grid watch-remote-media" id="watchRemoteMedia"></div>
+                  <div class="watch-members-head"><strong>Participantes</strong><span class="pill" id="watchMemberCount">0</span></div>
+                  <div class="member-list" id="watchMemberList"></div>
+                </section>
+
+                <section class="panel watch-music-panel">
+                  <div class="panel-head watch-music-head">
+                    <div>
+                      <span class="tag">CHARLOTTE MUSIC</span>
+                      <h3>Playlist da sala</h3>
+                      <small class="muted">Ativação da sala ₹50 • Free: 10 faixas inclusas • Premium: ilimitado</small>
+                    </div>
+                    <button class="text-button" id="watchMusicSkipBtn" type="button">Pular</button>
+                  </div>
+
+                  <div class="watch-music-access" id="watchMusicAccessBox">
+                    <div><strong id="watchMusicAccessTitle">Ativar Charlotte Music</strong><small id="watchMusicAccessText">Depois que a sala for ativada, quem entrar depois não verá cobrança de ativação.</small></div>
+                    <button class="btn primary" id="watchMusicActivateBtn" type="button">Ativar sala por ₹50</button>
+                  </div>
+
+                  <form class="watch-music-form" id="watchMusicForm">
+                    <input id="watchMusicInput" maxlength="160" placeholder="Pesquisar música ou colar link">
+                    <button class="btn" type="submit">Adicionar à fila</button>
+                  </form>
+
+                  <div class="watch-music-now" id="watchMusicNow"></div>
+                  <div class="watch-music-queue" id="watchMusicQueue"></div>
+
+                  <div class="watch-music-engine" id="watchMusicEngineShell" aria-hidden="true">
+                    <iframe id="watchMusicEngine" title="Player da Charlotte" allow="autoplay; encrypted-media"></iframe>
+                  </div>
+                </section>
               </aside>
             </div>
           </div>
@@ -557,6 +622,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261011-v9-6-site-fix"></script>
+  <script type="module" src="/assets/js/app.js?v=20261011-watch-v96"></script>
 </body>
 </html>
