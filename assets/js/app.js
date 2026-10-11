@@ -47,7 +47,7 @@ const state = {
   watchCode:null,watchRoom:null,watchUnsubs:[],watchApplying:false,
   watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set()},
   watchYoutube:{lastTime:0,lastState:-1,lastPublishAt:0},
-  watchMusic:{currentId:'',volume:Number(localStorage.getItem('gremory:watchMusicVolume')||65),muted:localStorage.getItem('gremory:watchMusicMuted')==='1',engineReady:false,lastAdvanceId:''},
+  watchMusic:{currentId:'',volume:Number(localStorage.getItem('gremory:watchMusicVolume')||65),muted:localStorage.getItem('gremory:watchMusicMuted')==='1',engineReady:false,lastAdvanceId:'',adding:false},
   rtc:{joined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true},premiumPoll:null
 };
 
@@ -1002,7 +1002,17 @@ function syncWatchPlayer(){
   const iframe=$('watchMediaStage')?.querySelector('iframe[data-watch-youtube="1"]');if(iframe)applyYoutubeWatchState(iframe,media);else renderWatchMedia(media);toast('Player sincronizado.')
 }
 function watchMusicRows(queueObj={}){
-  return Object.entries(queueObj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0))
+  const rows=Object.entries(queueObj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0));
+  // Esconde duplicatas acidentais criadas pelo mesmo pedido em poucos segundos.
+  const out=[],lastByTrack=new Map();
+  for(const row of rows){
+    const key=`${String(row.videoId||row.url||row.title||'')}|${String(row.requestedBy||'')}`;
+    const created=Number(row.createdAt||0),last=lastByTrack.get(key);
+    if(last&&Math.abs(created-last.created)<=15000)continue;
+    lastByTrack.set(key,{created,id:row.id});
+    out.push(row);
+  }
+  return out
 }
 function currentWatchMusic(){return watchMusicRows(state.watchRoom?.musicQueue||{})[0]||null}
 function watchMusicAccessForMe(accessObj=state.watchRoom?.musicAccess||{}){return state.user?accessObj?.[state.user.uid]||null:null}
@@ -1101,7 +1111,7 @@ function renderWatchMusic(queueObj={},accessObj={}){
     activate.textContent=audioJoined?'Ativar música por ₹50':'Entrar na voz e ativar ₹50';
   }
   const input=$('watchMusicInput'),submit=form.querySelector('button[type="submit"]');
-  if(input)input.disabled=!audioJoined||!access;if(submit)submit.disabled=!audioJoined||!access;
+  if(input)input.disabled=!audioJoined||!access||state.watchMusic.adding;if(submit){submit.disabled=!audioJoined||!access||state.watchMusic.adding;submit.textContent=state.watchMusic.adding?'Adicionando...':'Adicionar'}
   if(!rows.length){
     now.innerHTML='<div class="empty-state small">Nenhuma música tocando.</div>';destroyWatchMusicPlayback()
   }else{
@@ -1125,13 +1135,22 @@ $('watchMusicActivateBtn')?.addEventListener('click',async()=>{
   }catch(e){toast(e.message)}
 });
 $('watchMusicForm')?.addEventListener('submit',async ev=>{
-  ev.preventDefault();if(!watchMusicCanHear())return toast('Entre na chamada de voz primeiro.');
+  ev.preventDefault();
+  if(state.watchMusic.adding)return;
+  if(!watchMusicCanHear())return toast('Entre na chamada de voz primeiro.');
   const query=$('watchMusicInput').value.trim();if(!query)return;
+  state.watchMusic.adding=true;
+  renderWatchMusic(state.watchRoom?.musicQueue||{},state.watchRoom?.musicAccess||{});
   try{
     const r=await bridgeRequest('watch_music_add',{roomCode:state.watchCode,query},30000);
     $('watchMusicInput').value='';
     toast(r.cost>0?`Música adicionada por ₹${r.cost}.`:'Música adicionada sem custo extra.')
-  }catch(e){toast(e.message)}
+  }catch(e){
+    toast(e.message)
+  }finally{
+    state.watchMusic.adding=false;
+    renderWatchMusic(state.watchRoom?.musicQueue||{},state.watchRoom?.musicAccess||{});
+  }
 });
 $('watchMusicSkipBtn')?.addEventListener('click',async()=>{
   if(!isWatchHost())return toast('Somente o host pode pular.');
