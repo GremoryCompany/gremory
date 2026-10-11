@@ -39,7 +39,7 @@ const state = {
   roomCode:null, room:null, roomUnsubs:[],
   userUnsubs:[], duel:null, duelUnsub:null,
   bridgeResults:{}, siteInventory:{}, siteCustomization:{},
-  teamDraft:[], pokemonEncounter:null, pokemonHealing:{},
+  teamDraft:[], pokemonEncounter:null, pokemonHealing:{}, pokemonAudio:{encounterId:''},
   ttt:{game:null,unsub:null,index:{},lastResultId:''},
   notificationFilter:'team',
   admin:{reports:{},updates:{},directory:{},bans:{},selectedUid:''},
@@ -129,7 +129,12 @@ function authTab(mode){
   $$('[data-auth-form]').forEach(f=>f.classList.toggle('active',f.dataset.authForm===mode));
   $('authHeading').textContent=mode==='login'?'Bem-vindo':'Criar conta'; $('authStatus').textContent='';
 }
-$$('[data-auth-tab]').forEach(b=>b.addEventListener('click',()=>authTab(b.dataset.authTab)));
+$$('[data-auth-tab]').forEach(b=>{
+  b.addEventListener('click',()=>authTab(b.dataset.authTab));
+  b.addEventListener('pointerup',ev=>{
+    if(ev.pointerType==='touch')authTab(b.dataset.authTab)
+  });
+});
 function authError(err){const map={'auth/email-already-in-use':'Esse e-mail já está em uso.','auth/invalid-email':'E-mail inválido.','auth/weak-password':'Use uma senha com pelo menos 6 caracteres.','auth/invalid-credential':'E-mail ou senha incorretos.','auth/too-many-requests':'Muitas tentativas. Tente novamente mais tarde.'};return map[err?.code]||'Não foi possível concluir.'}
 async function configurePersistence(remember){
   await setPersistence(auth,remember?browserLocalPersistence:inMemoryPersistence);
@@ -140,14 +145,32 @@ async function initialAuthPolicy(){
   try{await setPersistence(auth,remember?browserLocalPersistence:inMemoryPersistence)}catch{}
   if(!remember&&auth.currentUser) await signOut(auth).catch(()=>{});
 }
-$('loginForm').addEventListener('submit',async ev=>{ev.preventDefault();$('authStatus').textContent='Entrando...';try{await configurePersistence($('loginRemember').checked);await signInWithEmailAndPassword(auth,$('loginEmail').value.trim(),$('loginPassword').value);$('authStatus').textContent=''}catch(e){$('authStatus').textContent=authError(e)}});
+$('loginForm').addEventListener('submit',async ev=>{
+  ev.preventDefault();
+  const form=ev.currentTarget,button=form.querySelector('button[type="submit"]');
+  if(button?.disabled)return;
+  if(button)button.disabled=true;
+  $('authStatus').textContent='Entrando...';
+  try{
+    await configurePersistence($('loginRemember').checked);
+    await signInWithEmailAndPassword(auth,$('loginEmail').value.trim(),$('loginPassword').value);
+    $('authStatus').textContent='Entrando na Gremory...';
+  }catch(e){
+    $('authStatus').textContent=authError(e);
+  }finally{
+    if(button)button.disabled=false;
+  }
+});
 $('registerForm').addEventListener('submit',async ev=>{
   ev.preventDefault();
+  const registerButton=ev.currentTarget.querySelector('button[type="submit"]');
+  if(registerButton?.disabled)return;
+  if(registerButton)registerButton.disabled=true;
   const name=$('registerName').value.trim(),username=normalizeUsername($('registerUsername').value),email=$('registerEmail').value.trim(),pass=$('registerPassword').value,pass2=$('registerPassword2').value;
-  if(!name)return $('authStatus').textContent='Digite seu nome.';
-  if(!validUsername(username))return $('authStatus').textContent='Nome de usuário inválido. Use 3–20 caracteres, começando por letra.';
-  if(pass.length<6)return $('authStatus').textContent='A senha precisa ter pelo menos 6 caracteres.';
-  if(pass!==pass2)return $('authStatus').textContent='As senhas não coincidem.';
+  if(!name){if(registerButton)registerButton.disabled=false;return $('authStatus').textContent='Digite seu nome.';}
+  if(!validUsername(username)){if(registerButton)registerButton.disabled=false;return $('authStatus').textContent='Nome de usuário inválido. Use 3–20 caracteres, começando por letra.';}
+  if(pass.length<6){if(registerButton)registerButton.disabled=false;return $('authStatus').textContent='A senha precisa ter pelo menos 6 caracteres.';}
+  if(pass!==pass2){if(registerButton)registerButton.disabled=false;return $('authStatus').textContent='As senhas não coincidem.';}
   $('authStatus').textContent='Criando conta...';
   try{
     const taken=await get(ref(db,`usernames/${username}`)).catch(()=>null);
@@ -163,6 +186,8 @@ $('registerForm').addEventListener('submit',async ev=>{
     $('authStatus').textContent='';
   }catch(e){
     $('authStatus').textContent=e?.message==='USERNAME_TAKEN'?'Esse nome de usuário já está em uso.':authError(e)
+  }finally{
+    if(registerButton)registerButton.disabled=false;
   }
 });
 $('resetPasswordBtn').addEventListener('click',async()=>{const email=$('loginEmail').value.trim();if(!email)return $('authStatus').textContent='Digite seu e-mail primeiro.';try{await sendPasswordResetEmail(auth,email);$('authStatus').textContent='E-mail de recuperação enviado.'}catch(e){$('authStatus').textContent=authError(e)}});
@@ -224,7 +249,7 @@ $('profileForm').addEventListener('submit',async ev=>{
     if(reservedNew&&changing)await remove(ref(db,`usernames/${username}`)).catch(()=>{});
     toast(permissionMessage(e,e.message||'Não foi possível salvar o perfil.'))
   }
-});state.profile=payload;renderAccount();toast('Perfil salvo.')}catch(e){toast(permissionMessage(e,'Não foi possível salvar o perfil.'))}});
+});
 
 function clearUserSubscriptions(){if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonHealing={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.ban=null;state.watchCode=null;state.watchRoom=null}
 function startUserSubscriptions(){
@@ -279,6 +304,16 @@ function playSiteSound(name,fallbackFreq=720){
 }
 function playNotificationTone(){playSiteSound('notification',720)}
 function playVictoryTone(){playSiteSound('victory',920)}
+function playPokemonSound(kind){
+  const map={
+    encounter:['pokemon-encounter',620],
+    hit:['pokemon-hit',180],
+    ball:['pokemon-ball',520],
+    capture:['pokemon-capture',920]
+  };
+  const row=map[kind];if(!row)return;
+  playSiteSound(row[0],row[1]);
+}
 function notificationLastSeen(){return Number(localStorage.getItem('gremory:notifSeen')||0)}
 function notificationSignature(n){return [String(n?.type||''),String(n?.title||''),String(n?.text||''),String(n?.link||''),String(n?.imageUrl||'')].join('\u241f')}
 function notificationCategory(n){
@@ -593,7 +628,7 @@ $('pokemonExploreBotBtn').onclick=async()=>{try{const r=await bridgeRequest('pok
 function renderDuelFriendSelect(){const sel=$('duelFriendSelect');if(!sel)return;const current=sel.value;sel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';sel.appendChild(o)});if(state.friends[current])sel.value=current;renderTttFriendSelect()}
 $('sendDuelChallengeBtn').addEventListener('click',async()=>{const targetUid=$('duelFriendSelect').value;if(!targetUid)return toast('Escolha um amigo.');if(state.charlottePublic?.status!=='linked')return toast('Vincule a Charlotte primeiro.');try{await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type:'duel_challenge',targetUid,createdAt:nowIso()});toast('Desafio 6x6 enviado.')}catch(e){toast(permissionMessage(e))}});
 function renderDuelInbox(obj){const box=$('duelInbox');box.innerHTML='';const rows=Object.entries(obj||{});if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhum desafio.</div>';return}rows.forEach(([id,c])=>{const r=document.createElement('div');r.className='duel-request';const cp=document.createElement('div');const st=document.createElement('strong');st.textContent=c.fromName||'Desafiante';const sm=document.createElement('small');sm.textContent='quer batalhar 6x6';cp.append(st,sm);const acts=document.createElement('div');acts.className='person-actions';const a=document.createElement('button');a.className='mini-btn primary';a.textContent='Aceitar';a.onclick=()=>duelJob('duel_accept',{challengeId:id});const d=document.createElement('button');d.className='mini-btn';d.textContent='Recusar';d.onclick=()=>duelJob('duel_decline',{challengeId:id});acts.append(a,d);r.append(cp,acts);box.appendChild(r)})}
-async function duelJob(type,data){try{await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type,...data,createdAt:nowIso()});toast(type==='duel_move'?'Golpe enviado.':type==='duel_switch'?'Troca enviada.':'Processando...')}catch(e){toast(permissionMessage(e))}}
+async function duelJob(type,data){try{await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type,...data,createdAt:nowIso()});if(type==='duel_move')playPokemonSound('hit');toast(type==='duel_move'?'Golpe enviado.':type==='duel_switch'?'Troca enviada.':'Processando...')}catch(e){toast(permissionMessage(e))}}
 function handleDuelIndex(obj){
   const entries=Object.entries(obj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0));
   const active=entries.find(x=>x.status==='active');
@@ -775,11 +810,14 @@ function renderWildEncounter(){
     const again=document.createElement('button');again.className='btn primary';again.type='button';again.textContent='Explorar de novo';again.onclick=()=>$('pokemonExploreBotBtn')?.click();
     done.append(h,p,again);box.appendChild(done);return;
   }
-  const wild=normalizeMon(e.mon||{}),mine=normalizeMon(e.player||{});$('wildStatusPill').textContent='Batalha';box.innerHTML='';
+  const wild=normalizeMon(e.mon||{}),mine=normalizeMon(e.player||{});
+  const encounterSoundId=String(e.id||`${wild.uid||wild.id}:${e.createdAt||''}`);
+  if(encounterSoundId&&state.pokemonAudio.encounterId!==encounterSoundId){state.pokemonAudio.encounterId=encounterSoundId;playPokemonSound('encounter')}
+  $('wildStatusPill').textContent='Batalha';box.innerHTML='';
   const stage=document.createElement('div');stage.className='wild-battle-stage';stage.innerHTML=`<div class="wild-mon"><img src="${escText(wild.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${wild.id}.png`)}" alt=""><strong>${escText(wild.name)}</strong><small>Lv.${wild.level} • HP ${Math.max(0,wild.hp)}/${wild.maxHp}</small></div><div class="wild-vs">VS</div><div class="wild-mon mine"><img src="${escText(mine.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${mine.id}.png`)}" alt=""><strong>${escText(mine.name||'Sua equipe')}</strong><small>${mine.uid?`HP ${Math.max(0,mine.hp)}/${mine.maxHp}`:'Escolha uma equipe saudável'}</small></div>`;
   const acts=document.createElement('div');acts.className='wild-actions';
-  if(mine.uid){(mine.moves.length?mine.moves:[{name:'Ataque rápido'},{name:'Investida'}]).slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn';b.textContent=m.nome||m.name||`Golpe ${i+1}`;b.onclick=async()=>{try{await bridgeRequest('pokemon_wild_move',{moveIndex:i},30000)}catch(er){toast(er.message)}};acts.appendChild(b)})}
-  ['pokebola','greatball','ultraball'].forEach(ball=>{const b=document.createElement('button');b.className=ball==='ultraball'?'btn primary':'btn';b.textContent=ball==='pokebola'?'Pokébola':ball==='greatball'?'Great Ball':'Ultra Ball';b.onclick=async()=>{try{const r=await bridgeRequest('pokemon_capture',{ball},30000);toast(r.captured?'Pokémon capturado!':`Escapou! Chance ${r.chance||'?'}%.`);if(r.captured)await requestAccountSync().catch(()=>{})}catch(er){toast(er.message)}};acts.appendChild(b)});
+  if(mine.uid){(mine.moves.length?mine.moves:[{name:'Ataque rápido'},{name:'Investida'}]).slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn';b.textContent=m.nome||m.name||`Golpe ${i+1}`;b.onclick=async()=>{try{await bridgeRequest('pokemon_wild_move',{moveIndex:i},30000);playPokemonSound('hit')}catch(er){toast(er.message)}};acts.appendChild(b)})}
+  ['pokebola','greatball','ultraball'].forEach(ball=>{const b=document.createElement('button');b.className=ball==='ultraball'?'btn primary':'btn';b.textContent=ball==='pokebola'?'Pokébola':ball==='greatball'?'Great Ball':'Ultra Ball';b.onclick=async()=>{try{playPokemonSound('ball');const r=await bridgeRequest('pokemon_capture',{ball},30000);toast(r.captured?'Pokémon capturado!':`Escapou! Chance ${r.chance||'?'}%.`);if(r.captured){playPokemonSound('capture');await requestAccountSync().catch(()=>{})}}catch(er){toast(er.message)}};acts.appendChild(b)});
   const flee=document.createElement('button');flee.className='btn danger-ghost';flee.type='button';flee.textContent='Fugir';flee.onclick=async()=>{try{await bridgeRequest('pokemon_wild_exit',{},20000);toast('Você saiu da batalha.')}catch(er){toast(er.message)}};acts.appendChild(flee);
   box.append(stage,acts);
 }
@@ -839,7 +877,7 @@ async function uniqueWatchCode(){for(let i=0;i<8;i++){const c=randomCode();const
 async function createWatchRoom(ev){ev.preventDefault();if(!state.user)return;try{const code=await uniqueWatchCode(),createdAt=nowIso(),name=$('watchNameInput').value.trim()||'Watch Party';const room={meta:{code,name,ownerUid:state.user.uid,createdAt},members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Host',joinedAt:createdAt}},media:{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}};await set(ref(db,`watchRooms/${code}`),room);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name,role:'Host',joinedAt:createdAt});closeModal('watchCreateModal');$('watchCreateForm').reset();await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível criar a sala.'),6000)}}
 async function loadWatchRooms(){if(!state.user)return;const box=$('watchRoomsList');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await get(ref(db,`watchUserRooms/${state.user.uid}`));box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];$('homeWatchRecent').textContent=rows.length?`${rows.length} sala${rows.length===1?'':'s'}`:'Assistir e conversar';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala.</div>';return}rows.forEach(r=>{const item=document.createElement('div');item.className='room-item';const c=document.createElement('div');c.innerHTML=`<strong>${escText(r.name||r.code)}</strong><small>${escText(r.code)} • ${escText(r.role||'Participante')}</small>`;const acts=document.createElement('div');acts.className='room-item-actions';const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=()=>openWatchRoom(r.code);acts.appendChild(b);if(r.role==='Host'){const del=document.createElement('button');del.className='btn danger-ghost';del.textContent='Apagar';del.onclick=()=>deleteWatchRoom(r.code,r.name);acts.appendChild(del)}item.append(c,acts);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
 async function joinWatchRoom(code){if(!state.user)return;try{const sn=await get(ref(db,`watchRooms/${code}`));if(!sn.exists())throw new Error('Sala não encontrada.');const room=sn.val(),member={uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:room.meta?.ownerUid===state.user.uid?'Host':'Participante',joinedAt:nowIso()};await set(ref(db,`watchRooms/${code}/members/${state.user.uid}`),member);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name:room.meta?.name||code,role:member.role,joinedAt:nowIso()});$('watchJoinCode').value='';await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível entrar.'))}}
-async function openWatchRoom(code){clearUnsubs(state.watchUnsubs);state.watchCode=code;$('watchLobby').hidden=true;$('watchRoom').hidden=false;state.watchUnsubs.push(onValue(ref(db,`watchRooms/${code}`),sn=>{if(!sn.exists()){toast('Essa sala não existe mais.');closeWatchRoom(false);return}state.watchRoom=sn.val();renderWatchRoom()}));navigate('watch')}
+async function openWatchRoom(code){clearUnsubs(state.watchUnsubs);state.watchCode=code;$('watchLobby').hidden=true;$('watchRoom').hidden=false;if($('watchCreateBtn'))$('watchCreateBtn').hidden=true;state.watchUnsubs.push(onValue(ref(db,`watchRooms/${code}`),sn=>{if(!sn.exists()){toast('Essa sala não existe mais.');closeWatchRoom(false);return}state.watchRoom=sn.val();renderWatchRoom()}));navigate('watch')}
 function isWatchHost(){return !!state.user&&state.watchRoom?.meta?.ownerUid===state.user.uid}
 function renderWatchRoom(){
   const r=state.watchRoom||{},m=r.meta||{};$('watchRoomName').textContent=m.name||'Watch Party';$('watchCode').textContent=state.watchCode||'------';$('watchHostPill').textContent=isWatchHost()?'Host':'Participante';$('watchMemberCount').textContent=String(Object.keys(r.members||{}).length);
@@ -1057,7 +1095,11 @@ function renderWatchMusic(queueObj={},accessObj={}){
     if(title)title.textContent=premium?'Música ativa • Premium ilimitado':`Música ativa • ${Math.max(0,10-used)} inclusa${Math.max(0,10-used)===1?'':'s'} restante${Math.max(0,10-used)===1?'':'s'}`;
     if(txt)txt.textContent=premium?'Você não paga mais nada para adicionar músicas nesta sala.':used<10?`Você usou ${used}/10 músicas incluídas na taxa.`:`As 10 inclusas acabaram. Cada nova música custa ₹5.`;
   }
-  if(activate){activate.hidden=!!access;activate.disabled=!audioJoined}
+  if(activate){
+    activate.hidden=!!access;
+    activate.disabled=false;
+    activate.textContent=audioJoined?'Ativar música por ₹50':'Entrar na voz e ativar ₹50';
+  }
   const input=$('watchMusicInput'),submit=form.querySelector('button[type="submit"]');
   if(input)input.disabled=!audioJoined||!access;if(submit)submit.disabled=!audioJoined||!access;
   if(!rows.length){
@@ -1072,8 +1114,12 @@ function renderWatchMusic(queueObj={},accessObj={}){
   rows.slice(1,11).forEach((x,i)=>{const row=document.createElement('div');row.className='watch-music-row';const badge=document.createElement('span');badge.textContent=String(i+1);const c=document.createElement('div');const st=document.createElement('strong');st.textContent=x.title||'Música';const sm=document.createElement('small');sm.textContent=x.requestedName||'Participante';c.append(st,sm);row.append(badge,c);box.appendChild(row)})
 }
 $('watchMusicActivateBtn')?.addEventListener('click',async()=>{
-  if(!watchMusicCanHear())return toast('Entre na chamada de voz primeiro.');
   try{
+    if(!watchMusicCanHear()){
+      toast('Abrindo a chamada de voz para ativar a música...');
+      await joinWatchVoice();
+      if(!watchMusicCanHear())return;
+    }
     const r=await bridgeRequest('watch_music_activate',{roomCode:state.watchCode},20000);
     toast(r.alreadyActive?'Música já estava ativa nesta sala.':`Música ativada por ₹${r.cost||50}.`)
   }catch(e){toast(e.message)}
@@ -1092,7 +1138,7 @@ $('watchMusicSkipBtn')?.addEventListener('click',async()=>{
   try{const r=await bridgeRequest('watch_music_skip',{roomCode:state.watchCode},20000);toast(r.skipped?'Música pulada.':'A fila está vazia.')}catch(e){toast(e.message)}
 });
 
-async function closeWatchRoom(silent=false){await leaveWatchVoice(true);destroyWatchMusicPlayback();clearUnsubs(state.watchUnsubs);state.watchCode=null;state.watchRoom=null;$('watchRoom').hidden=true;$('watchLobby').hidden=false;if(!silent)loadWatchRooms()}
+async function closeWatchRoom(silent=false){await leaveWatchVoice(true);destroyWatchMusicPlayback();clearUnsubs(state.watchUnsubs);state.watchCode=null;state.watchRoom=null;$('watchRoom').hidden=true;$('watchLobby').hidden=false;if($('watchCreateBtn'))$('watchCreateBtn').hidden=false;if(!silent)loadWatchRooms()}
 async function exitWatchRoom(){if(!state.user||!state.watchCode)return;const code=state.watchCode;if(isWatchHost())return deleteWatchRoom(code,state.watchRoom?.meta?.name);try{await remove(ref(db,`watchRooms/${code}/members/${state.user.uid}`));await remove(ref(db,`watchUserRooms/${state.user.uid}/${code}`));await closeWatchRoom(false)}catch(e){toast(permissionMessage(e))}}
 async function deleteWatchRoom(code,name='Sala'){if(!state.user||!code||!confirm(`Apagar "${name||code}" para todos?`))return;try{const sn=await get(ref(db,`watchRooms/${code}`));const room=sn.val()||{};if(room.meta?.ownerUid!==state.user.uid)throw new Error('Só o host pode apagar.');await Promise.all(Object.keys(room.members||{}).map(uid=>remove(ref(db,`watchUserRooms/${uid}/${code}`)).catch(()=>{})));await remove(ref(db,`watchRooms/${code}`));await remove(ref(db,`watchVoice/${code}`)).catch(()=>{});await remove(ref(db,`watchRtc/${code}`)).catch(()=>{});await closeWatchRoom(false);toast('Sala apagada.')}catch(e){toast(permissionMessage(e,e.message))}}
 

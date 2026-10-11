@@ -1,0 +1,24 @@
+SONS DO POKÉMON — GREMORY
+
+Coloque seus arquivos MP3 nesta pasta com EXATAMENTE estes nomes:
+
+pokemon-encounter.mp3
+- toca quando aparece um novo Pokémon selvagem.
+
+pokemon-hit.mp3
+- toca quando um golpe é executado em batalha selvagem ou duelo.
+
+pokemon-ball.mp3
+- toca no momento em que a Pokébola / Great Ball / Ultra Ball é lançada.
+
+pokemon-capture.mp3
+- toca quando a captura é concluída com sucesso.
+
+Caminho final no site:
+/assets/audio/pokemon-encounter.mp3
+/assets/audio/pokemon-hit.mp3
+/assets/audio/pokemon-ball.mp3
+/assets/audio/pokemon-capture.mp3
+
+Se algum MP3 ainda não existir, o site usa um tom simples de fallback,
+então a interface continua funcionando normalmente.
