@@ -1261,6 +1261,23 @@ module.exports = async (req, res) => {
   const rapidKey = process.env.RAPIDAPI_KEY || '';
   const action = (qp(req, 'action') || '').toLowerCase();
 
+  if (action === 'account_backup_put' || action === 'account_backup_get') {
+    const secret=String(process.env.GREMORY_BACKUP_SECRET||'').trim(),supplied=String(req.headers['x-gremory-backup-secret']||'').trim();
+    if(!secret||!timingSafeEqualString(secret,supplied))return sendJson(res,403,{erro:'backup não autorizado'});
+    let blobSdk;try{blobSdk=await import('@vercel/blob')}catch{return sendJson(res,503,{erro:'@vercel/blob não instalado'})}
+    if(action==='account_backup_put'){
+      if(req.method!=='POST')return sendJson(res,405,{erro:'Método inválido'});const body=await readJsonBody(req),uid=String(body.uid||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,160);if(!uid)return sendJson(res,400,{erro:'uid obrigatório'});
+      const payload=JSON.stringify({...body,uid,storedAt:new Date().toISOString()});
+      try{
+        const latest=await blobSdk.put(`backups/accounts/${uid}/latest.json`,payload,{access:'private',allowOverwrite:true,contentType:'application/json',cacheControlMaxAge:60});
+        const day=new Date().toISOString().slice(0,10);await blobSdk.put(`backups/accounts/${uid}/history/${day}.json`,payload,{access:'private',allowOverwrite:true,contentType:'application/json',cacheControlMaxAge:60}).catch(()=>{});
+        return sendJson(res,200,{ok:true,pathname:latest.pathname,etag:latest.etag})
+      }catch(e){return sendJson(res,503,{erro:'falha ao salvar backup',detalhe:e.message})}
+    }
+    if(req.method!=='GET')return sendJson(res,405,{erro:'Método inválido'});const uid=String(qp(req,'uid')||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,160);if(!uid)return sendJson(res,400,{erro:'uid obrigatório'});
+    try{const got=await blobSdk.get(`backups/accounts/${uid}/latest.json`,{access:'private'});if(!got?.stream)return sendJson(res,404,{erro:'backup não encontrado'});const txt=await new Response(got.stream).text();return sendJson(res,200,{ok:true,snapshot:JSON.parse(txt)})}catch(e){return sendJson(res,404,{erro:'backup não encontrado',detalhe:e.message})}
+  }
+
   if (action === 'rtc_config') {
     if (req.method !== 'GET') return sendJson(res, 405, { erro: 'Método inválido' });
     const iceServers = [

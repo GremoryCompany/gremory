@@ -5,8 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#09090d">
   <meta name="color-scheme" content="dark">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="application-name" content="Gremory">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
+  <link rel="icon" href="/assets/icons/icon-192.png">
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261012-watch-v97-screen-audio">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261013-v10">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -279,16 +288,28 @@
 
         <section class="view" data-view="tinder">
           <div class="section-head"><div><span class="tag">TINDER</span><h2>Descobrir pessoas</h2></div><button class="btn" id="tinderRefreshBtn" type="button">Próximo perfil</button></div>
-          <article class="panel tinder-site-panel">
-            <div class="tinder-site-note"><strong>Mesmo perfil da Charlotte.</strong><span>Seu cadastro, likes e matches continuam sincronizados com o bot. Somente maiores de 18 anos.</span></div>
-            <div class="tinder-site-card" id="tinderSiteCard">
-              <div class="empty-state">Vincule a Charlotte e use /rgtinder no WhatsApp para criar seu perfil.</div>
-            </div>
-            <div class="tinder-site-actions" id="tinderSiteActions" hidden>
-              <button class="btn" id="tinderSkipBtn" type="button">Passar</button>
-              <button class="btn primary" id="tinderLikeBtn" type="button">Curtir ♥</button>
-            </div>
-          </article>
+          <div class="tinder-layout-v10">
+            <article class="panel tinder-profile-editor">
+              <div class="panel-head"><div><span class="tag">SEU PERFIL</span><h3>Perfil do Tinder</h3></div><span class="pill" id="tinderOwnStatus">Não criado</span></div>
+              <p class="muted">Você pode criar e editar pelo site. O perfil fica sincronizado com a Charlotte. Somente maiores de 18 anos.</p>
+              <form id="tinderProfileForm" class="stack-form tinder-profile-form">
+                <label>Nome<input id="tinderProfileName" maxlength="60" required></label>
+                <label>Idade<input id="tinderProfileAge" type="number" min="18" max="99" required></label>
+                <label>Foto (URL)<input id="tinderProfilePhoto" type="url" placeholder="https://..."></label>
+                <label>Bio<textarea id="tinderProfileBio" maxlength="300" rows="4" placeholder="Fale um pouco sobre você"></textarea></label>
+                <label class="check-row"><input id="tinderProfileActive" type="checkbox" checked><span>Mostrar meu perfil para outras pessoas</span></label>
+                <button class="btn primary full" type="submit">Salvar perfil</button>
+              </form>
+            </article>
+            <article class="panel tinder-site-panel">
+              <div class="tinder-site-note"><strong>Descobrir.</strong><span>Likes e matches continuam sincronizados com o bot e com seu perfil salvo.</span></div>
+              <div class="tinder-site-card" id="tinderSiteCard"><div class="empty-state">Carregando perfis...</div></div>
+              <div class="tinder-site-actions" id="tinderSiteActions" hidden>
+                <button class="btn" id="tinderSkipBtn" type="button">Passar</button>
+                <button class="btn primary" id="tinderLikeBtn" type="button">Curtir ♥</button>
+              </div>
+            </article>
+          </div>
         </section>
 
         <section class="view" data-view="downloads">
@@ -479,6 +500,11 @@
               <section class="table-center panel">
                 <div class="scene-toolbar"><span class="tag">CENA</span><button class="text-button" id="editSceneBtn">Editar</button></div>
                 <div class="scene-card" id="sceneCard"><div class="scene-placeholder" id="scenePlaceholder"><span>✦</span><strong id="sceneTitle">A aventura começa aqui</strong><small id="sceneDescription">O mestre pode mudar a cena.</small></div><img id="sceneImage" alt="Cena da mesa" hidden></div>
+                <div class="rpg-system-panel" id="rpgSystemPanel">
+                  <div class="panel-head"><div><span class="tag">SISTEMA</span><h3 id="rpgSystemTitle">Livre</h3></div><span class="pill" id="rpgSystemMode">Rolagens livres</span></div>
+                  <p class="muted" id="rpgSystemSummary">Use os dados abaixo ou uma fórmula personalizada.</p>
+                  <div class="rpg-system-actions" id="rpgSystemActions"></div>
+                </div>
                 <div class="dice-dock"><div class="dice-buttons" id="diceButtons"><button data-die="4">d4</button><button data-die="6">d6</button><button data-die="8">d8</button><button data-die="10">d10</button><button data-die="12">d12</button><button data-die="20">d20</button><button data-die="100">d100</button></div><form id="customRollForm" class="custom-roll"><input id="customRollInput" placeholder="2d6+3"><button type="submit">Rolar</button></form></div>
                 <div class="roll-log" id="rollLog"></div>
               </section>
@@ -613,7 +639,7 @@
 
   <div class="modal" id="createRoomModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="createRoomModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="createRoomModal">×</button><span class="tag">NOVA MESA</span><h2>Criar RPG</h2><form id="createRoomForm" class="stack-form"><label>Nome da mesa<input id="roomNameInput" maxlength="60" placeholder="Ex: Ecos de Ravenfall" required></label><label>Sistema<select id="roomSystemInput"><option>Livre</option><option>D&D 5e</option><option>Tormenta 20</option><option>Ordem Paranormal</option><option>Call of Cthulhu</option><option>Outro</option></select></label><label>Privacidade<select id="roomPrivacyInput"><option value="invite">Somente convite</option></select></label><button class="btn primary full" type="submit">Criar mesa</button></form></div></div>
 
-  <div class="modal" id="characterModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="characterModal"></button><div class="modal-card wide"><button class="modal-close" data-close-modal="characterModal">×</button><span class="tag">PERFIL DA MESA</span><h2>Identidade e personagem</h2><p class="muted">Este perfil existe somente nesta mesa e não altera sua conta Gremory.</p><form id="characterForm" class="character-form"><label>Seu nome na mesa<input id="charAlias" maxlength="40" required></label><label>Avatar da mesa (URL)<input id="charAvatar" type="url" placeholder="https://..."></label><label>Nome do personagem<input id="charName" maxlength="50" required></label><label>Classe / arquétipo<input id="charClass" maxlength="50"></label><label>Nível<input id="charLevel" type="number" min="1" max="99" value="1"></label><label>HP atual<input id="charHp" type="number" min="0" value="10"></label><label>HP máximo<input id="charMaxHp" type="number" min="1" value="10"></label><label>Defesa<input id="charDefense" type="number" min="0" value="10"></label><label class="full-span">Notas<textarea id="charNotes" rows="4" maxlength="1000"></textarea></label><button class="btn primary full-span" type="submit">Salvar perfil da mesa</button></form></div></div>
+  <div class="modal" id="characterModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="characterModal"></button><div class="modal-card wide"><button class="modal-close" data-close-modal="characterModal">×</button><span class="tag">PERFIL DA MESA</span><h2>Identidade e personagem</h2><p class="muted">Este perfil existe somente nesta mesa e não altera sua conta Gremory.</p><form id="characterForm" class="character-form"><label>Seu nome na mesa<input id="charAlias" maxlength="40" required></label><label>Avatar da mesa (URL)<input id="charAvatar" type="url" placeholder="https://..."></label><label>Nome do personagem<input id="charName" maxlength="50" required></label><label>Classe / arquétipo<input id="charClass" maxlength="50"></label><label>Nível<input id="charLevel" type="number" min="1" max="99" value="1"></label><label>HP atual<input id="charHp" type="number" min="0" value="10"></label><label>HP máximo<input id="charMaxHp" type="number" min="1" value="10"></label><label>Defesa<input id="charDefense" type="number" min="0" value="10"></label><div class="full-span character-system-fields" id="characterSystemFields"></div><label class="full-span">Notas<textarea id="charNotes" rows="4" maxlength="1000"></textarea></label><button class="btn primary full-span" type="submit">Salvar perfil da mesa</button></form></div></div>
 
   <div class="modal" id="sceneModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="sceneModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="sceneModal">×</button><span class="tag">CENA</span><h2>Editar cena</h2><form id="sceneForm" class="stack-form"><label>Título<input id="sceneTitleInput" maxlength="80"></label><label>Descrição<textarea id="sceneDescriptionInput" rows="3" maxlength="300"></textarea></label><label>Imagem (URL)<input id="sceneImageInput" type="url" placeholder="https://..."></label><button class="btn primary full" type="submit">Salvar cena</button></form></div></div>
 
@@ -628,6 +654,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261012-watch-v97-screen-audio"></script>
+  <script type="module" src="/assets/js/app.js?v=20261013-v10"></script>
 </body>
 </html>

@@ -140,6 +140,9 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   const tinderPath=path.join(__dirname,'tinder.json');
   const rootDir=path.join(__dirname,'..');
   const downloadDir=path.join(rootDir,'Gremory','downloads');
+  const siteOrigin=String(process.env.GREMORY_SITE_ORIGIN||'https://gremory2.vercel.app').replace(/\/+$/,'').replace(/#.*$/,'');
+  const backupSecret=String(process.env.GREMORY_BACKUP_SECRET||'').trim();
+  const backupInFlight=new Map();
   const HEAL_COST=100;
   const HEAL_MS_FREE=5*60*1000;
   const HEAL_MS_PREMIUM=2*60*1000;
@@ -281,7 +284,53 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     for(const[uid,jid]of syncAfter)await syncAccount(uid,jid).catch(()=>{});
   }
   async function syncPokemon(uid,jid){await processDueHealingJobs().catch(()=>{});const{user}=pokemonState(jid);const pokemon=publicPokemonUser(user);await rtdb.ref(`charlotteSync/${uid}`).update({pokemon,updatedAt:now()});return pokemon;}
-  async function syncAccount(uid,jid){const pokemon=await syncPokemon(uid,jid).catch(()=>null),lvl=readLevel(jid),prem=readPremium(jid),ach=readAchievements(jid),account={registered:registeredFor(jid),balance:balanceFor(jid),level:lvl.level,xp:lvl.xp,messages:lvl.messages,premium:prem.active};const patch={account,achievements:ach,updatedAt:now()};if(pokemon)patch.pokemon=pokemon;await rtdb.ref(`charlotteSync/${uid}`).update(patch);return{account,achievements:ach,pokemon};}
+  function safeEconomyRaw(jid){
+    try{
+      if(typeof economy.getRegUser==='function'){
+        const raw=economy.getRegUser(cleanJid(jid));
+        return raw&&typeof raw==='object'?JSON.parse(JSON.stringify(raw)):null
+      }
+    }catch{}
+    return null
+  }
+  async function backupAccountSnapshot(uid,jid,account,force=false){
+    if(!uid||!jid||!account)return null;
+    if(backupInFlight.has(uid))return backupInFlight.get(uid);
+    const task=(async()=>{
+      const dir=(await rtdb.ref(`directory/${uid}`).once('value').catch(()=>null))?.val?.()||{};
+      const snapshot={version:1,uid,whatsappJid:cleanJid(jid),identity:{name:String(dir.nome||'').slice(0,60),username:String(dir.username||'').slice(0,30)},account:{registered:!!account.registered,balance:Number(account.balance||0),level:Number(account.level||0),xp:Number(account.xp||0),messages:Number(account.messages||0),premium:!!account.premium},economyRaw:safeEconomyRaw(jid),backedAt:now()};
+      const hash=crypto.createHash('sha256').update(JSON.stringify({identity:snapshot.identity,account:snapshot.account,economyRaw:snapshot.economyRaw})).digest('hex');
+      const refBackup=rtdb.ref(`economyBackups/${uid}`),prevSn=await refBackup.once('value').catch(()=>null),prev=prevSn?.val?.()||{};
+      const changed=prev.hash!==hash,lastBlobAt=Number(prev.lastBlobAt||0),blobDue=Date.now()-lastBlobAt>24*60*60*1000;
+      if(changed||force)await refBackup.update({hash,snapshot,updatedAt:Date.now()});
+      if(backupSecret&&(changed||blobDue||force)){
+        try{
+          const resp=await fetch(`${siteOrigin}/api/main?action=account_backup_put`,{method:'POST',headers:{'content-type':'application/json','x-gremory-backup-secret':backupSecret},body:JSON.stringify(snapshot),signal:AbortSignal.timeout(12000)});
+          if(!resp.ok)throw new Error(`HTTP ${resp.status}`);
+          await refBackup.update({lastBlobAt:Date.now(),blobOk:true});
+        }catch(e){await refBackup.update({blobOk:false,blobError:String(e.message||e).slice(0,160)}).catch(()=>{});logger.log('[ACCOUNT BACKUP]',e.message)}
+      }
+      return snapshot
+    })().finally(()=>backupInFlight.delete(uid));backupInFlight.set(uid,task);return task
+  }
+  async function fetchAccountBackup(uid){
+    if(backupSecret){
+      try{
+        const r=await fetch(`${siteOrigin}/api/main?action=account_backup_get&uid=${encodeURIComponent(uid)}`,{headers:{'x-gremory-backup-secret':backupSecret},signal:AbortSignal.timeout(12000)});
+        if(r.ok){const j=await r.json();if(j?.snapshot)return j.snapshot}
+      }catch(e){logger.log('[ACCOUNT BACKUP GET]',e.message)}
+    }
+    const sn=await rtdb.ref(`economyBackups/${uid}/snapshot`).once('value');return sn.val()||null
+  }
+  async function syncIdentity(uid,jid,data){
+    const name=String(data.name||'').trim().slice(0,60),username=String(data.username||'').trim().toLowerCase().replace(/^@+/,'').slice(0,30);
+    await rtdb.ref(`charlotteSync/${uid}/identity`).set({name,username,updatedAt:now()});
+    // Mantém o nome do Tinder alinhado se já existir.
+    const rows=readJson(tinderPath,[]);if(Array.isArray(rows)){const i=rows.findIndex(p=>sameUser(p?.jid,jid));if(i>=0){rows[i].nome=name||rows[i].nome;writeJson(tinderPath,rows)}}
+    const account={registered:registeredFor(jid),balance:balanceFor(jid),...readLevel(jid),premium:readPremium(jid).active};
+    await backupAccountSnapshot(uid,jid,account,true).catch(()=>{});return{identity:{name,username},account}
+  }
+  async function syncAccount(uid,jid){const pokemon=await syncPokemon(uid,jid).catch(()=>null),lvl=readLevel(jid),prem=readPremium(jid),ach=readAchievements(jid),account={registered:registeredFor(jid),balance:balanceFor(jid),level:lvl.level,xp:lvl.xp,messages:lvl.messages,premium:prem.active};const patch={account,achievements:ach,updatedAt:now()};if(pokemon)patch.pokemon=pokemon;await rtdb.ref(`charlotteSync/${uid}`).update(patch);backupAccountSnapshot(uid,jid,account,false).catch(()=>{});return{account,achievements:ach,pokemon};}
   async function findLinkCode(code){const snap=await rtdb.ref('charlotteLinkRequests').orderByChild('code').equalTo(String(code||'').trim().toUpperCase()).once('value');for(const[uid,req]of Object.entries(snap.val()||{}))if(Number(req.expiresAt||0)>=Date.now())return{uid,req};return null;}
   async function linkAccount(code,sender){const found=await findLinkCode(code);if(!found)throw new Error('Código inválido ou expirado. Gere outro no site.');const jid=cleanJid(sender);await rtdb.ref(`charlottePrivate/${found.uid}`).set({whatsappJid:jid,linkedAt:now()});await rtdb.ref(`charlottePublic/${found.uid}`).set({status:'linked',whatsappMasked:maskJid(jid),linkedAt:now()});await rtdb.ref(`charlotteLinkRequests/${found.uid}`).remove();try{await syncAccount(found.uid,jid)}catch(e){logger.log('[SITE BRIDGE] sync inicial:',e.message)}return found.uid;}
   async function reciprocalFriends(a,b){const[x,y]=await Promise.all([rtdb.ref(`friends/${a}/${b}`).once('value'),rtdb.ref(`friends/${b}/${a}`).once('value')]);return x.exists()&&y.exists();}
@@ -505,6 +554,29 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   function tinderNormalizeProfile(p={}){
     return{...p,jid:cleanJid(p.jid||''),nome:String(p.nome||'Usuário').slice(0,60),idade:String(p.idade||''),bio:String(p.bio||'').slice(0,300),likes:Number(p.likes||0),matches:Number(p.matches||0),likedBy:Array.isArray(p.likedBy)?p.likedBy:[],matchedWith:Array.isArray(p.matchedWith)?p.matchedWith:[],ativo:p.ativo!==false};
   }
+  async function mirrorTinderProfile(uid,profile){
+    if(!uid||!profile)return;const p=tinderNormalizeProfile(profile);
+    await rtdb.ref(`siteTinderProfiles/${uid}`).set({uid,nome:p.nome,idade:Number(p.idade||0),bio:p.bio,foto:String(p.foto||''),ativo:p.ativo!==false,likes:Number(p.likes||0),matches:Number(p.matches||0),updatedAt:now()});
+    await rtdb.ref(`tinderBackups/${uid}`).set({jid:cleanJid(p.jid||''),nome:p.nome,idade:String(p.idade||''),bio:p.bio,foto:String(p.foto||''),wa:String(p.wa||''),ativo:p.ativo!==false,likes:Number(p.likes||0),matches:Number(p.matches||0),likedBy:p.likedBy||[],matchedWith:p.matchedWith||[],updatedAt:now()})
+  }
+  async function restoreTinderFromFirebase(){
+    const [pubSn,privateSn,links]=await Promise.all([rtdb.ref('siteTinderProfiles').once('value').catch(()=>null),rtdb.ref('tinderBackups').once('value').catch(()=>null),rtdb.ref('charlottePrivate').once('value').catch(()=>null)]),mirrors=pubSn?.val?.()||{},privateMirrors=privateSn?.val?.()||{};if(!Object.keys(mirrors).length&&!Object.keys(privateMirrors).length)return;
+    const rows=readJson(tinderPath,[]);if(!Array.isArray(rows))return;const privateRows=links?.val?.()||{};let changed=false;const uids=new Set([...Object.keys(mirrors),...Object.keys(privateMirrors)]);
+    for(const uid of uids){const p={...(mirrors[uid]||{}),...(privateMirrors[uid]||{})},jid=cleanJid(p.jid||privateRows?.[uid]?.whatsappJid||'');if(!jid)continue;let i=rows.findIndex(x=>sameUser(x?.jid,jid));if(i<0){rows.push(tinderNormalizeProfile({...p,jid}));changed=true}else{rows[i]={...rows[i],...tinderNormalizeProfile({...rows[i],...p,jid})};changed=true}}
+    if(changed)writeJson(tinderPath,rows)
+  }
+  async function processTinderProfileGet(uid,jid){
+    let rows=readJson(tinderPath,[]);let local=Array.isArray(rows)?rows.find(p=>sameUser(p?.jid,jid)):null;
+    if(!local){const sn=await rtdb.ref(`siteTinderProfiles/${uid}`).once('value');if(sn.exists()){const p=sn.val();local=tinderNormalizeProfile({jid,nome:p.nome,idade:p.idade,bio:p.bio,foto:p.foto,ativo:p.ativo,likes:p.likes,matches:p.matches});rows=Array.isArray(rows)?rows:[];rows.push(local);writeJson(tinderPath,rows)}}
+    if(!local)return{profile:null};const p=tinderNormalizeProfile(local);return{profile:{nome:p.nome,idade:Number(p.idade||0),bio:p.bio,photo:await tinderPhoto(p),foto:p.foto||'',ativo:p.ativo,likes:p.likes,matches:p.matches}}
+  }
+  async function processTinderProfileSave(uid,jid,data){
+    const idade=Number(data.idade||0);if(idade<18||idade>99)throw new Error('O Tinder é somente para maiores de 18 anos.');
+    const rows=readJson(tinderPath,[]);if(!Array.isArray(rows))throw new Error('Tinder indisponível.');const i=rows.findIndex(p=>sameUser(p?.jid,jid)),old=i>=0?tinderNormalizeProfile(rows[i]):tinderNormalizeProfile({jid});
+    const profile={...old,jid:cleanJid(jid),nome:String(data.nome||old.nome||'Usuário').trim().slice(0,60),idade:String(idade),bio:String(data.bio||'').trim().slice(0,300),foto:String(data.foto||'').trim().slice(0,1000),wa:old.wa||cleanJid(jid).split('@')[0],ativo:data.ativo!==false};
+    if(i>=0)rows[i]=profile;else rows.push(profile);writeJson(tinderPath,rows);await mirrorTinderProfile(uid,profile);
+    return{profile:{nome:profile.nome,idade, bio:profile.bio,photo:profile.foto||await tinderPhoto(profile),foto:profile.foto||'',ativo:profile.ativo,likes:profile.likes,matches:profile.matches}}
+  }
   async function siteUidMapByJid(){
     const sn=await rtdb.ref('charlottePrivate').once('value'),map=new Map();
     for(const[uid,v]of Object.entries(sn.val()||{})){const jid=cleanJid(v?.whatsappJid||'');if(jid)map.set(jid,uid)}
@@ -519,7 +591,7 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   }
   async function processTinderFeed(uid,jid,data){
     const rows=readJson(tinderPath,[]);if(!Array.isArray(rows))throw new Error('Tinder indisponível.');
-    const me=rows.find(p=>sameUser(p?.jid,jid));if(!me)throw new Error('Crie seu perfil primeiro com /rgtinder no WhatsApp.');
+    let me=rows.find(p=>sameUser(p?.jid,jid));if(!me){await processTinderProfileGet(uid,jid);const fresh=readJson(tinderPath,[]);me=Array.isArray(fresh)?fresh.find(p=>sameUser(p?.jid,jid)):null}if(!me)throw new Error('Crie seu perfil do Tinder pelo site ou pela Charlotte.');
     const links=await siteUidMapByJid(),skip=new Set((Array.isArray(data.skipUids)?data.skipUids:[]).map(String));
     const candidates=[];
     for(const raw of rows){
@@ -536,7 +608,7 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     const targetJid=await linkedJidByUid(targetUid);if(!targetJid)throw new Error('Esse perfil não está disponível.');
     const rows=readJson(tinderPath,[]);if(!Array.isArray(rows))throw new Error('Tinder indisponível.');
     const myIndex=rows.findIndex(p=>sameUser(p?.jid,jid)),targetIndex=rows.findIndex(p=>sameUser(p?.jid,targetJid));
-    if(myIndex<0)throw new Error('Crie seu perfil primeiro com /rgtinder no WhatsApp.');if(targetIndex<0)throw new Error('Esse perfil não existe mais.');
+    if(myIndex<0)throw new Error('Crie seu perfil do Tinder pelo site ou pela Charlotte.');if(targetIndex<0)throw new Error('Esse perfil não existe mais.');
     const me=tinderNormalizeProfile(rows[myIndex]),target=tinderNormalizeProfile(rows[targetIndex]);
     if(!target.likedBy.some(x=>sameUser(x,jid)))target.likedBy.push(jid);target.likes=target.likedBy.length;
     const match=me.likedBy.some(x=>sameUser(x,targetJid));
@@ -545,7 +617,7 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
       if(!target.matchedWith.some(x=>sameUser(x,jid)))target.matchedWith.push(jid);
       me.matches=me.matchedWith.length;target.matches=target.matchedWith.length;
     }
-    rows[myIndex]=me;rows[targetIndex]=target;writeJson(tinderPath,rows);
+    rows[myIndex]=me;rows[targetIndex]=target;writeJson(tinderPath,rows);await mirrorTinderProfile(uid,me).catch(()=>{});await mirrorTinderProfile(targetUid,target).catch(()=>{});
     if(match){
       await notifySite(uid,{type:'tinder_match',title:'Deu match 💘',text:`Você e ${target.nome} curtiram um ao outro.`,link:'#tinder'}).catch(()=>{});
       await notifySite(targetUid,{type:'tinder_match',title:'Deu match 💘',text:`Você e ${me.nome} curtiram um ao outro.`,link:'#tinder'}).catch(()=>{});
@@ -743,6 +815,9 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
       else if(type==='ttt_create')payload=await processTttCreate(uid,data);
       else if(type==='ttt_move')payload=await processTttMove(uid,data);
       else if(type==='ttt_exit')payload=await processTttExit(uid,data);
+      else if(type==='sync_identity')payload=await syncIdentity(uid,jid,data);
+      else if(type==='tinder_profile_get')payload=await processTinderProfileGet(uid,jid);
+      else if(type==='tinder_profile_save')payload=await processTinderProfileSave(uid,jid,data);
       else if(type==='tinder_feed')payload=await processTinderFeed(uid,jid,data);
       else if(type==='tinder_like')payload=await processTinderLike(uid,jid,data);
       else if(type==='watch_music_activate')payload=await processWatchMusicActivate(uid,jid,data);
@@ -755,7 +830,7 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   }
   function processJob(uid,jobId,data){const prev=userQueues.get(uid)||Promise.resolve(),next=prev.catch(()=>{}).then(()=>processJobNow(uid,jobId,data));userQueues.set(uid,next);next.finally(()=>{if(userQueues.get(uid)===next)userQueues.delete(uid)});return next;}
   function watchUserJobs(uid){if(watchedUsers.has(uid))return;watchedUsers.add(uid);const userRef=rtdb.ref(`siteBridgeJobs/${uid}`),handler=sn=>processJob(uid,sn.key,sn.val());userRef.on('child_added',handler);watchedRefs.set(uid,{userRef,handler});}
-  function start(){if(rootWatcher)return;rootWatcher=rtdb.ref('siteBridgeJobs');rootWatcher.on('child_added',sn=>watchUserJobs(sn.key));processDueHealingJobs().catch(()=>{});healingTimer=setInterval(()=>processDueHealingJobs().catch(()=>{}),30000);healingTimer.unref?.();setTimeout(()=>syncLinkedAccounts().catch(()=>{}),5000).unref?.();syncTimer=setInterval(()=>syncLinkedAccounts().catch(()=>{}),180000);syncTimer.unref?.();logger.log('✅ GREMORY SITE BRIDGE ATIVO');}
+  function start(){if(rootWatcher)return;rootWatcher=rtdb.ref('siteBridgeJobs');rootWatcher.on('child_added',sn=>watchUserJobs(sn.key));processDueHealingJobs().catch(()=>{});healingTimer=setInterval(()=>processDueHealingJobs().catch(()=>{}),30000);healingTimer.unref?.();setTimeout(()=>syncLinkedAccounts().catch(()=>{}),5000).unref?.();setTimeout(()=>restoreTinderFromFirebase().catch(()=>{}),7000).unref?.();syncTimer=setInterval(()=>syncLinkedAccounts().catch(()=>{}),180000);syncTimer.unref?.();logger.log('✅ GREMORY SITE BRIDGE ATIVO');}
   function stop(){try{if(rootWatcher)rootWatcher.off()}catch{}for(const{userRef,handler}of watchedRefs.values()){try{userRef.off('child_added',handler)}catch{}}watchedRefs.clear();watchedUsers.clear();rootWatcher=null;if(healingTimer){clearInterval(healingTimer);healingTimer=null;}if(syncTimer){clearInterval(syncTimer);syncTimer=null;}syncingLinked=false;}
   function rawIncomingText(info){
     return String(
@@ -869,6 +944,21 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
         await enviar(`✅ Publicação apagada.\nID: ${result.id}\nAs notificações vinculadas também foram removidas.`)
       }catch(e){await enviar(`❌ ${e.message}`)}
       return true
+    }
+    if(cmd==='backupconta'&&isOwner){
+      try{const uid=String(args[0]||q||'').trim();if(!uid)throw new Error('Use: /backupconta UID');const jid=await linkedJidByUid(uid);if(!jid)throw new Error('UID não está vinculado à Charlotte.');const r=await syncAccount(uid,jid);await backupAccountSnapshot(uid,jid,r.account,true);await enviar(`✅ Backup atualizado.\nUID: ${uid}\nSaldo: ₹${r.account.balance}\nRegistro: ${r.account.registered?'sim':'não'}`)}catch(e){await enviar(`❌ ${e.message}`)}return true
+    }
+    if(cmd==='backupcontas'&&isOwner){
+      try{await syncLinkedAccounts();await enviar('✅ Backup das contas vinculadas atualizado no Firebase e, quando configurado, no Vercel Blob.')}catch(e){await enviar(`❌ ${e.message}`)}return true
+    }
+    if(cmd==='restaurarconta'&&isOwner){
+      try{
+        const uid=String(args[0]||'').trim(),confirm=String(args[1]||'').toLowerCase()==='confirmar';if(!uid)throw new Error('Use: /restaurarconta UID confirmar');if(!confirm)throw new Error('Por segurança use: /restaurarconta UID confirmar');
+        const jid=await linkedJidByUid(uid);if(!jid)throw new Error('UID não está vinculado.');const b=await fetchAccountBackup(uid);if(!b?.account)throw new Error('Nenhum backup encontrado.');
+        const currentRegistered=registeredFor(jid),currentBalance=balanceFor(jid);if(currentRegistered&&currentBalance>0)throw new Error(`A conta atual ainda possui registro e ₹${currentBalance}. Não restaure por cima de uma conta ativa.`);
+        if(b.account.registered&&!currentRegistered&&typeof economy.AddReg==='function'){let ok=false;for(const a of [[jid,b.identity?.name||'Usuário'],[jid]]){try{await economy.AddReg(...a);if(registeredFor(jid)){ok=true;break}}catch{}}if(!ok)throw new Error('Não consegui recriar o registro automaticamente.')}
+        const target=Math.max(0,Number(b.account.balance||0)),nowBal=balanceFor(jid),delta=target-nowBal;if(delta>0&&typeof economy.addkoin==='function')await economy.addkoin(jid,delta);if(delta<0&&typeof economy.delkoin==='function')await economy.delkoin(jid,Math.abs(delta));await syncAccount(uid,jid);await enviar(`✅ Conta restaurada do backup.\nSaldo: ₹${balanceFor(jid)}\nRegistro: ${registeredFor(jid)?'sim':'não'}`)
+      }catch(e){await enviar(`❌ ${e.message}`)}return true
     }
     if(cmd==='siteban'&&isOwner){
       const uid=String(args[0]||'').trim(),reason=args.slice(1).join(' ').trim()||'Violação das regras';if(!uid){await enviar('Use: /siteban UID motivo');return true}

@@ -6,14 +6,15 @@
       "$uid": {
         ".read": "auth != null",
         ".write": "auth != null && auth.uid === $uid",
-        ".validate": "newData.hasChildren(['uid','nome','createdAt']) && newData.child('uid').val() === auth.uid && newData.child('nome').isString() && newData.child('nome').val().length <= 40 && (!newData.child('bio').exists() || (newData.child('bio').isString() && newData.child('bio').val().length <= 180)) && (!newData.child('favoriteAnime').exists() || (newData.child('favoriteAnime').isString() && newData.child('favoriteAnime').val().length <= 80))"
-      }
+        ".validate": "newData.hasChildren(['uid','nome','createdAt']) && newData.child('uid').val() === auth.uid && newData.child('nome').isString() && newData.child('nome').val().length <= 40 && (!newData.child('bio').exists() || (newData.child('bio').isString() && newData.child('bio').val().length <= 180)) && (!newData.child('favoriteAnime').exists() || (newData.child('favoriteAnime').isString() && newData.child('favoriteAnime').val().length <= 80)) && (!newData.child('username').exists() || (newData.child('username').isString() && newData.child('username').val().matches(/^[a-z][a-z0-9_]{2,19}$/) && root.child('usernames').child(newData.child('username').val()).child('uid').val() === auth.uid)) && (!data.child('username').exists() || !newData.child('username').exists() || newData.child('username').val() === data.child('username').val() || !data.child('usernameChangedAt').exists() || now - data.child('usernameChangedAt').val() >= 604800000)"
+      },
+      ".read": "auth != null && auth.token.email === 'losermodder@gmail.com'"
     },
     "directory": {
       ".read": "auth != null",
       "$uid": {
         ".write": "auth != null && auth.uid === $uid",
-        ".validate": "newData.hasChildren(['uid','nome']) && newData.child('uid').val() === auth.uid && newData.child('nome').isString() && newData.child('nome').val().length <= 40"
+        ".validate": "newData.hasChildren(['uid','nome']) && newData.child('uid').val() === auth.uid && newData.child('nome').isString() && newData.child('nome').val().length <= 40 && (!newData.child('username').exists() || (newData.child('username').isString() && newData.child('username').val().matches(/^[a-z][a-z0-9_]{2,19}$/)))"
       }
     },
     "users": {
@@ -71,7 +72,7 @@
         ".read": "auth != null && auth.uid === $uid",
         "$jobId": {
           ".write": "auth != null && auth.uid === $uid",
-          ".validate": "!newData.exists() || (newData.child('type').isString() && (newData.child('type').val() === 'sync_pokemon' || newData.child('type').val() === 'sync_account' || newData.child('type').val() === 'daily_claim' || newData.child('type').val() === 'buy_customization' || newData.child('type').val() === 'equip_customization' || newData.child('type').val() === 'premium_checkout' || newData.child('type').val() === 'send_download_link' || newData.child('type').val() === 'duel_challenge' || newData.child('type').val() === 'duel_accept' || newData.child('type').val() === 'duel_decline' || newData.child('type').val() === 'duel_move'))"
+          ".validate": "!newData.exists() || (newData.child('type').isString() && (newData.child('type').val() === 'sync_pokemon' || newData.child('type').val() === 'sync_account' || newData.child('type').val() === 'daily_claim' || newData.child('type').val() === 'buy_customization' || newData.child('type').val() === 'equip_customization' || newData.child('type').val() === 'premium_checkout' || newData.child('type').val() === 'send_download_link' || newData.child('type').val() === 'youtube_bot_download' || newData.child('type').val() === 'pokemon_set_team' || newData.child('type').val() === 'pokemon_explore' || newData.child('type').val() === 'pokemon_wild_move' || newData.child('type').val() === 'pokemon_wild_exit' || newData.child('type').val() === 'pokemon_capture' || newData.child('type').val() === 'pokemon_heal_start' || newData.child('type').val() === 'duel_challenge' || newData.child('type').val() === 'duel_accept' || newData.child('type').val() === 'duel_decline' || newData.child('type').val() === 'duel_move' || newData.child('type').val() === 'duel_switch' || newData.child('type').val() === 'duel_exit' || newData.child('type').val() === 'ttt_create' || newData.child('type').val() === 'ttt_move' || newData.child('type').val() === 'ttt_exit' || newData.child('type').val() === 'tinder_feed' || newData.child('type').val() === 'tinder_like' || newData.child('type').val() === 'watch_music_activate' || newData.child('type').val() === 'watch_music_add' || newData.child('type').val() === 'watch_music_skip' || newData.child('type').val() === 'watch_music_advance' || newData.child('type').val() === 'sync_identity' || newData.child('type').val() === 'tinder_profile_get' || newData.child('type').val() === 'tinder_profile_save'))"
         }
       }
     },
@@ -172,6 +173,123 @@
           }
         }
       }
+    },
+    "pokemonSiteEncounter": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+    "pokemonHealing": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+    "pokemonSiteMeta": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+    "ticTacToeIndex": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+    "ticTacToeGames": {
+      "$gameId": {
+        ".read": "auth != null && data.child('players').child(auth.uid).exists()",
+        ".write": false
+      }
+    },
+    "watchUserRooms": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "watchRooms": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((!data.exists() && newData.child('meta').child('ownerUid').val() === auth.uid && newData.child('members').child(auth.uid).child('uid').val() === auth.uid) || (data.exists() && data.child('meta').child('ownerUid').val() === auth.uid))",
+        "members": {
+          "$uid": {
+            ".write": "auth != null && (auth.uid === $uid || root.child('watchRooms').child($code).child('meta').child('ownerUid').val() === auth.uid)"
+          }
+        },
+        "media": {
+          ".write": "auth != null && root.child('watchRooms').child($code).child('meta').child('ownerUid').val() === auth.uid"
+        }
+      }
+    },
+    "watchVoice": {
+      "$code": {
+        ".read": "auth != null && root.child('watchRooms').child($code).child('members').child(auth.uid).exists()",
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid && root.child('watchRooms').child($code).child('members').child(auth.uid).exists()"
+        }
+      }
+    },
+    "watchRtc": {
+      "$code": {
+        "$targetUid": {
+          ".read": "auth != null && auth.uid === $targetUid && root.child('watchRooms').child($code).child('members').child(auth.uid).exists()",
+          "$messageId": {
+            ".write": "auth != null && ((newData.exists() && newData.child('fromUid').val() === auth.uid && root.child('watchRooms').child($code).child('members').child(auth.uid).exists() && root.child('watchRooms').child($code).child('members').child($targetUid).exists()) || (!newData.exists() && auth.uid === $targetUid))"
+          }
+        }
+      }
+    },
+    "siteUpdates": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email === 'losermodder@gmail.com'"
+    },
+    "siteNotifications": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'losermodder@gmail.com')",
+        ".write": false,
+        "$notificationId": {
+          ".write": "auth != null && ((auth.token.email === 'losermodder@gmail.com') || (auth.uid === $uid && !newData.exists()) || (!data.exists() && newData.child('type').val() === 'friend_request' && newData.child('actorUid').val() === auth.uid && root.child('friendRequests').child($uid).child(auth.uid).exists()))"
+        }
+      },
+      ".read": "auth != null && auth.token.email === 'losermodder@gmail.com'"
+    },
+    "siteBans": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'losermodder@gmail.com')",
+        ".write": "auth != null && auth.token.email === 'losermodder@gmail.com'"
+      },
+      ".read": "auth != null && auth.token.email === 'losermodder@gmail.com'"
+    },
+    "siteReports": {
+      ".read": "auth != null && auth.token.email === 'losermodder@gmail.com'",
+      "$reportId": {
+        ".write": "auth != null && ((auth.token.email === 'losermodder@gmail.com') || (!data.exists() && newData.child('reporterUid').val() === auth.uid && newData.child('targetUid').isString() && newData.child('targetUid').val() !== auth.uid))",
+        ".validate": "newData.hasChildren(['id','reporterUid','targetUid','category','createdAt','status']) && newData.child('details').isString() && newData.child('details').val().length <= 500"
+      }
+    },
+    "usernames": {
+      ".read": "auth != null",
+      "$username": {
+        ".write": "auth != null && ((!data.exists() && newData.child('uid').val() === auth.uid) || (data.child('uid').val() === auth.uid && (!newData.exists() || newData.child('uid').val() === auth.uid)))",
+        ".validate": "!newData.exists() || (newData.hasChildren(['uid','username']) && newData.child('uid').val() === auth.uid && newData.child('username').val() === $username && newData.child('username').isString() && newData.child('username').val().matches(/^[a-z][a-z0-9_]{2,19}$/))"
+      }
+    },
+    "economyBackups": {
+      ".read": "auth != null && auth.token.email === 'losermodder@gmail.com'",
+      ".write": "auth != null && auth.token.email === 'losermodder@gmail.com'"
+    },
+    "siteTinderProfiles": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.token.email === 'losermodder@gmail.com'"
+      }
+    },
+    "tinderBackups": {
+      ".read": "auth != null && auth.token.email === 'losermodder@gmail.com'",
+      ".write": "auth != null && auth.token.email === 'losermodder@gmail.com'"
     }
   }
 }

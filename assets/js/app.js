@@ -5,7 +5,7 @@ import {
   signOut, updateProfile
 } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js';
 import {
-  getDatabase, ref, get, set, update, push, onValue, remove, onDisconnect
+  getDatabase, ref, get, set, update, push, onValue, remove, onDisconnect, query, orderByChild, limitToLast
 } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js';
 
 const firebaseConfig = {
@@ -70,6 +70,8 @@ function usernameCooldownRemaining(p=state.profile){
   const at=Number(p?.usernameChangedAt||0);if(!at)return 0;
   return Math.max(0,USERNAME_COOLDOWN_MS-(Date.now()-at));
 }
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}),{once:true})}
+
 function formatCooldown(ms){
   if(ms<=0)return'Você pode alterar agora.';
   const d=Math.ceil(ms/86400000);return `Você poderá trocar novamente em ${d} dia${d===1?'':'s'}.`;
@@ -107,7 +109,7 @@ function navigate(route){
   history.replaceState(null,'',`#${route}`); window.scrollTo({top:0,behavior:'auto'});
   if(route==='pokemon') {loadPokemonSources(); renderDuelFriendSelect();}
   if(route==='friends') loadDirectory();
-  if(route==='tinder') loadTinderProfile();
+  if(route==='tinder'){loadOwnTinderProfile();loadTinderProfile();}
   if(route==='updates') renderUpdates();
   if(route==='games') renderTttFriendSelect();
   if(route==='watch'&&state.user&&!state.watchCode) loadWatchRooms();
@@ -244,7 +246,14 @@ $('profileForm').addEventListener('submit',async ev=>{
     await set(ref(db,`directory/${state.user.uid}`),publicProfile(payload));
     if(changing&&oldUsername)await remove(ref(db,`usernames/${oldUsername}`)).catch(()=>{});
     if(state.user.displayName!==payload.nome)await updateProfile(state.user,{displayName:payload.nome});
-    state.profile=payload;renderAccount();toast('Perfil salvo.');
+    state.profile=payload;renderAccount();
+    // O saldo continua preso à conta vinculada (UID <-> WhatsApp), não ao texto do @.
+    // Sincronizamos a identidade no bridge para que backup, Tinder e saldo usem o novo nome imediatamente.
+    if(linkedCharlotte()){
+      bridgeRequest('sync_identity',{name:payload.nome,username:payload.username},20000).catch(()=>{});
+      requestAccountSync().catch(()=>{});
+    }
+    toast('Perfil salvo. Seu saldo continua vinculado à mesma conta.');
   }catch(e){
     if(reservedNew&&changing)await remove(ref(db,`usernames/${username}`)).catch(()=>{});
     toast(permissionMessage(e,e.message||'Não foi possível salvar o perfil.'))
@@ -266,9 +275,9 @@ function startUserSubscriptions(){
   state.userUnsubs.push(onValue(ref(db,`pokemonSiteEncounter/${uid}`),s=>{state.pokemonEncounter=s.exists()?s.val():null;renderWildEncounter()}));
   state.userUnsubs.push(onValue(ref(db,`pokemonHealing/${uid}`),s=>{state.pokemonHealing=s.exists()?s.val():{};renderHealingList();renderCollection()}));
   state.userUnsubs.push(onValue(ref(db,`ticTacToeIndex/${uid}`),s=>{state.ttt.index=s.exists()?s.val():{};handleTttIndex(state.ttt.index)}));
-  state.userUnsubs.push(onValue(ref(db,'siteUpdates'),s=>{state.updates=s.exists()?s.val():{};renderUpdates()}));
+  state.userUnsubs.push(onValue(query(ref(db,'siteUpdates'),orderByChild('createdAt'),limitToLast(60)),s=>{state.updates=s.exists()?s.val():{};renderUpdates()}));
   let notificationBoot=true;
-  state.userUnsubs.push(onValue(ref(db,`siteNotifications/${uid}`),s=>{
+  state.userUnsubs.push(onValue(query(ref(db,`siteNotifications/${uid}`),orderByChild('createdAt'),limitToLast(100)),s=>{
     const previousCount=uniqueNotificationRows(state.notifications).length;
     state.notifications=s.exists()?s.val():{};
     const nextCount=uniqueNotificationRows(state.notifications).length;
@@ -536,15 +545,35 @@ $('adminBanUserBtn')?.addEventListener('click',async()=>{if(!state.admin.selecte
 $('adminUnbanUserBtn')?.addEventListener('click',async()=>{if(!state.admin.selectedUid)await adminLookupUser();if(state.admin.selectedUid)await adminUnbanUid(state.admin.selectedUid)});
 
 
-// Tinder sincronizado com o perfil já existente da Charlotte
+// Tinder — cadastro no site + sincronização com a Charlotte/Firebase
+function fillOwnTinderProfile(profile={}){
+  if($('tinderProfileName'))$('tinderProfileName').value=profile.nome||state.profile?.nome||displayName();
+  if($('tinderProfileAge'))$('tinderProfileAge').value=profile.idade||'';
+  if($('tinderProfilePhoto'))$('tinderProfilePhoto').value=profile.foto||'';
+  if($('tinderProfileBio'))$('tinderProfileBio').value=profile.bio||'';
+  if($('tinderProfileActive'))$('tinderProfileActive').checked=profile.ativo!==false;
+  if($('tinderOwnStatus'))$('tinderOwnStatus').textContent=profile.exists===false?'Não criado':'Salvo';
+}
+async function loadOwnTinderProfile(){
+  if(!state.user)return;fillOwnTinderProfile({exists:false});
+  if(!linkedCharlotte())return;
+  try{const r=await bridgeRequest('tinder_profile_get',{},20000);fillOwnTinderProfile(r.profile?{...r.profile,exists:true}:{exists:false})}catch(e){console.warn('[TINDER PROFILE]',e)}
+}
+$('tinderProfileForm')?.addEventListener('submit',async ev=>{
+  ev.preventDefault();if(!state.user)return;
+  if(!linkedCharlotte())return toast('Vincule a Charlotte antes de salvar o Tinder.');
+  const idade=Number($('tinderProfileAge').value||0);if(idade<18)return toast('O Tinder do site é somente para maiores de 18 anos.');
+  const data={nome:$('tinderProfileName').value.trim().slice(0,60)||displayName(),idade,bio:$('tinderProfileBio').value.trim().slice(0,300),foto:$('tinderProfilePhoto').value.trim().slice(0,1000),ativo:$('tinderProfileActive').checked};
+  try{const r=await bridgeRequest('tinder_profile_save',data,25000);fillOwnTinderProfile({...r.profile,exists:true});toast('Perfil do Tinder salvo no site e sincronizado com a Charlotte.');await loadTinderProfile()}catch(e){toast(e.message)}
+});
 function renderTinderCard(profile){
   const box=$('tinderSiteCard'),actions=$('tinderSiteActions');if(!box||!actions)return;box.innerHTML='';
   if(!profile){box.innerHTML='<div class="empty-state">Não encontrei outro perfil disponível agora.</div>';actions.hidden=true;return}
-  const card=document.createElement('article');card.className='tinder-profile-card';const img=document.createElement('img');img.className='tinder-profile-photo';img.src=profile.photo||DEFAULT_AVATAR;img.alt='';const copy=document.createElement('div');copy.className='tinder-profile-copy';const h=document.createElement('h3');h.textContent=`${profile.nome||'Usuário'}${profile.idade?`, ${profile.idade}`:''}`;const bio=document.createElement('p');bio.textContent=profile.bio||'Sem bio.';const stats=document.createElement('small');stats.textContent=`${profile.likes||0} curtidas • ${profile.matches||0} matches`;copy.append(h,bio,stats);card.append(img,copy);box.appendChild(card);actions.hidden=false
+  const card=document.createElement('article');card.className='tinder-profile-card';const img=document.createElement('img');img.className='tinder-profile-photo';img.src=profile.photo||DEFAULT_AVATAR;img.alt='';img.loading='lazy';const copy=document.createElement('div');copy.className='tinder-profile-copy';const h=document.createElement('h3');h.textContent=`${profile.nome||'Usuário'}${profile.idade?`, ${profile.idade}`:''}`;const bio=document.createElement('p');bio.textContent=profile.bio||'Sem bio.';const stats=document.createElement('small');stats.textContent=`${profile.likes||0} curtidas • ${profile.matches||0} matches`;copy.append(h,bio,stats);card.append(img,copy);box.appendChild(card);actions.hidden=false
 }
 async function loadTinderProfile(){
   if(!state.user)return;const box=$('tinderSiteCard');if(box)box.innerHTML='<div class="loading-line">Procurando perfil...</div>';
-  if(!linkedCharlotte()){renderTinderCard(null);if(box)box.innerHTML='<div class="empty-state">Vincule a Charlotte primeiro. O cadastro do Tinder continua sendo o mesmo do bot.</div>';return}
+  if(!linkedCharlotte()){renderTinderCard(null);if(box)box.innerHTML='<div class="empty-state">Vincule a Charlotte para usar o Tinder.</div>';return}
   try{const r=await bridgeRequest('tinder_feed',{skipUids:state.tinder.seen},25000);state.tinder.current=r.profile||null;if(r.profile&&!state.tinder.seen.includes(r.profile.uid))state.tinder.seen.push(r.profile.uid);renderTinderCard(state.tinder.current)}catch(e){if(box)box.innerHTML=`<div class="empty-state">${escText(e.message)}</div>`;$('tinderSiteActions').hidden=true}
 }
 $('tinderRefreshBtn')?.addEventListener('click',loadTinderProfile);$('tinderSkipBtn')?.addEventListener('click',loadTinderProfile);
@@ -1235,6 +1264,17 @@ async function negotiateWatchPeer(peerUid,{iceRestart=false,reason='update'}={})
     await sendWatchRtc(peerUid,{type:'offer',sdp:pc.localDescription?.sdp||offer.sdp,reason,iceRestart:!!iceRestart});return true
   }finally{state.watchRtc.makingOffer.delete(peerUid)}
 }
+async function tuneWatchScreenSender(pc){
+  const sender=watchPcSender(pc,'video');if(!sender)return;
+  try{
+    const p=sender.getParameters();p.encodings=p.encodings?.length?p.encodings:[{}];
+    const mobile=matchMedia('(max-width:820px)').matches;
+    p.encodings[0].maxBitrate=mobile?1100000:2200000;
+    p.encodings[0].maxFramerate=mobile?15:24;
+    p.degradationPreference='balanced';
+    await sender.setParameters(p)
+  }catch{}
+}
 async function requestWatchScreenFrom(uid,force=false){
   uid=String(uid||'');if(!uid||uid===state.user?.uid||!state.watchRtc.screenSharers.has(uid))return;
   const last=Number(state.watchRtc.screenRetry.get(uid)||0);if(!force&&Date.now()-last<3500)return;
@@ -1404,7 +1444,7 @@ async function handleWatchRtc(id,msg){
       if(videoTrack&&videoTrack.readyState==='live'){
         const videoSender=watchPcSender(pc,'video');if(videoSender)await videoSender.replaceTrack(videoTrack);
         const audioSender=watchPcSender(pc,'audio','screen');if(audioSender)await audioSender.replaceTrack(audioTrack&&audioTrack.readyState==='live'?audioTrack:null);
-        await negotiateWatchPeer(from,{iceRestart:true,reason:'screen-request'})
+        await tuneWatchScreenSender(pc);await negotiateWatchPeer(from,{iceRestart:false,reason:'screen-request'})
       }
     }
   }finally{remove(ref(db,`watchRtc/${state.watchCode}/${state.user.uid}/${id}`)).catch(()=>{})}
@@ -1486,13 +1526,14 @@ async function toggleWatchScreen(){
     // audio:true solicita o áudio da aba/tela quando o navegador/SO oferece suporte.
     // Em Chrome/Edge, ao compartilhar uma aba, marque "Compartilhar áudio".
     const stream=await navigator.mediaDevices.getDisplayMedia({
-      video:{frameRate:{ideal:24,max:30},width:{ideal:1920},height:{ideal:1080}},
+      video:{frameRate:{ideal:18,max:24},width:{ideal:1280,max:1600},height:{ideal:720,max:900}},
       audio:true,
       systemAudio:'include',
       surfaceSwitching:'include'
     });
 
     const videoTrack=stream.getVideoTracks()[0];
+    try{if(videoTrack)videoTrack.contentHint='detail'}catch{}
     const screenAudioTrack=stream.getAudioTracks()[0]||null;
     if(!videoTrack)throw new Error('Nenhuma tela selecionada.');
 
@@ -1510,7 +1551,7 @@ async function toggleWatchScreen(){
       const videoSender=watchPcSender(pc,'video');if(videoSender)await videoSender.replaceTrack(videoTrack);
       const screenAudioSender=watchPcSender(pc,'audio','screen');
       if(screenAudioSender)await screenAudioSender.replaceTrack(screenAudioTrack&&screenAudioTrack.readyState==='live'?screenAudioTrack:null);
-      if(pc.signalingState==='stable')await negotiateWatchPeer(uid,{iceRestart:true,reason:'screen-start'}).catch(()=>{})
+      await tuneWatchScreenSender(pc);if(pc.signalingState==='stable')await negotiateWatchPeer(uid,{iceRestart:false,reason:'screen-start'}).catch(()=>{})
     }
 
     videoTrack.onended=()=>{if(state.watchRtc.screenStream)toggleWatchScreen().catch(()=>{})};
@@ -1603,9 +1644,54 @@ function rpgAvatar(uid=state.user?.uid){
   return ch?.playerAvatar||member?.avatar||state.directory?.[uid]?.avatar||DEFAULT_AVATAR
 }
 
+const RPG_SYSTEMS={
+  'D&D 5e':{mode:'d20',summary:'Testes: d20 + modificador. Vantagem/desvantagem rola 2d20 e mantém o maior/menor. Iniciativa usa Destreza.',stats:['str','dex','con','int','wis','cha']},
+  'Tormenta 20':{mode:'d20',summary:'Testes: d20 + bônus. O painel usa atributos e um bônus de perícia informado pelo jogador. Iniciativa usa o modificador de iniciativa.',stats:['for','des','con','int','sab','car']},
+  'Ordem Paranormal':{mode:'pool',summary:'Teste de atributo: role uma quantidade de d20 igual ao atributo e mantenha o maior; atributo 0 rola 2d20 e mantém o menor. Some o bônus de perícia.',stats:['agi','for','int','pre','vig']},
+  'Call of Cthulhu':{mode:'d100',summary:'Teste percentual: d100 <= valor. Difícil usa metade; extremo usa um quinto. Ordem de combate usa DEX como referência.',stats:['str','con','siz','dex','app','int','pow','edu','luck']},
+  'Livre':{mode:'free',summary:'Rolagens livres. O mestre define a interpretação.',stats:[]},
+  'Outro':{mode:'free',summary:'Rolagens livres. Registre as regras específicas da mesa na aba Regras.',stats:[]}
+};
+const RPG_LABELS={str:'FOR',dex:'DES',con:'CON',int:'INT',wis:'SAB',cha:'CAR',for:'FOR',des:'DES',sab:'SAB',car:'CAR',agi:'AGI',pre:'PRE',vig:'VIG',siz:'TAM',app:'APA',pow:'POD',edu:'EDU',luck:'SORTE'};
+function rpgSystemKey(){const s=String(state.room?.meta?.system||'Livre');return RPG_SYSTEMS[s]?s:'Outro'}
+function abilityMod(score){return Math.floor((Number(score||10)-10)/2)}
+function currentCharacter(){return state.room?.characters?.[state.user?.uid]||{}}
+function renderCharacterSystemFields(ch=currentCharacter()){
+  const box=$('characterSystemFields');if(!box)return;box.innerHTML='';const system=rpgSystemKey(),def=RPG_SYSTEMS[system],stats=ch.systemStats||{};
+  if(!def.stats.length){box.innerHTML='<small class="muted">Este sistema usa a ficha livre acima.</small>';return}
+  const title=document.createElement('div');title.className='character-system-title';title.innerHTML=`<strong>${escText(system)}</strong><small>Atributos usados pelo assistente de rolagem</small>`;box.appendChild(title);
+  const grid=document.createElement('div');grid.className='character-stat-grid';
+  for(const key of def.stats){const label=document.createElement('label');label.textContent=RPG_LABELS[key]||key.toUpperCase();const input=document.createElement('input');input.type='number';input.dataset.rpgStat=key;input.min=system==='Call of Cthulhu'?'1':system==='Tormenta 20'?'-5':'0';input.max=system==='Call of Cthulhu'?'99':system==='Ordem Paranormal'?'5':system==='Tormenta 20'?'20':'30';input.value=stats[key]??(system==='Call of Cthulhu'?50:system==='Ordem Paranormal'?1:system==='Tormenta 20'?0:10);label.appendChild(input);grid.appendChild(label)}
+  box.appendChild(grid);
+  const extras=document.createElement('div');extras.className='character-stat-grid extras';
+  if(system==='D&D 5e'){extras.innerHTML=`<label>Bônus de proficiência<input type="number" data-rpg-extra="proficiency" min="2" max="9" value="${Number(stats.proficiency||2)}"></label>`}
+  if(system==='Tormenta 20'){extras.innerHTML=`<label>Iniciativa<input type="number" data-rpg-extra="initiative" min="-20" max="50" value="${Number(stats.initiative||0)}"></label><label>PM atual<input type="number" data-rpg-extra="pm" min="0" value="${Number(stats.pm||0)}"></label><label>PM máximo<input type="number" data-rpg-extra="maxPm" min="0" value="${Number(stats.maxPm||0)}"></label>`}
+  if(system==='Ordem Paranormal'){extras.innerHTML=`<label>Bônus de perícia<input type="number" data-rpg-extra="skillBonus" min="0" max="30" step="5" value="${Number(stats.skillBonus||0)}"></label>`}
+  if(extras.children.length)box.appendChild(extras)
+}
+function collectCharacterSystemStats(){const out={};$$('[data-rpg-stat]').forEach(i=>out[i.dataset.rpgStat]=Number(i.value||0));$$('[data-rpg-extra]').forEach(i=>out[i.dataset.rpgExtra]=Number(i.value||0));return out}
+function rollD20(mode='normal'){const a=secureInt(20),b=secureInt(20);return mode==='adv'?Math.max(a,b):mode==='dis'?Math.min(a,b):a}
+function ordemPool(attr){const n=Number(attr||0);if(n<=0){const a=secureInt(20),b=secureInt(20);return{rolls:[a,b],kept:Math.min(a,b)}}const rolls=Array.from({length:Math.min(5,n)},()=>secureInt(20));return{rolls,kept:Math.max(...rolls)}}
+async function pushSystemRoll(label,total,detail,formula){if(!state.user||!state.roomCode)return;try{await push(ref(db,`rpgRooms/${state.roomCode}/rolls`),{uid:state.user.uid,name:rpgDisplayName(),formula:formula||label,total,detail,label,system:rpgSystemKey(),at:nowIso()})}catch(e){toast(permissionMessage(e),6000)}}
+async function rpgSystemCheck(key,mode='normal'){
+  const system=rpgSystemKey(),ch=currentCharacter(),s=ch.systemStats||{};
+  if(system==='D&D 5e'){const score=Number(s[key]??10),mod=abilityMod(score),die=rollD20(mode),total=die+mod;return pushSystemRoll(`${RPG_LABELS[key]} ${mode==='adv'?'(vantagem)':mode==='dis'?'(desvantagem)':''}`,total,`d20 ${die} ${mod>=0?'+':''}${mod}`,`1d20${mod>=0?'+':''}${mod}`)}
+  if(system==='Tormenta 20'){const mod=Number(s[key]??0),die=secureInt(20),total=die+mod;return pushSystemRoll(RPG_LABELS[key],total,`d20 ${die} ${mod>=0?'+':''}${mod}`,`1d20${mod>=0?'+':''}${mod}`)}
+  if(system==='Ordem Paranormal'){const r=ordemPool(Number(s[key]??1)),bonus=Number(s.skillBonus||0),total=r.kept+bonus;return pushSystemRoll(RPG_LABELS[key],total,`${r.rolls.join(', ')} → ${r.kept}${bonus?` + ${bonus}`:''}`,`${Math.max(1,Number(s[key]||1))}d20 keep`)}
+  if(system==='Call of Cthulhu'){const target=Number(s[key]??50),roll=secureInt(100),level=roll<=Math.floor(target/5)?'Extremo':roll<=Math.floor(target/2)?'Difícil':roll<=target?'Sucesso':'Falha';return pushSystemRoll(`${RPG_LABELS[key]} • ${level}`,roll,`Alvo ${target}%`,`1d100 <= ${target}`)}
+  return rollDice('1d20')
+}
+function renderRpgSystemTools(){
+  const box=$('rpgSystemActions'),system=rpgSystemKey(),def=RPG_SYSTEMS[system]||RPG_SYSTEMS.Outro;if(!box)return;box.innerHTML='';$('rpgSystemTitle').textContent=system;$('rpgSystemMode').textContent=def.mode==='d100'?'Percentual':def.mode==='pool'?'Pool de d20':def.mode==='d20'?'d20':'Livre';$('rpgSystemSummary').textContent=def.summary;
+  const ch=currentCharacter(),stats=ch.systemStats||{};
+  if(!def.stats.length){const b=document.createElement('button');b.type='button';b.className='mini-btn';b.textContent='Rolar d20';b.onclick=()=>rollDice('1d20');box.appendChild(b);return}
+  for(const key of def.stats){const b=document.createElement('button');b.type='button';b.className='mini-btn rpg-stat-roll';b.textContent=RPG_LABELS[key]||key.toUpperCase();b.onclick=()=>rpgSystemCheck(key,'normal');box.appendChild(b)}
+  if(system==='D&D 5e'){const adv=document.createElement('button');adv.type='button';adv.className='mini-btn';adv.textContent='Vantagem DES';adv.onclick=()=>rpgSystemCheck('dex','adv');const dis=document.createElement('button');dis.type='button';dis.className='mini-btn';dis.textContent='Desvantagem DES';dis.onclick=()=>rpgSystemCheck('dex','dis');box.append(adv,dis)}
+}
+
 function renderRoom(){
   const r=state.room||{};$('tableRoomName').textContent=r.meta?.name||'Mesa';$('tableSystem').textContent=r.meta?.system||'Livre';$('tableCode').textContent=state.roomCode||'';
-  renderMembers(r.members||{},r.characters||{});renderInitiative(r.initiative||{});renderScene(r.scene||{});renderRolls(r.rolls||{});renderChat(r.messages||{});
+  renderMembers(r.members||{},r.characters||{});renderInitiative(r.initiative||{});renderScene(r.scene||{});renderRolls(r.rolls||{});renderChat(r.messages||{});renderRpgSystemTools();
   $('roomRules').value=r.rules||'';$('roomRules').readOnly=!isRoomOwner();$('saveRulesBtn').hidden=!isRoomOwner();$('editSceneBtn').hidden=!isRoomOwner();if($('clearInitiativeBtn'))$('clearInitiativeBtn').hidden=!isRoomOwner();
   const mine=r.characters?.[state.user?.uid];
   if(mine)fillCharacterForm(mine);
@@ -1621,21 +1707,28 @@ function renderMembers(members,chars){
 function renderInitiative(obj){const wrap=$('initiativeList');wrap.innerHTML='';const rows=Object.values(obj).sort((a,b)=>Number(b.value)-Number(a.value));if(!rows.length){wrap.innerHTML='<div class="empty-state small">Sem iniciativa.</div>';return}rows.forEach(x=>{const d=document.createElement('div');d.className='initiative-item';const s=document.createElement('span');s.textContent=x.name||'Jogador';const b=document.createElement('b');b.textContent=String(x.value);d.append(s,b);wrap.appendChild(d)})}
 function renderScene(scene){$('sceneTitle').textContent=scene.title||'A aventura começa aqui';$('sceneDescription').textContent=scene.description||'O mestre pode mudar a cena.';const img=$('sceneImage');if(scene.image){img.src=scene.image;img.hidden=false;$('scenePlaceholder').hidden=true}else{img.hidden=true;$('scenePlaceholder').hidden=false}}
 function valuesRecent(obj,limit=20){return Object.entries(obj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>String(a.at||'').localeCompare(String(b.at||''))).slice(-limit)}
-function renderRolls(obj){const wrap=$('rollLog');wrap.innerHTML='';valuesRecent(obj,12).reverse().forEach(x=>{const d=document.createElement('div');d.className='roll-chip';const s=document.createElement('strong');s.textContent=`${x.formula} = ${x.total}`;const sm=document.createElement('small');sm.textContent=x.name||'Jogador';d.append(s,sm);wrap.appendChild(d)})}
+function renderRolls(obj){const wrap=$('rollLog');wrap.innerHTML='';valuesRecent(obj,12).reverse().forEach(x=>{const d=document.createElement('div');d.className='roll-chip';const s=document.createElement('strong');s.textContent=`${x.formula} = ${x.total}`;const sm=document.createElement('small');sm.textContent=`${x.name||'Jogador'}${x.detail?' • '+x.detail:''}`;d.append(s,sm);wrap.appendChild(d)})}
 function renderChat(obj){const wrap=$('chatList');const atBottom=wrap.scrollHeight-wrap.scrollTop-wrap.clientHeight<60;wrap.innerHTML='';valuesRecent(obj,80).forEach(m=>{const d=document.createElement('div');d.className='chat-msg'+(m.uid===state.user?.uid?' mine':'');const head=document.createElement('div');const st=document.createElement('strong');st.textContent=m.name||'Jogador';const t=document.createElement('time');t.textContent=shortDateTime(m.at).split(' ')[1]||'';head.append(st,t);const p=document.createElement('p');p.textContent=m.text||'';d.append(head,p);wrap.appendChild(d)});if(atBottom)wrap.scrollTop=wrap.scrollHeight}
 async function sendChat(ev){ev.preventDefault();if(!state.user||!state.roomCode)return;const text=$('chatInput').value.trim();if(!text)return;$('chatInput').value='';try{await push(ref(db,`rpgRooms/${state.roomCode}/messages`),{uid:state.user.uid,name:rpgDisplayName(),text:text.slice(0,500),at:nowIso()})}catch(e){toast(permissionMessage(e),6000)}}
 function secureInt(max){const b=new Uint32Array(1);crypto.getRandomValues(b);return(b[0]%max)+1}
 function parseRoll(formula){const m=String(formula||'').toLowerCase().replace(/\s/g,'').match(/^(\d{1,2})d(4|6|8|10|12|20|100)([+-]\d{1,3})?$/);if(!m)return null;const count=Math.min(20,Number(m[1]));const sides=Number(m[2]);const mod=Number(m[3]||0);const rolls=Array.from({length:count},()=>secureInt(sides));return{formula:`${count}d${sides}${mod>0?'+'+mod:mod<0?mod:''}`,rolls,total:rolls.reduce((a,b)=>a+b,0)+mod}}
 async function rollDice(formula){if(!state.user||!state.roomCode)return;const result=parseRoll(formula);if(!result)return toast('Use algo como 1d20 ou 2d6+3.');try{await push(ref(db,`rpgRooms/${state.roomCode}/rolls`),{uid:state.user.uid,name:rpgDisplayName(),...result,at:nowIso()})}catch(e){toast(permissionMessage(e),6000)}}
-async function rollInitiative(){if(!state.user||!state.roomCode)return;const value=secureInt(20);const name=state.room?.characters?.[state.user.uid]?.name||rpgDisplayName();try{await set(ref(db,`rpgRooms/${state.roomCode}/initiative/${state.user.uid}`),{uid:state.user.uid,name,value,at:nowIso()});toast(`Iniciativa: ${value}`)}catch(e){toast(permissionMessage(e),6000)}}
+async function rollInitiative(){
+  if(!state.user||!state.roomCode)return;const ch=currentCharacter(),system=rpgSystemKey(),s=ch.systemStats||{};let value=secureInt(20),detail='1d20';
+  if(system==='D&D 5e'){const mod=abilityMod(Number(s.dex??10));value+=mod;detail=`1d20 ${mod>=0?'+':''}${mod}`}
+  else if(system==='Tormenta 20'){const mod=Number(s.initiative||0);value+=mod;detail=`1d20 ${mod>=0?'+':''}${mod}`}
+  else if(system==='Ordem Paranormal'){const r=ordemPool(Number(s.agi??1));value=r.kept+Number(s.skillBonus||0);detail=`AGI [${r.rolls.join(', ')}]`}
+  else if(system==='Call of Cthulhu'){value=Number(s.dex||50);detail='Ordem por DEX'}
+  const name=ch.name||rpgDisplayName();try{await set(ref(db,`rpgRooms/${state.roomCode}/initiative/${state.user.uid}`),{uid:state.user.uid,name,value,detail,system,at:nowIso()});toast(`Iniciativa: ${value}`)}catch(e){toast(permissionMessage(e),6000)}
+}
 async function clearInitiative(){if(!isRoomOwner()||!state.roomCode)return toast('Só o mestre pode limpar a iniciativa.');if(!confirm('Limpar toda a iniciativa desta cena?'))return;try{await remove(ref(db,`rpgRooms/${state.roomCode}/initiative`));toast('Iniciativa limpa.')}catch(e){toast(permissionMessage(e),6000)}}
 function openCharacter(){if(!state.user||!state.roomCode)return;fillCharacterForm(state.room?.characters?.[state.user.uid]||{});openModal('characterModal')}
-function fillCharacterForm(ch){if($('charAlias'))$('charAlias').value=ch.playerName||state.profile?.nome||displayName();if($('charAvatar'))$('charAvatar').value=ch.playerAvatar||avatarFor();$('charName').value=ch.name||'';$('charClass').value=ch.className||'';$('charLevel').value=ch.level||1;$('charHp').value=ch.hp??10;$('charMaxHp').value=ch.maxHp??10;$('charDefense').value=ch.defense??10;$('charNotes').value=ch.notes||''}
+function fillCharacterForm(ch){if($('charAlias'))$('charAlias').value=ch.playerName||state.profile?.nome||displayName();if($('charAvatar'))$('charAvatar').value=ch.playerAvatar||avatarFor();$('charName').value=ch.name||'';$('charClass').value=ch.className||'';$('charLevel').value=ch.level||1;$('charHp').value=ch.hp??10;$('charMaxHp').value=ch.maxHp??10;$('charDefense').value=ch.defense??10;$('charNotes').value=ch.notes||'';renderCharacterSystemFields(ch)}
 async function saveCharacter(ev){
   ev.preventDefault();if(!state.user||!state.roomCode)return;
   const playerName=$('charAlias').value.trim().slice(0,40),name=$('charName').value.trim().slice(0,50);
   if(!playerName||!name)return toast('Preencha seu nome na mesa e o nome do personagem.');
-  const ch={playerName,playerAvatar:$('charAvatar').value.trim(),name,className:$('charClass').value.trim().slice(0,50),level:Math.max(1,Number($('charLevel').value||1)),hp:Math.max(0,Number($('charHp').value||0)),maxHp:Math.max(1,Number($('charMaxHp').value||1)),defense:Math.max(0,Number($('charDefense').value||0)),notes:$('charNotes').value.trim().slice(0,1000),updatedAt:nowIso()};
+  const ch={playerName,playerAvatar:$('charAvatar').value.trim(),name,className:$('charClass').value.trim().slice(0,50),level:Math.max(1,Number($('charLevel').value||1)),hp:Math.max(0,Number($('charHp').value||0)),maxHp:Math.max(1,Number($('charMaxHp').value||1)),defense:Math.max(0,Number($('charDefense').value||0)),system:rpgSystemKey(),systemStats:collectCharacterSystemStats(),notes:$('charNotes').value.trim().slice(0,1000),updatedAt:nowIso()};
   try{await set(ref(db,`rpgRooms/${state.roomCode}/characters/${state.user.uid}`),ch);closeModal('characterModal');toast('Perfil desta mesa salvo.')}catch(e){toast(permissionMessage(e),6000)}
 }
 async function saveScene(ev){ev.preventDefault();if(!isRoomOwner()||!state.roomCode)return;try{await set(ref(db,`rpgRooms/${state.roomCode}/scene`),{title:$('sceneTitleInput').value.trim().slice(0,80)||'Aventura',description:$('sceneDescriptionInput').value.trim().slice(0,300),image:$('sceneImageInput').value.trim()});closeModal('sceneModal');toast('Cena atualizada.')}catch(e){toast(permissionMessage(e),6000)}}

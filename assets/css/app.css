@@ -429,3 +429,10 @@ body.fx-badge-demon #profileNameView::after,body.fx-badge-demon #sideName::after
   .watch-screen-actions{display:grid;grid-template-columns:1fr 1fr}
   .watch-screen-actions .btn{font-size:9px;padding:7px 8px}
 }
+
+
+/* ========================= V10 PERF / TINDER / RPG ========================= */
+.tinder-layout-v10{display:grid;grid-template-columns:minmax(300px,.78fr) minmax(0,1.25fr);gap:16px;align-items:start}.tinder-profile-editor,.tinder-site-panel{border-radius:19px}.tinder-profile-form{margin-top:14px}.tinder-profile-editor textarea{resize:vertical}
+.rpg-system-panel{border:1px solid #282e38;border-radius:15px;background:linear-gradient(150deg,#11151c,#0a0d12);padding:12px;margin:12px 0}.rpg-system-panel .panel-head{margin-bottom:5px}.rpg-system-panel p{font-size:11px;line-height:1.5;margin:4px 0 10px}.rpg-system-actions{display:flex;gap:7px;flex-wrap:wrap}.rpg-stat-roll{min-width:48px}.character-system-fields{border-top:1px solid #292f38;padding-top:14px}.character-system-title{display:flex;justify-content:space-between;gap:12px;align-items:end;margin-bottom:9px}.character-system-title small{color:var(--muted);font-size:10px}.character-stat-grid{display:grid;grid-template-columns:repeat(6,minmax(70px,1fr));gap:8px}.character-stat-grid.extras{margin-top:8px;grid-template-columns:repeat(3,minmax(100px,1fr))}.character-stat-grid label{font-size:10px}.character-stat-grid input{margin-top:4px}
+@media(max-width:900px){.tinder-layout-v10{grid-template-columns:1fr}.character-stat-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:520px){.character-stat-grid,.character-stat-grid.extras{grid-template-columns:repeat(2,1fr)}.rpg-system-actions{display:grid;grid-template-columns:repeat(3,1fr)}.rpg-system-actions .mini-btn{width:100%}.tinder-profile-editor,.tinder-site-panel{border-radius:16px}}
