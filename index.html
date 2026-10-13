@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#09090d">
   <meta name="color-scheme" content="dark">
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261011-watch-v96">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261012-watch-v97-screen-audio">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -378,7 +378,13 @@
                 <div class="watch-player-shell" id="watchPlayerShell">
                   <div class="watch-media-stage" id="watchMediaStage"><div class="empty-state">Cole um vídeo abaixo ou compartilhe sua tela.</div></div>
                   <div class="watch-screen-stage" id="watchScreenStage" hidden>
-                    <div class="watch-screen-head"><div><span class="status-dot"></span><strong id="watchScreenLabel">Tela compartilhada</strong></div><button class="btn" id="watchScreenFullscreenBtn" type="button">Tela cheia</button></div>
+                    <div class="watch-screen-head">
+                      <div><span class="status-dot"></span><strong id="watchScreenLabel">Tela compartilhada</strong></div>
+                      <div class="watch-screen-actions">
+                        <button class="btn" id="watchScreenSoundBtn" type="button">Som: ligado</button>
+                        <button class="btn" id="watchScreenFullscreenBtn" type="button">Tela cheia</button>
+                      </div>
+                    </div>
                     <video id="watchScreenVideo" autoplay playsinline></video>
                   </div>
                 </div>
@@ -622,6 +628,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261011-watch-v96"></script>
+  <script type="module" src="/assets/js/app.js?v=20261012-watch-v97-screen-audio"></script>
 </body>
 </html>

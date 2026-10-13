@@ -45,7 +45,7 @@ const state = {
   admin:{reports:{},updates:{},directory:{},bans:{},selectedUid:''},
   tinder:{current:null,seen:[]},updates:{},notifications:{},ban:null,
   watchCode:null,watchRoom:null,watchUnsubs:[],watchApplying:false,
-  watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set()},
+  watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false},
   watchYoutube:{lastTime:0,lastState:-1,lastPublishAt:0},
   watchMusic:{currentId:'',volume:Number(localStorage.getItem('gremory:watchMusicVolume')||65),muted:localStorage.getItem('gremory:watchMusicMuted')==='1',engineReady:false,lastAdvanceId:'',adding:false,currentTime:0,lastClockSync:0,endedId:''},
   rtc:{joined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true},premiumPoll:null
@@ -1200,7 +1200,19 @@ function setWatchRtcStatus(text,tone=''){
   const el=$('watchRtcStatus');if(!el)return;el.textContent=String(text||'');el.dataset.tone=tone||''
 }
 function watchPeerName(uid){return state.watchRoom?.members?.[uid]?.name||'Participante'}
-function watchPcSender(pc,kind){return pc?.getTransceivers?.().find(t=>t.receiver?.track?.kind===kind)?.sender||null}
+function watchPcSender(pc,kind,role='voice'){
+  if(!pc)return null;
+  if(kind==='video')return pc.__watchVideoSender||pc.getTransceivers?.().find(t=>t.receiver?.track?.kind==='video')?.sender||null;
+  if(kind==='audio'&&role==='screen')return pc.__watchScreenAudioSender||null;
+  if(kind==='audio')return pc.__watchVoiceAudioSender||pc.getTransceivers?.().find(t=>t.receiver?.track?.kind==='audio')?.sender||null;
+  return null
+}
+function watchScreenStreamFor(uid){
+  return state.watchRtc.remoteScreenStreams.get(String(uid||''))||state.watchRtc.remoteStreams.get(String(uid||''))||null
+}
+function watchVoiceStreamFor(uid){
+  return state.watchRtc.remoteVoiceStreams.get(String(uid||''))||null
+}
 function ensureWatchCallCard(uid){
   const grid=$('watchRemoteMedia');if(!grid)return null;let card=grid.querySelector(`[data-watch-peer="${CSS.escape(uid)}"]`);
   if(!card){
@@ -1213,7 +1225,7 @@ function ensureWatchCallCard(uid){
   }
   return card
 }
-function watchRemoteHasScreen(uid,stream){return state.watchRtc.screenSharers.has(String(uid||''))&&!!stream?.getVideoTracks?.().some(t=>t.readyState==='live'&&!t.muted)}
+function watchRemoteHasScreen(uid,stream=watchScreenStreamFor(uid)){return state.watchRtc.screenSharers.has(String(uid||''))&&!!stream?.getVideoTracks?.().some(t=>t.readyState==='live'&&!t.muted)}
 async function sendWatchRtc(targetUid,payload){if(!state.user||!state.watchCode)return;await push(ref(db,`watchRtc/${state.watchCode}/${targetUid}`),{fromUid:state.user.uid,at:Date.now(),...payload})}
 async function negotiateWatchPeer(peerUid,{iceRestart=false,reason='update'}={}){
   const pc=state.watchRtc.peers.get(peerUid);if(!pc||pc.signalingState==='closed'||pc.signalingState!=='stable'||state.watchRtc.makingOffer.has(peerUid))return false;
@@ -1229,7 +1241,7 @@ async function requestWatchScreenFrom(uid,force=false){
   state.watchRtc.screenRetry.set(uid,Date.now());await sendWatchRtc(uid,{type:'screen_request'}).catch(()=>{})
 }
 function updateWatchPeerScreenButton(uid){
-  const card=ensureWatchCallCard(uid),btn=card?.querySelector('.watch-view-screen'),stream=state.watchRtc.remoteStreams.get(uid),sharing=state.watchRtc.screenSharers.has(String(uid)),ready=watchRemoteHasScreen(uid,stream);
+  const card=ensureWatchCallCard(uid),btn=card?.querySelector('.watch-view-screen'),stream=watchScreenStreamFor(uid),sharing=state.watchRtc.screenSharers.has(String(uid)),ready=watchRemoteHasScreen(uid,stream);
   if(btn){
     btn.hidden=!sharing;btn.textContent=ready?'Assistir tela':'Reconectar tela';
     btn.onclick=()=>{if(ready){state.watchRtc.activeScreenUid=uid;refreshWatchScreenStage()}else{setWatchRtcStatus('Reconectando compartilhamento...','warn');requestWatchScreenFrom(uid,true)}}
@@ -1237,45 +1249,119 @@ function updateWatchPeerScreenButton(uid){
   const status=card?.querySelector('small');if(status)status.textContent=sharing?(ready?'Compartilhando tela':'Conectando tela...'):'Conectado'
 }
 function refreshWatchScreenStage(){
-  const stage=$('watchScreenStage'),video=$('watchScreenVideo'),label=$('watchScreenLabel'),mediaStage=$('watchMediaStage');if(!stage||!video)return;
-  let stream=null,uid=null,isLocal=false;const localUid=String(state.user?.uid||''),localTrack=state.watchRtc.screenStream?.getVideoTracks?.()[0];
-  if(state.watchRtc.activeScreenUid&&state.watchRtc.activeScreenUid!==localUid){const remote=state.watchRtc.remoteStreams.get(state.watchRtc.activeScreenUid);if(watchRemoteHasScreen(state.watchRtc.activeScreenUid,remote)){stream=remote;uid=state.watchRtc.activeScreenUid}}
-  if(!stream&&localTrack&&localTrack.readyState==='live'){stream=state.watchRtc.screenStream;uid=localUid;isLocal=true}
-  if(!stream){for(const [peerUid,remote] of state.watchRtc.remoteStreams.entries()){if(watchRemoteHasScreen(peerUid,remote)){stream=remote;uid=peerUid;break}}}
-  if(!stream){state.watchRtc.activeScreenUid=null;video.pause?.();video.srcObject=null;stage.hidden=true;if(mediaStage)mediaStage.hidden=false;return}
-  state.watchRtc.activeScreenUid=uid;stage.hidden=false;if(mediaStage)mediaStage.hidden=true;
-  const track=stream.getVideoTracks?.()[0],current=video.srcObject?.getVideoTracks?.()[0];
-  if(track&&current?.id!==track.id)video.srcObject=new MediaStream([track]);
-  video.muted=true;video.play?.().catch(()=>{});if(label)label.textContent=isLocal?'Sua tela compartilhada':`${watchPeerName(uid)} está compartilhando`
-}
-function attachWatchRemote(uid,stream){
-  state.watchRtc.remoteStreams.set(uid,stream);const card=ensureWatchCallCard(uid),audio=card?.querySelector('audio');
-  if(audio&&audio.srcObject!==stream)audio.srcObject=stream;if(audio){audio.muted=!state.watchRtc.audioJoined;audio.play?.().catch(()=>{})}
-  for(const track of stream?.getVideoTracks?.()||[]){
-    const refresh=()=>{updateWatchPeerScreenButton(uid);refreshWatchScreenStage()};
-    track.onmute=refresh;track.onunmute=()=>{refresh();setWatchRtcStatus(`${watchPeerName(uid)} está compartilhando a tela`,'ok')};track.onended=refresh
+  const stage=$('watchScreenStage'),video=$('watchScreenVideo'),label=$('watchScreenLabel'),mediaStage=$('watchMediaStage'),soundBtn=$('watchScreenSoundBtn');if(!stage||!video)return;
+  let stream=null,uid=null,isLocal=false;
+  const localUid=String(state.user?.uid||''),localVideo=state.watchRtc.screenStream?.getVideoTracks?.()[0];
+
+  if(state.watchRtc.activeScreenUid&&state.watchRtc.activeScreenUid!==localUid){
+    const remote=watchScreenStreamFor(state.watchRtc.activeScreenUid);
+    if(watchRemoteHasScreen(state.watchRtc.activeScreenUid,remote)){stream=remote;uid=state.watchRtc.activeScreenUid}
   }
-  updateWatchPeerScreenButton(uid);refreshWatchScreenStage()
+  if(!stream&&localVideo&&localVideo.readyState==='live'){stream=state.watchRtc.screenStream;uid=localUid;isLocal=true}
+  if(!stream){
+    for(const peerUid of state.watchRtc.screenSharers){
+      if(peerUid===localUid)continue;
+      const remote=watchScreenStreamFor(peerUid);
+      if(watchRemoteHasScreen(peerUid,remote)){stream=remote;uid=peerUid;break}
+    }
+  }
+
+  if(!stream){
+    state.watchRtc.activeScreenUid=null;
+    try{video.pause()}catch{}
+    video.srcObject=null;stage.hidden=true;if(mediaStage)mediaStage.hidden=false;
+    return
+  }
+
+  state.watchRtc.activeScreenUid=uid;stage.hidden=false;if(mediaStage)mediaStage.hidden=true;
+
+  const selected=new MediaStream();
+  const vtrack=stream.getVideoTracks?.().find(t=>t.readyState==='live');
+  const atrack=stream.getAudioTracks?.().find(t=>t.readyState==='live');
+  if(vtrack)selected.addTrack(vtrack);
+  if(atrack)selected.addTrack(atrack);
+
+  const currentVideo=video.srcObject?.getVideoTracks?.()[0],currentAudio=video.srcObject?.getAudioTracks?.()[0];
+  if(currentVideo?.id!==vtrack?.id||currentAudio?.id!==atrack?.id)video.srcObject=selected;
+
+  // O próprio compartilhador não ouve seu áudio de tela para não criar eco.
+  // Quem assiste recebe o áudio da transmissão quando o navegador capturou esse áudio.
+  video.muted=isLocal||state.watchRtc.screenSoundMuted;
+  video.volume=1;
+  video.play?.().catch(()=>{});
+
+  if(label)label.textContent=isLocal?'Sua tela compartilhada':`${watchPeerName(uid)} está compartilhando`;
+  if(soundBtn){
+    const hasAudio=!!atrack;
+    soundBtn.hidden=isLocal;
+    soundBtn.disabled=!hasAudio;
+    soundBtn.textContent=!hasAudio?'Sem áudio':(state.watchRtc.screenSoundMuted?'Som: desligado':'Som: ligado')
+  }
+}
+function attachWatchRemote(uid){
+  const voice=watchVoiceStreamFor(uid),screen=watchScreenStreamFor(uid),card=ensureWatchCallCard(uid),audio=card?.querySelector('audio');
+  if(audio&&voice&&audio.srcObject!==voice)audio.srcObject=voice;
+  if(audio){audio.muted=!state.watchRtc.audioJoined;audio.play?.().catch(()=>{})}
+
+  for(const track of screen?.getVideoTracks?.()||[]){
+    const refresh=()=>{updateWatchPeerScreenButton(uid);refreshWatchScreenStage()};
+    track.onmute=refresh;
+    track.onunmute=()=>{state.watchRtc.activeScreenUid=String(uid);refresh();setWatchRtcStatus(`${watchPeerName(uid)} está compartilhando a tela`,'ok')};
+    track.onended=refresh
+  }
+  for(const track of screen?.getAudioTracks?.()||[]){
+    track.onunmute=()=>refreshWatchScreenStage();
+    track.onended=()=>refreshWatchScreenStage()
+  }
+
+  updateWatchPeerScreenButton(uid);
+  if(state.watchRtc.screenSharers.has(String(uid)))state.watchRtc.activeScreenUid=String(uid);
+  refreshWatchScreenStage()
 }
 function removeWatchPeer(uid){
-  const pc=state.watchRtc.peers.get(uid);try{pc?.close()}catch{}state.watchRtc.peers.delete(uid);state.watchRtc.remoteStreams.delete(uid);state.watchRtc.pendingCandidates.delete(uid);state.watchRtc.screenRetry.delete(uid);
+  const pc=state.watchRtc.peers.get(uid);try{pc?.close()}catch{}state.watchRtc.peers.delete(uid);state.watchRtc.remoteStreams.delete(uid);state.watchRtc.remoteVoiceStreams.delete(uid);state.watchRtc.remoteScreenStreams.delete(uid);state.watchRtc.pendingCandidates.delete(uid);state.watchRtc.screenRetry.delete(uid);
   $('watchRemoteMedia')?.querySelector(`[data-watch-peer="${CSS.escape(uid)}"]`)?.remove();refreshWatchScreenStage()
 }
 async function createWatchPeer(peerUid,initiator=false){
   peerUid=String(peerUid||'');if(!peerUid||peerUid===state.user?.uid)return null;
   const existing=state.watchRtc.peers.get(peerUid);if(existing&&existing.signalingState!=='closed')return existing;
-  const pc=new RTCPeerConnection({...RTC_CONFIG,iceCandidatePoolSize:8});state.watchRtc.peers.set(peerUid,pc);
-  const remote=new MediaStream();state.watchRtc.remoteStreams.set(peerUid,remote);ensureWatchCallCard(peerUid);
-  const audioTr=pc.addTransceiver('audio',{direction:'sendrecv'}),videoTr=pc.addTransceiver('video',{direction:'sendrecv'});
-  const audioTrack=state.watchRtc.localStream?.getAudioTracks?.()[0];if(audioTrack)await audioTr.sender.replaceTrack(audioTrack);
-  const screenTrack=state.watchRtc.screenStream?.getVideoTracks?.()[0];if(screenTrack)await videoTr.sender.replaceTrack(screenTrack);
+
+  const pc=new RTCPeerConnection({...RTC_CONFIG,iceCandidatePoolSize:8});
+  state.watchRtc.peers.set(peerUid,pc);
+
+  const voiceRemote=new MediaStream(),screenRemote=new MediaStream();
+  state.watchRtc.remoteVoiceStreams.set(peerUid,voiceRemote);
+  state.watchRtc.remoteScreenStreams.set(peerUid,screenRemote);
+  state.watchRtc.remoteStreams.set(peerUid,screenRemote);
+  ensureWatchCallCard(peerUid);
+
+  const voiceAudioTr=pc.addTransceiver('audio',{direction:'sendrecv'});
+  const videoTr=pc.addTransceiver('video',{direction:'sendrecv'});
+  const screenAudioTr=pc.addTransceiver('audio',{direction:'sendrecv'});
+  pc.__watchVoiceAudioSender=voiceAudioTr.sender;
+  pc.__watchVideoSender=videoTr.sender;
+  pc.__watchScreenAudioSender=screenAudioTr.sender;
+  pc.__watchVoiceAudioTr=voiceAudioTr;
+  pc.__watchVideoTr=videoTr;
+  pc.__watchScreenAudioTr=screenAudioTr;
+
+  const micTrack=state.watchRtc.localStream?.getAudioTracks?.()[0];
+  const screenVideo=state.watchRtc.screenStream?.getVideoTracks?.()[0];
+  const screenAudio=state.watchRtc.screenStream?.getAudioTracks?.()[0];
+  if(micTrack)await voiceAudioTr.sender.replaceTrack(micTrack);
+  if(screenVideo)await videoTr.sender.replaceTrack(screenVideo);
+  if(screenAudio)await screenAudioTr.sender.replaceTrack(screenAudio);
 
   pc.ontrack=ev=>{
-    const stream=state.watchRtc.remoteStreams.get(peerUid)||remote;
-    if(!stream.getTracks().some(t=>t.id===ev.track.id))stream.addTrack(ev.track);
-    ev.track.onunmute=()=>attachWatchRemote(peerUid,stream);ev.track.onended=()=>{updateWatchPeerScreenButton(peerUid);refreshWatchScreenStage()};
-    attachWatchRemote(peerUid,stream)
+    const isScreenVideo=ev.transceiver===pc.__watchVideoTr||ev.track.kind==='video';
+    const isScreenAudio=ev.transceiver===pc.__watchScreenAudioTr;
+    const target=(isScreenVideo||isScreenAudio)?screenRemote:voiceRemote;
+    if(!target.getTracks().some(t=>t.id===ev.track.id))target.addTrack(ev.track);
+    ev.track.onunmute=()=>attachWatchRemote(peerUid);
+    ev.track.onended=()=>attachWatchRemote(peerUid);
+    attachWatchRemote(peerUid)
   };
+
   pc.onicecandidate=ev=>{if(ev.candidate)sendWatchRtc(peerUid,{type:'candidate',candidate:ev.candidate.toJSON()}).catch(()=>{})};
   pc.oniceconnectionstatechange=()=>{
     const st=pc.iceConnectionState;
@@ -1293,6 +1379,7 @@ async function createWatchPeer(peerUid,initiator=false){
       setTimeout(()=>{if(pc.connectionState==='disconnected'){if(String(state.user?.uid).localeCompare(peerUid)<0)negotiateWatchPeer(peerUid,{iceRestart:true,reason:'disconnected'}).catch(()=>{});else if(state.watchRtc.screenSharers.has(peerUid))requestWatchScreenFrom(peerUid,true)}},2200)
     }
   };
+
   if(initiator)await negotiateWatchPeer(peerUid,{reason:'initial'});
   return pc
 }
@@ -1312,8 +1399,13 @@ async function handleWatchRtc(id,msg){
     }else if(msg.type==='candidate'&&msg.candidate){
       if(pc.remoteDescription)try{await pc.addIceCandidate(msg.candidate)}catch{}else{const q=state.watchRtc.pendingCandidates.get(from)||[];q.push(msg.candidate);state.watchRtc.pendingCandidates.set(from,q)}
     }else if(msg.type==='screen_request'){
-      const track=state.watchRtc.screenStream?.getVideoTracks?.()[0];
-      if(track&&track.readyState==='live'){const sender=watchPcSender(pc,'video');if(sender)await sender.replaceTrack(track);await negotiateWatchPeer(from,{iceRestart:true,reason:'screen-request'})}
+      const videoTrack=state.watchRtc.screenStream?.getVideoTracks?.()[0];
+      const audioTrack=state.watchRtc.screenStream?.getAudioTracks?.()[0];
+      if(videoTrack&&videoTrack.readyState==='live'){
+        const videoSender=watchPcSender(pc,'video');if(videoSender)await videoSender.replaceTrack(videoTrack);
+        const audioSender=watchPcSender(pc,'audio','screen');if(audioSender)await audioSender.replaceTrack(audioTrack&&audioTrack.readyState==='live'?audioTrack:null);
+        await negotiateWatchPeer(from,{iceRestart:true,reason:'screen-request'})
+      }
     }
   }finally{remove(ref(db,`watchRtc/${state.watchCode}/${state.user.uid}/${id}`)).catch(()=>{})}
 }
@@ -1329,8 +1421,8 @@ function watchWatchPresence(){
     for(const uid of [...state.watchRtc.peers.keys()])if(!p[uid])removeWatchPeer(uid);
     for(const uid of ids){
       updateWatchPeerScreenButton(uid);
-      if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteHasScreen(uid,state.watchRtc.remoteStreams.get(uid))){
-        setTimeout(()=>{if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteHasScreen(uid,state.watchRtc.remoteStreams.get(uid)))requestWatchScreenFrom(uid,false)},800)
+      if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteHasScreen(uid,watchScreenStreamFor(uid))){
+        setTimeout(()=>{if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteHasScreen(uid,watchScreenStreamFor(uid)))requestWatchScreenFrom(uid,false)},800)
       }
     }
     if(ids.some(uid=>state.watchRtc.screenSharers.has(uid))&&!state.watchRtc.screenStream)setWatchRtcStatus('Recebendo compartilhamento de tela...','warn');
@@ -1354,7 +1446,7 @@ async function joinWatchVoice(){
     const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
     state.watchRtc.localStream=stream;state.watchRtc.audioJoined=true;state.watchRtc.micEnabled=true;
     const track=stream.getAudioTracks()[0];
-    for(const [uid,pc] of state.watchRtc.peers){const sender=watchPcSender(pc,'audio');if(sender)await sender.replaceTrack(track);if(pc.signalingState==='stable')await negotiateWatchPeer(uid,{reason:'audio-join'}).catch(()=>{})}
+    for(const [uid,pc] of state.watchRtc.peers){const sender=watchPcSender(pc,'audio','voice');if(sender)await sender.replaceTrack(track);if(pc.signalingState==='stable')await negotiateWatchPeer(uid,{reason:'audio-join'}).catch(()=>{})}
     await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:true}).catch(()=>{});
     $$('.watch-call-card audio').forEach(a=>{a.muted=false;a.play?.().catch(()=>{})});watchVoiceUi();toast('Você entrou na voz.')
   }catch(e){toast(e?.name==='NotAllowedError'?'Permissão do microfone negada.':'Não foi possível abrir o microfone.')}
@@ -1362,53 +1454,117 @@ async function joinWatchVoice(){
 function toggleWatchMic(){const track=state.watchRtc.localStream?.getAudioTracks?.()[0];if(!track)return;track.enabled=!track.enabled;state.watchRtc.micEnabled=track.enabled;watchVoiceUi()}
 async function leaveWatchAudio(silent=false){
   const track=state.watchRtc.localStream?.getAudioTracks?.()[0];if(track)track.stop();state.watchRtc.localStream=null;state.watchRtc.audioJoined=false;state.watchRtc.micEnabled=true;
-  for(const pc of state.watchRtc.peers.values()){const sender=watchPcSender(pc,'audio');if(sender)await sender.replaceTrack(null)}
+  for(const pc of state.watchRtc.peers.values()){const sender=watchPcSender(pc,'audio','voice');if(sender)await sender.replaceTrack(null)}
   if(state.watchCode&&state.user)await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:false}).catch(()=>{});
   $$('.watch-call-card audio').forEach(a=>a.muted=true);destroyWatchMusicPlayback();watchVoiceUi();if(!silent)toast('Você saiu da voz.')
 }
 async function toggleWatchScreen(){
   if(!state.user||!state.watchCode)return toast('Entre numa sala primeiro.');
+
   if(state.watchRtc.screenStream){
-    const old=state.watchRtc.screenStream;state.watchRtc.screenStream=null;old.getTracks().forEach(t=>{t.onended=null;t.stop()});
-    for(const [uid,pc] of state.watchRtc.peers){const sender=watchPcSender(pc,'video');if(sender)await sender.replaceTrack(null);if(pc.signalingState==='stable')await negotiateWatchPeer(uid,{reason:'screen-stop'}).catch(()=>{})}
+    const old=state.watchRtc.screenStream;state.watchRtc.screenStream=null;
+    old.getTracks().forEach(t=>{t.onended=null;t.stop()});
+
+    for(const [uid,pc] of state.watchRtc.peers){
+      const videoSender=watchPcSender(pc,'video');if(videoSender)await videoSender.replaceTrack(null);
+      const screenAudioSender=watchPcSender(pc,'audio','screen');if(screenAudioSender)await screenAudioSender.replaceTrack(null);
+      if(pc.signalingState==='stable')await negotiateWatchPeer(uid,{reason:'screen-stop'}).catch(()=>{})
+    }
+
     state.watchRtc.screenSharers.delete(String(state.user.uid));state.watchRtc.activeScreenUid=null;
-    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:false,screenAt:null}).catch(()=>{});
-    setWatchRtcStatus('Compartilhamento encerrado','');refreshWatchScreenStage();watchVoiceUi();return
+    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:false,screenAt:null,screenAudio:false}).catch(()=>{});
+    setWatchRtcStatus('Compartilhamento encerrado','');
+    refreshWatchScreenStage();watchVoiceUi();return
   }
+
   if(!navigator.mediaDevices?.getDisplayMedia)return toast('Seu navegador não permite compartilhar a tela.');
   if(!await ensureWatchRtcSession())return;
+
   try{
     setWatchRtcStatus('Escolha a tela ou janela para compartilhar...','warn');
-    const stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:24,max:30},width:{ideal:1920},height:{ideal:1080}},audio:false});
-    const track=stream.getVideoTracks()[0];if(!track)throw new Error('Nenhuma tela selecionada.');
-    state.watchRtc.screenStream=stream;state.watchRtc.activeScreenUid=String(state.user.uid);state.watchRtc.screenSharers.add(String(state.user.uid));
-    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:true,screenAt:Date.now()});
-    // Cria peers ausentes e renegocia todos com a faixa de tela.
+
+    // audio:true solicita o áudio da aba/tela quando o navegador/SO oferece suporte.
+    // Em Chrome/Edge, ao compartilhar uma aba, marque "Compartilhar áudio".
+    const stream=await navigator.mediaDevices.getDisplayMedia({
+      video:{frameRate:{ideal:24,max:30},width:{ideal:1920},height:{ideal:1080}},
+      audio:true,
+      systemAudio:'include',
+      surfaceSwitching:'include'
+    });
+
+    const videoTrack=stream.getVideoTracks()[0];
+    const screenAudioTrack=stream.getAudioTracks()[0]||null;
+    if(!videoTrack)throw new Error('Nenhuma tela selecionada.');
+
+    state.watchRtc.screenStream=stream;
+    state.watchRtc.activeScreenUid=String(state.user.uid);
+    state.watchRtc.screenSharers.add(String(state.user.uid));
+
+    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{
+      screen:true,screenAt:Date.now(),screenAudio:!!screenAudioTrack
+    });
+
     const ids=Object.keys(state.watchRtc.presence||{}).filter(uid=>uid!==state.user.uid);
     for(const uid of ids){
       let pc=state.watchRtc.peers.get(uid);if(!pc)pc=await createWatchPeer(uid,false);
-      const sender=watchPcSender(pc,'video');if(sender)await sender.replaceTrack(track);
+      const videoSender=watchPcSender(pc,'video');if(videoSender)await videoSender.replaceTrack(videoTrack);
+      const screenAudioSender=watchPcSender(pc,'audio','screen');
+      if(screenAudioSender)await screenAudioSender.replaceTrack(screenAudioTrack&&screenAudioTrack.readyState==='live'?screenAudioTrack:null);
       if(pc.signalingState==='stable')await negotiateWatchPeer(uid,{iceRestart:true,reason:'screen-start'}).catch(()=>{})
     }
-    track.onended=()=>{if(state.watchRtc.screenStream)toggleWatchScreen().catch(()=>{})};
-    setWatchRtcStatus('Sua tela está sendo compartilhada','ok');refreshWatchScreenStage();watchVoiceUi();toast('Tela compartilhada com a sala.')
+
+    videoTrack.onended=()=>{if(state.watchRtc.screenStream)toggleWatchScreen().catch(()=>{})};
+    if(screenAudioTrack)screenAudioTrack.onended=()=>refreshWatchScreenStage();
+
+    setWatchRtcStatus(screenAudioTrack?'Tela e áudio sendo compartilhados':'Tela compartilhada sem áudio','ok');
+    refreshWatchScreenStage();watchVoiceUi();
+
+    if(screenAudioTrack)toast('Tela + áudio compartilhados com a sala.');
+    else toast('Tela compartilhada. Para transmitir som, no seletor do navegador marque “Compartilhar áudio”.',6000)
   }catch(e){
     state.watchRtc.screenStream=null;state.watchRtc.screenSharers.delete(String(state.user?.uid||''));
-    if(state.watchCode&&state.user)await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:false,screenAt:null}).catch(()=>{});
-    setWatchRtcStatus('Compartilhamento não iniciado','');if(e?.name!=='NotAllowedError')toast(`Não foi possível compartilhar a tela${e?.message?`: ${e.message}`:'.'}`);watchVoiceUi()
+    if(state.watchCode&&state.user)await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:false,screenAt:null,screenAudio:false}).catch(()=>{});
+    setWatchRtcStatus('Compartilhamento não iniciado','');
+    if(e?.name!=='NotAllowedError')toast(`Não foi possível compartilhar a tela${e?.message?`: ${e.message}`:'.'}`);
+    watchVoiceUi()
   }
+}
+function updateWatchFullscreenButton(){
+  const btn=$('watchScreenFullscreenBtn'),stage=$('watchScreenStage');if(!btn||!stage)return;
+  const active=document.fullscreenElement===stage||document.webkitFullscreenElement===stage;
+  btn.textContent=active?'Sair da tela cheia':'Tela cheia'
 }
 async function fullscreenWatchScreen(){
   const stage=$('watchScreenStage'),video=$('watchScreenVideo');if(!stage||stage.hidden)return toast('Nenhuma tela está sendo compartilhada.');
-  try{if(stage.requestFullscreen)await stage.requestFullscreen();else if(video?.webkitEnterFullscreen)video.webkitEnterFullscreen();else toast('Tela cheia não é suportada neste navegador.')}catch{toast('Não foi possível abrir em tela cheia.')}
+  try{
+    const active=document.fullscreenElement===stage||document.webkitFullscreenElement===stage;
+    if(active){
+      if(document.exitFullscreen)await document.exitFullscreen();
+      else if(document.webkitExitFullscreen)document.webkitExitFullscreen();
+      updateWatchFullscreenButton();return
+    }
+
+    if(stage.requestFullscreen)await stage.requestFullscreen();
+    else if(stage.webkitRequestFullscreen)stage.webkitRequestFullscreen();
+    else if(video?.webkitEnterFullscreen)video.webkitEnterFullscreen();
+    else return toast('Tela cheia não é suportada neste navegador.');
+
+    updateWatchFullscreenButton()
+  }catch{toast('Não foi possível alternar a tela cheia.')}
 }
+document.addEventListener('fullscreenchange',updateWatchFullscreenButton);
+document.addEventListener('webkitfullscreenchange',updateWatchFullscreenButton);
+$('watchScreenSoundBtn')?.addEventListener('click',()=>{
+  state.watchRtc.screenSoundMuted=!state.watchRtc.screenSoundMuted;
+  refreshWatchScreenStage()
+});
 async function leaveWatchVoice(silent=false){
   if(!state.watchRtc.joined&&!state.watchRtc.localStream&&!state.watchRtc.peers.size)return;
   const code=state.watchCode,uid=state.user?.uid;
   try{state.watchRtc.presenceUnsub?.()}catch{}try{state.watchRtc.inboxUnsub?.()}catch{}try{await state.watchRtc.disconnectRef?.cancel?.()}catch{}
   state.watchRtc.presenceUnsub=null;state.watchRtc.inboxUnsub=null;state.watchRtc.disconnectRef=null;
   for(const pc of state.watchRtc.peers.values()){try{pc.close()}catch{}}
-  state.watchRtc.peers.clear();state.watchRtc.remoteStreams.clear();state.watchRtc.localStream?.getTracks?.().forEach(t=>t.stop());state.watchRtc.screenStream?.getTracks?.().forEach(t=>t.stop());
+  state.watchRtc.peers.clear();state.watchRtc.remoteStreams.clear();state.watchRtc.remoteVoiceStreams.clear();state.watchRtc.remoteScreenStreams.clear();state.watchRtc.localStream?.getTracks?.().forEach(t=>t.stop());state.watchRtc.screenStream?.getTracks?.().forEach(t=>t.stop());
   state.watchRtc.localStream=null;state.watchRtc.screenStream=null;state.watchRtc.joined=false;state.watchRtc.audioJoined=false;state.watchRtc.activeScreenUid=null;state.watchRtc.micEnabled=true;
   state.watchRtc.processed.clear();state.watchRtc.pendingCandidates.clear();state.watchRtc.screenSharers.clear();state.watchRtc.presence={};state.watchRtc.screenRetry.clear();state.watchRtc.makingOffer.clear();
   if(code&&uid){await remove(ref(db,`watchVoice/${code}/${uid}`)).catch(()=>{});await remove(ref(db,`watchRtc/${code}/${uid}`)).catch(()=>{})}

@@ -381,3 +381,51 @@ body.fx-badge-demon #profileNameView::after,body.fx-badge-demon #sideName::after
   .watch-side-stack{grid-template-columns:1fr!important;gap:9px!important}.watch-call-panel,.watch-music-panel{padding:12px;border-radius:16px}.watch-remote-media{grid-template-columns:1fr!important}.watch-music-form{grid-template-columns:1fr!important}.watch-music-form .btn{width:100%}
 }
 @media(max-width:480px){.watch-controls{grid-template-columns:1fr!important}.watch-controls .screen-share-btn,.watch-controls .pill{grid-column:auto}.watch-room-subline{max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.watch-main-v2 .watch-player-shell,.watch-main-v2 .watch-media-stage,.watch-main-v2 .watch-screen-stage,.watch-main-v2 .watch-video,.watch-main-v2 .watch-iframe{min-height:200px}}
+
+
+/* V9.7 — tela compartilhada com áudio e fullscreen */
+.watch-screen-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.watch-screen-actions{
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
+#watchScreenStage:fullscreen,
+#watchScreenStage:-webkit-full-screen{
+  width:100vw!important;
+  height:100vh!important;
+  max-width:none!important;
+  max-height:none!important;
+  background:#000!important;
+  display:flex!important;
+  flex-direction:column;
+}
+#watchScreenStage:fullscreen .watch-screen-head,
+#watchScreenStage:-webkit-full-screen .watch-screen-head{
+  flex:0 0 auto;
+  position:relative;
+  z-index:30;
+}
+#watchScreenStage:fullscreen #watchScreenVideo,
+#watchScreenStage:-webkit-full-screen #watchScreenVideo{
+  flex:1 1 auto;
+  width:100%!important;
+  height:calc(100vh - 54px)!important;
+  max-height:none!important;
+  object-fit:contain!important;
+  background:#000!important;
+}
+#watchScreenSoundBtn:disabled{
+  opacity:.5;
+  cursor:not-allowed;
+}
+@media(max-width:620px){
+  .watch-screen-head{align-items:flex-start}
+  .watch-screen-actions{display:grid;grid-template-columns:1fr 1fr}
+  .watch-screen-actions .btn{font-size:9px;padding:7px 8px}
+}
