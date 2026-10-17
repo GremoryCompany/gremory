@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261017-v11">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261017-v11-1">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -132,6 +132,7 @@
             <button class="home-card" data-route="friends"><span class="home-card-icon">◇</span><div><strong>Amigos</strong><small id="homeFriendsText">Ver pessoas</small></div><b>›</b></button>
             <button class="home-card" data-route="tinder"><span class="home-card-icon">♥</span><div><strong>Tinder</strong><small>Perfis sincronizados com a Charlotte</small></div><b>›</b></button>
             <button class="home-card" data-route="updates"><span class="home-card-icon">◌</span><div><strong>Atualizações</strong><small>Novidades do projeto</small></div><b>›</b></button>
+            <button class="home-card" data-route="studio"><span class="home-card-icon">▤</span><div><strong>PDF & Canvas</strong><small>Documentos e criação visual</small></div><b>›</b></button>
             <button class="home-card" data-route="games"><span class="home-card-icon">✕</span><div><strong>Jogos</strong><small>Jogo da velha com amigos</small></div><b>›</b></button>
             <button class="home-card" data-route="watch"><span class="home-card-icon">▶</span><div><strong>Watch Party</strong><small id="homeWatchRecent">Assistir e conversar</small></div><b>›</b></button>
             <button class="home-card" data-route="rpg"><span class="home-card-icon">⚄</span><div><strong>RPG</strong><small id="homeRpgRecent">Suas mesas</small></div><b>›</b></button>
@@ -234,21 +235,6 @@
             <div class="wild-stage" id="wildStage"><div class="empty-state small">Explore para encontrar um Pokémon selvagem.</div></div>
           </article>
 
-          <article class="panel site-raid-panel" id="siteRaidPanel">
-            <div class="panel-head">
-              <div><span class="tag">RAID GLOBAL</span><h3>Raid Pokémon do site</h3><small class="muted">Todos os treinadores atacam o mesmo boss.</small></div>
-              <span class="pill" id="siteRaidStatus">Aguardando</span>
-            </div>
-            <div id="siteRaidStage" class="site-raid-stage"><div class="empty-state small">Nenhuma raid ativa. Quando uma começar, ela aparecerá aqui.</div></div>
-            <div class="site-raid-prefs">
-              <label class="check-row"><input id="raidWhatsappNotify" type="checkbox"><span>Receber aviso de nova raid no WhatsApp pela Charlotte</span></label>
-              <div class="site-raid-admin" id="siteRaidAdmin" hidden>
-                <button class="btn primary" id="siteRaidStartBtn" type="button">Iniciar raid agora</button>
-                <label class="check-row"><input id="siteRaidAutoToggle" type="checkbox"><span>Raid automática a cada 1 hora</span></label>
-              </div>
-            </div>
-          </article>
-
           <article class="panel collection-panel" id="pokemonCollectionPanel">
             <div class="panel-head"><div><span class="tag">COLEÇÃO</span><h3>PC Pokémon</h3></div><span class="pill" id="collectionCount">0</span></div>
             <div class="collection-grid" id="pokemonCollection"><div class="empty-state small">Sincronize a Charlotte para carregar sua coleção.</div></div>
@@ -271,9 +257,9 @@
             </div>
             <div id="duelArena" class="duel-arena duel-arena-v5" hidden>
               <div class="duel-team-strip" id="duelEnemyTeam"></div>
-              <div class="duel-player enemy"><div class="duel-pokemon-copy"><strong id="duelEnemyName">Pokémon</strong><span id="duelEnemyOwner">Adversário</span><div class="pokemon-type-row" id="duelEnemyTypes"></div></div><div class="hpbar"><i id="duelEnemyHpBar"></i></div><small id="duelEnemyHp">0 / 0</small><img id="duelEnemySprite" alt=""></div>
+              <div class="duel-player enemy"><div class="duel-pokemon-copy"><strong id="duelEnemyName">Pokémon</strong><span id="duelEnemyOwner">Adversário</span></div><div class="hpbar"><i id="duelEnemyHpBar"></i></div><small id="duelEnemyHp">0 / 0</small><img id="duelEnemySprite" alt=""></div>
               <div class="duel-vs">VS</div>
-              <div class="duel-player mine"><img id="duelMySprite" alt=""><div class="duel-pokemon-copy"><strong id="duelMyName">Pokémon</strong><span id="duelMyOwner">Você</span><div class="pokemon-type-row" id="duelMyTypes"></div></div><div class="hpbar"><i id="duelMyHpBar"></i></div><small id="duelMyHp">0 / 0</small></div>
+              <div class="duel-player mine"><img id="duelMySprite" alt=""><div class="duel-pokemon-copy"><strong id="duelMyName">Pokémon</strong><span id="duelMyOwner">Você</span></div><div class="hpbar"><i id="duelMyHpBar"></i></div><small id="duelMyHp">0 / 0</small></div>
               <div class="duel-team-strip mine" id="duelMyTeam"></div>
               <div class="duel-actions" id="duelMoveButtons"></div>
               <div class="duel-secondary-actions"><button class="btn" id="duelSwitchBtn" type="button">Trocar Pokémon</button><button class="btn danger-ghost" id="duelExitBtn" type="button">Sair da luta</button></div>
@@ -350,17 +336,135 @@
         </section>
 
         <section class="view studio-view" data-view="studio">
-          <div class="section-head">
-            <div><span class="tag">STUDIO</span><h2>PDF & Canvas</h2><p class="muted">Ferramentas rápidas no próprio navegador. Seus arquivos locais não são enviados ao Firebase.</p></div>
+          <div class="section-head studio-page-head">
+            <div>
+              <span class="tag">STUDIO</span>
+              <h2>PDF & Canvas</h2>
+              <p class="muted">Edite documentos, converta arquivos e crie artes em um só lugar.</p>
+            </div>
+            <div class="section-actions">
+              <button class="btn primary" id="studioCanvasShortcut" type="button">Criar arte</button>
+            </div>
           </div>
-          <div class="studio-grid">
-            <article class="panel studio-card"><div class="panel-head"><div><span class="tag">PDF</span><h3>Juntar PDFs</h3></div></div><p class="panel-help">Selecione dois ou mais PDFs e gere um único arquivo.</p><input id="pdfMergeFiles" type="file" accept="application/pdf" multiple><button class="btn primary full" id="pdfMergeBtn" type="button">Juntar PDFs</button></article>
-            <article class="panel studio-card"><div class="panel-head"><div><span class="tag">PDF</span><h3>Imagens → PDF</h3></div></div><p class="panel-help">Transforme JPG/PNG em páginas de um PDF.</p><input id="imagesToPdfFiles" type="file" accept="image/png,image/jpeg" multiple><button class="btn primary full" id="imagesToPdfBtn" type="button">Criar PDF</button></article>
-            <article class="panel studio-card"><div class="panel-head"><div><span class="tag">EDITOR</span><h3>Editar PDF</h3></div></div><p class="panel-help">Adicione texto ou marca d'água e remova páginas.</p><input id="pdfEditFile" type="file" accept="application/pdf"><label>Texto / marca d'água<input id="pdfEditText" maxlength="120" placeholder="Ex: Gremory Company"></label><label>Páginas para remover<input id="pdfRemovePages" placeholder="Ex: 2,5,7"></label><button class="btn primary full" id="pdfEditBtn" type="button">Gerar PDF editado</button></article>
-            <article class="panel studio-card"><div class="panel-head"><div><span class="tag">CONVERSOR</span><h3>PDF → PNG</h3></div></div><p class="panel-help">Renderiza as páginas do PDF em imagens PNG.</p><input id="pdfToImageFile" type="file" accept="application/pdf"><div class="modal-actions"><button class="btn primary" id="pdfToImageBtn" type="button">PDF → PNG</button><button class="btn" id="pdfToTextBtn" type="button">PDF → TXT</button></div><div id="pdfImageResults" class="studio-downloads"></div></article>
-            <article class="panel studio-card studio-office-card"><div class="panel-head"><div><span class="tag">OFFICE</span><h3>Word / Excel / PowerPoint → PDF</h3></div></div><p class="panel-help">Conversões Office usam o PDF Studio da Charlotte, porque o navegador sozinho não preserva esses documentos com fidelidade.</p><button class="btn full" id="openBotPdfBtn" type="button">Abrir /pdf na Charlotte</button></article>
-            <article class="panel studio-card canvas-studio-card"><div class="panel-head"><div><span class="tag">CANVAS</span><h3>Criar arte</h3></div><select id="canvasPreset"><option value="1080x1080">Post 1080×1080</option><option value="1080x1920">Story 1080×1920</option><option value="1920x1080">Paisagem 1920×1080</option></select></div><div class="canvas-tools"><label>Texto<input id="canvasText" maxlength="120" value="Gremory"></label><label>Tamanho<input id="canvasFontSize" type="number" min="20" max="240" value="82"></label><label>Cor do texto<input id="canvasTextColor" type="color" value="#ffffff"></label><label>Fundo<input id="canvasBgColor" type="color" value="#17121f"></label><label>Imagem de fundo<input id="canvasImageFile" type="file" accept="image/*"></label></div><div class="canvas-preview-wrap"><canvas id="designCanvas" width="1080" height="1080"></canvas></div><div class="modal-actions"><button class="btn" id="canvasRenderBtn" type="button">Atualizar arte</button><button class="btn primary" id="canvasExportBtn" type="button">Exportar PNG</button></div></article>
+
+          <div class="studio-kpis">
+            <button type="button" data-studio-scroll="pdfMergeCard"><span>＋</span><div><strong>Juntar PDFs</strong><small>Combine documentos</small></div></button>
+            <button type="button" data-studio-scroll="imagesPdfCard"><span>▧</span><div><strong>Imagens em PDF</strong><small>JPG e PNG</small></div></button>
+            <button type="button" data-studio-scroll="pdfEditCard"><span>✎</span><div><strong>Editar PDF</strong><small>Texto e páginas</small></div></button>
+            <button type="button" data-studio-scroll="canvasStudio"><span>✦</span><div><strong>Canvas</strong><small>Crie e exporte</small></div></button>
           </div>
+
+          <div class="studio-section-label"><span>DOCUMENTOS</span><h3>Ferramentas PDF</h3></div>
+          <div class="studio-tools-grid">
+            <article class="panel studio-tool-card" id="pdfMergeCard">
+              <div class="studio-tool-icon">＋</div>
+              <div class="studio-tool-title"><div><span class="tag">PDF</span><h3>Juntar PDFs</h3></div></div>
+              <p>Una vários documentos na ordem em que forem selecionados.</p>
+              <label class="studio-upload"><span>Selecionar PDFs</span><input id="pdfMergeFiles" type="file" accept="application/pdf" multiple></label>
+              <button class="btn primary full" id="pdfMergeBtn" type="button">Gerar PDF</button>
+            </article>
+
+            <article class="panel studio-tool-card" id="imagesPdfCard">
+              <div class="studio-tool-icon">▧</div>
+              <div class="studio-tool-title"><div><span class="tag">IMAGENS</span><h3>Imagens em PDF</h3></div></div>
+              <p>Transforme fotos e imagens em um documento único.</p>
+              <label class="studio-upload"><span>Selecionar imagens</span><input id="imagesToPdfFiles" type="file" accept="image/png,image/jpeg" multiple></label>
+              <button class="btn primary full" id="imagesToPdfBtn" type="button">Criar PDF</button>
+            </article>
+
+            <article class="panel studio-tool-card" id="pdfEditCard">
+              <div class="studio-tool-icon">✎</div>
+              <div class="studio-tool-title"><div><span class="tag">EDITOR</span><h3>Editar PDF</h3></div></div>
+              <label class="studio-upload"><span>Selecionar PDF</span><input id="pdfEditFile" type="file" accept="application/pdf"></label>
+              <div class="studio-form-grid">
+                <label>Texto / marca d'água<input id="pdfEditText" maxlength="120" placeholder="Ex: Gremory Company"></label>
+                <label>Remover páginas<input id="pdfRemovePages" inputmode="numeric" placeholder="Ex: 2, 5, 7"></label>
+              </div>
+              <button class="btn primary full" id="pdfEditBtn" type="button">Salvar edição</button>
+            </article>
+
+            <article class="panel studio-tool-card" id="pdfExportCard">
+              <div class="studio-tool-icon">⇩</div>
+              <div class="studio-tool-title"><div><span class="tag">EXPORTAR</span><h3>Converter PDF</h3></div></div>
+              <p>Exporte páginas como imagem ou extraia o texto do documento.</p>
+              <label class="studio-upload"><span>Selecionar PDF</span><input id="pdfToImageFile" type="file" accept="application/pdf"></label>
+              <div class="studio-inline-actions">
+                <button class="btn primary" id="pdfToImageBtn" type="button">PDF → PNG</button>
+                <button class="btn" id="pdfToTextBtn" type="button">PDF → TXT</button>
+              </div>
+              <div id="pdfImageResults" class="studio-downloads"></div>
+            </article>
+          </div>
+
+          <article class="panel studio-office-strip">
+            <div><span class="tag">DOCUMENTOS</span><h3>Word, PowerPoint e Excel</h3><p>Converta DOCX, PPTX e XLSX pelo PDF Studio da Charlotte.</p></div>
+            <button class="btn" id="openBotPdfBtn" type="button">Abrir PDF Studio</button>
+          </article>
+
+          <div class="studio-section-label canvas-section-label"><span>CRIAÇÃO</span><h3>Canvas</h3></div>
+          <article class="panel canvas-pro" id="canvasStudio">
+            <header class="canvas-pro-head">
+              <div><span class="tag">CANVAS</span><h3>Editor de arte</h3></div>
+              <div class="canvas-head-actions">
+                <label class="canvas-preset-label">Formato
+                  <select id="canvasPreset">
+                    <option value="1080x1080">Post 1:1 · 1080×1080</option>
+                    <option value="1080x1350">Feed 4:5 · 1080×1350</option>
+                    <option value="1080x1920">Story · 1080×1920</option>
+                    <option value="1920x1080">Paisagem · 1920×1080</option>
+                  </select>
+                </label>
+                <button class="btn primary" id="canvasExportBtn" type="button">Exportar PNG</button>
+              </div>
+            </header>
+
+            <div class="canvas-pro-layout">
+              <aside class="canvas-controls">
+                <section class="canvas-control-group">
+                  <div class="canvas-control-title"><span>01</span><b>Conteúdo</b></div>
+                  <label>Título<textarea id="canvasText" rows="2" maxlength="120" placeholder="Título principal">Gremory</textarea></label>
+                  <label>Subtítulo<input id="canvasSubtitle" maxlength="120" placeholder="Uma mensagem curta"></label>
+                  <label>Etiqueta<input id="canvasBadge" maxlength="32" placeholder="DESTAQUE"></label>
+                </section>
+
+                <section class="canvas-control-group">
+                  <div class="canvas-control-title"><span>02</span><b>Tipografia</b></div>
+                  <div class="canvas-control-grid">
+                    <label>Tamanho<input id="canvasFontSize" type="number" min="28" max="240" value="92"></label>
+                    <label>Peso<select id="canvasFontWeight"><option value="500">Médio</option><option value="700" selected>Negrito</option><option value="800">Extra bold</option><option value="900">Black</option></select></label>
+                    <label>Alinhamento<select id="canvasAlign"><option value="left">Esquerda</option><option value="center" selected>Centro</option><option value="right">Direita</option></select></label>
+                    <label>Cor<input id="canvasTextColor" type="color" value="#ffffff"></label>
+                  </div>
+                </section>
+
+                <section class="canvas-control-group">
+                  <div class="canvas-control-title"><span>03</span><b>Fundo</b></div>
+                  <div class="canvas-control-grid">
+                    <label>Cor de fundo<input id="canvasBgColor" type="color" value="#17121f"></label>
+                    <label>Cor de destaque<input id="canvasAccentColor" type="color" value="#ff4f78"></label>
+                    <label>Ajuste da imagem<select id="canvasImageFit"><option value="cover">Preencher</option><option value="contain">Encaixar</option></select></label>
+                    <label>Escurecer <span id="canvasOverlayValue">24%</span><input id="canvasOverlay" type="range" min="0" max="70" value="24"></label>
+                  </div>
+                  <label class="studio-upload canvas-upload"><span>Imagem de fundo</span><input id="canvasImageFile" type="file" accept="image/*"></label>
+                  <button class="text-button canvas-clear-image" id="canvasClearImageBtn" type="button">Remover imagem</button>
+                </section>
+
+                <section class="canvas-control-group">
+                  <div class="canvas-control-title"><span>04</span><b>Composição</b></div>
+                  <label>Posição vertical <span id="canvasPositionValue">50%</span><input id="canvasPositionY" type="range" min="20" max="80" value="50"></label>
+                  <div class="canvas-control-actions">
+                    <button class="btn" id="canvasResetBtn" type="button">Restaurar</button>
+                    <button class="btn" id="canvasRenderBtn" type="button">Atualizar</button>
+                  </div>
+                </section>
+              </aside>
+
+              <div class="canvas-preview-area">
+                <div class="canvas-preview-top"><span id="canvasSizeLabel">1080 × 1080</span><span>Prévia</span></div>
+                <div class="canvas-preview-wrap"><canvas id="designCanvas" width="1080" height="1080"></canvas></div>
+              </div>
+            </div>
+          </article>
         </section>
 
         <section class="view" data-view="games">
@@ -650,7 +754,18 @@
     <section class="mobile-more-card">
       <div class="mobile-more-head"><div><span class="tag">GREMORY</span><h3>Mais</h3></div><button class="modal-close static" id="mobileMoreClose" type="button">×</button></div>
       <div class="mobile-more-grid">
-        <button data-route="friends"><span>◇</span><b>Amigos</b></button><button data-route="tinder"><span>♥</span><b>Tinder</b></button><button data-route="updates"><span>◌</span><b>Novidades</b></button><button data-route="downloads"><span>⇩</span><b>Downloads</b></button><button data-route="studio"><span>▤</span><b>PDF & Canvas</b></button><button data-route="games"><span>▦</span><b>Jogos</b></button><button data-route="rpg"><span>⚄</span><b>RPG</b></button><button data-route="premium"><span>♛</span><b>Premium</b></button><button data-route="personalize"><span>✧</span><b>Personalizar</b></button><button data-route="support"><span>?</span><b>Suporte</b></button><button id="mobileAccountBtn"><span>●</span><b>Conta</b></button><button data-route="admin" id="mobileAdminBtn" hidden><span>⚙</span><b>Admin</b></button>
+        <button data-route="friends"><span>◇</span><b>Amigos</b></button>
+        <button data-route="tinder"><span>♥</span><b>Tinder</b></button>
+        <button data-route="updates"><span>◌</span><b>Novidades</b></button>
+        <button data-route="downloads"><span>⇩</span><b>Downloads</b></button>
+        <button data-route="studio"><span>▤</span><b>PDF & Canvas</b></button>
+        <button data-route="games"><span>▦</span><b>Jogos</b></button>
+        <button data-route="rpg"><span>⚄</span><b>RPG</b></button>
+        <button data-route="premium"><span>♛</span><b>Premium</b></button>
+        <button data-route="personalize"><span>✧</span><b>Personalizar</b></button>
+        <button data-route="support"><span>?</span><b>Suporte</b></button>
+        <button id="mobileAccountBtn" type="button"><span>●</span><b>Conta</b></button>
+        <button data-route="admin" id="mobileAdminBtn" type="button" hidden><span>⚙</span><b>Admin</b></button>
       </div>
     </section>
   </div>
@@ -664,7 +779,7 @@
         <label>Nome<input id="profileName" maxlength="40"></label><label>Nome de usuário<input id="profileUsername" maxlength="20" autocomplete="username" placeholder="usuario"><small class="field-hint" id="profileUsernameHint">Pode ser alterado uma vez a cada 7 dias.</small></label>
         <label>Foto (URL)<input id="profileAvatar" type="url" placeholder="https://..."></label>
         <label>Bio<textarea id="profileBio" maxlength="180" rows="3" placeholder="Seu recado"></textarea></label>
-        <label>Anime favorito<input id="profileFavoriteAnime" maxlength="80"></label><label class="check-row"><input id="profileRaidWhatsapp" type="checkbox"><span>Avisar raids Pokémon no WhatsApp</span></label>
+        <label>Anime favorito<input id="profileFavoriteAnime" maxlength="80"></label>
         <div class="profile-stats"><div><span>Nível</span><strong id="profileLevel">0</strong></div><div><span>Rupias</span><strong id="profileBalance">0</strong></div></div>
         <button class="btn primary full" type="submit">Salvar</button><button class="btn full" id="adminDrawerBtn" type="button" hidden>Administração</button><button class="btn full danger-ghost" id="logoutBtn" type="button">Sair</button>
       </form>
@@ -688,6 +803,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261017-v11"></script>
+  <script type="module" src="/assets/js/app.js?v=20261017-v11-1"></script>
 </body>
 </html>
