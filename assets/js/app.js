@@ -99,6 +99,19 @@ function permissionMessage(err, fallback='Não foi possível concluir essa açã
   return fallback;
 }
 
+function withTimeout(promise, ms=15000, code='TIMEOUT'){
+  let timer;
+  return Promise.race([
+    Promise.resolve(promise).finally(()=>clearTimeout(timer)),
+    new Promise((_,reject)=>{timer=setTimeout(()=>{const e=new Error(code);e.code=code;reject(e)},ms)})
+  ]);
+}
+function authFlowError(err){
+  const code=String(err?.code||err?.message||'');
+  if(code==='AUTH_TIMEOUT'||code==='DB_TIMEOUT'||code==='PERSISTENCE_TIMEOUT')return 'A conexão demorou mais que o esperado. Tente novamente.';
+  return authError(err);
+}
+
 const routeMeta={
   home:['GREMORY','Início'],charlotte:['CHARLOTTE','Charlotte'],pokemon:['POKÉMON','Centro Pokémon'],friends:['AMIGOS','Pessoas'],tinder:['TINDER','Descobrir pessoas'],updates:['ATUALIZAÇÕES','Novidades'],downloads:['DOWNLOADS','Downloads'],studio:['STUDIO','PDF & Canvas'],games:['JOGOS','Jogos'],watch:['WATCH PARTY','Assistir com amigos'],rpg:['RPG','Mesas'],premium:['PREMIUM','Gremory Premium'],personalize:['PERSONALIZAR','Loja de rúpias'],support:['SUPORTE','Gremory oficial'],admin:['ADMINISTRAÇÃO','Painel do host']
 };
@@ -149,7 +162,7 @@ $$('[data-auth-tab]').forEach(b=>{
 });
 function authError(err){const map={'auth/email-already-in-use':'Esse e-mail já está em uso.','auth/invalid-email':'E-mail inválido.','auth/weak-password':'Use uma senha com pelo menos 6 caracteres.','auth/invalid-credential':'E-mail ou senha incorretos.','auth/too-many-requests':'Muitas tentativas. Tente novamente mais tarde.'};return map[err?.code]||'Não foi possível concluir.'}
 async function configurePersistence(remember){
-  await setPersistence(auth,remember?browserLocalPersistence:inMemoryPersistence);
+  await withTimeout(setPersistence(auth,remember?browserLocalPersistence:inMemoryPersistence),8000,'PERSISTENCE_TIMEOUT');
   if(remember)localStorage.setItem('gremory:remember','1');else localStorage.removeItem('gremory:remember');
 }
 async function initialAuthPolicy(){
@@ -165,10 +178,10 @@ $('loginForm').addEventListener('submit',async ev=>{
   $('authStatus').textContent='Entrando...';
   try{
     await configurePersistence($('loginRemember').checked);
-    await signInWithEmailAndPassword(auth,$('loginEmail').value.trim(),$('loginPassword').value);
+    await withTimeout(signInWithEmailAndPassword(auth,$('loginEmail').value.trim(),$('loginPassword').value),20000,'AUTH_TIMEOUT');
     $('authStatus').textContent='Entrando na Gremory...';
   }catch(e){
-    $('authStatus').textContent=authError(e);
+    $('authStatus').textContent=authFlowError(e);
   }finally{
     if(button)button.disabled=false;
   }
@@ -178,26 +191,77 @@ $('registerForm').addEventListener('submit',async ev=>{
   const registerButton=ev.currentTarget.querySelector('button[type="submit"]');
   if(registerButton?.disabled)return;
   if(registerButton)registerButton.disabled=true;
-  const name=$('registerName').value.trim(),username=normalizeUsername($('registerUsername').value),email=$('registerEmail').value.trim(),pass=$('registerPassword').value,pass2=$('registerPassword2').value;
+
+  const name=$('registerName').value.trim();
+  const username=normalizeUsername($('registerUsername').value);
+  const email=$('registerEmail').value.trim();
+  const pass=$('registerPassword').value;
+  const pass2=$('registerPassword2').value;
+
   if(!name){if(registerButton)registerButton.disabled=false;return $('authStatus').textContent='Digite seu nome.';}
   if(!validUsername(username)){if(registerButton)registerButton.disabled=false;return $('authStatus').textContent='Nome de usuário inválido. Use 3–20 caracteres, começando por letra.';}
   if(pass.length<6){if(registerButton)registerButton.disabled=false;return $('authStatus').textContent='A senha precisa ter pelo menos 6 caracteres.';}
   if(pass!==pass2){if(registerButton)registerButton.disabled=false;return $('authStatus').textContent='As senhas não coincidem.';}
+
   $('authStatus').textContent='Criando conta...';
   try{
-    const taken=await get(ref(db,`usernames/${username}`)).catch(()=>null);
-    if(taken?.exists())throw new Error('USERNAME_TAKEN');
-    await configurePersistence($('registerRemember').checked);
-    const cred=await createUserWithEmailAndPassword(auth,email,pass);
+    await configurePersistence(Boolean($('registerRemember')?.checked));
+
+    // O Firebase Auth é a etapa que cria a conta. Depois disso o usuário já pode
+    // entrar no site, mesmo que o Realtime Database esteja momentaneamente lento.
+    const cred=await withTimeout(createUserWithEmailAndPassword(auth,email,pass),20000,'AUTH_TIMEOUT');
     const stamp=Date.now();
-    await updateProfile(cred.user,{displayName:name});
-    await set(ref(db,`usernames/${username}`),{uid:cred.user.uid,username,updatedAt:stamp});
-    const p={uid:cred.user.uid,nome:name,username,usernameChangedAt:stamp,avatar:'',bio:'',favoriteAnime:'',email:cred.user.email||email,raidWhatsappNotify:false,createdAt:nowIso(),updatedAt:nowIso()};
-    await set(ref(db,`profiles/${cred.user.uid}`),p);
-    await set(ref(db,`directory/${cred.user.uid}`),publicProfile(p));
-    $('authStatus').textContent='';
+
+    await updateProfile(cred.user,{displayName:name}).catch(()=>{});
+
+    // A reserva do @ precisa ser feita depois do Auth, pois /usernames exige usuário autenticado.
+    let usernameOk=true;
+    try{
+      const taken=await withTimeout(get(ref(db,`usernames/${username}`)),8000,'DB_TIMEOUT');
+      if(taken?.exists()&&taken.val()?.uid!==cred.user.uid){
+        usernameOk=false;
+      }else{
+        await withTimeout(set(ref(db,`usernames/${username}`),{uid:cred.user.uid,username,updatedAt:stamp}),8000,'DB_TIMEOUT');
+      }
+    }catch(e){
+      if(String(e?.code||e?.message)==='DB_TIMEOUT'){
+        console.warn('[GREMORY AUTH] Banco demorou ao reservar username. O perfil poderá ser concluído depois.');
+      }else{
+        console.warn('[GREMORY AUTH] Não foi possível reservar username:',e);
+      }
+    }
+
+    const p={
+      uid:cred.user.uid,
+      nome:name,
+      ...(usernameOk?{username,usernameChangedAt:stamp}:{}),
+      avatar:'',bio:'',favoriteAnime:'',email:cred.user.email||email,
+      raidWhatsappNotify:false,createdAt:nowIso(),updatedAt:nowIso()
+    };
+
+    // Não bloqueia a entrada no site indefinidamente por causa do RTDB.
+    Promise.allSettled([
+      withTimeout(set(ref(db,`profiles/${cred.user.uid}`),p),10000,'DB_TIMEOUT'),
+      usernameOk?withTimeout(set(ref(db,`directory/${cred.user.uid}`),publicProfile(p)),10000,'DB_TIMEOUT'):Promise.resolve()
+    ]).then(results=>{
+      if(results.some(r=>r.status==='rejected'))console.warn('[GREMORY AUTH] Perfil será sincronizado novamente após entrar.');
+    });
+
+    state.profile=p;
+    $('authStatus').textContent=usernameOk?'Conta criada. Entrando...':'Conta criada. Escolha outro @ no seu perfil.';
+
+    // onAuthStateChanged abre o app; este fallback impede a tela de cadastro de ficar presa.
+    setTimeout(()=>{
+      if(auth.currentUser){
+        document.body.classList.remove('auth-loading');
+        document.body.classList.add('authenticated');
+        $('appShell')?.setAttribute('aria-hidden','false');
+        if(!usernameOk)setTimeout(()=>setDrawer(true),300);
+      }
+    },250);
+
   }catch(e){
-    $('authStatus').textContent=e?.message==='USERNAME_TAKEN'?'Esse nome de usuário já está em uso.':authError(e)
+    $('authStatus').textContent=authFlowError(e);
   }finally{
     if(registerButton)registerButton.disabled=false;
   }
@@ -314,21 +378,53 @@ function startUserSubscriptions(){
 }
 
 await initialAuthPolicy();
-onAuthStateChanged(auth,async user=>{
-  document.body.classList.remove('auth-loading');state.user=user||null;
-  if(!user){document.body.classList.remove('authenticated');$('appShell').setAttribute('aria-hidden','true');const reason=sessionStorage.getItem('gremory:banReason');if(reason){$('authStatus').textContent=`Conta suspensa: ${reason}`;sessionStorage.removeItem('gremory:banReason')}clearUserSubscriptions();return}
-  try{await readUserData(user)}catch{}
-  state.ttt.lastResultId=localStorage.getItem(`gremory:tttSeen:${user.uid}`)||'';
+onAuthStateChanged(auth,user=>{
+  document.body.classList.remove('auth-loading');
+  state.user=user||null;
+
+  if(!user){
+    document.body.classList.remove('authenticated');
+    $('appShell').setAttribute('aria-hidden','true');
+    const reason=sessionStorage.getItem('gremory:banReason');
+    if(reason){$('authStatus').textContent=`Conta suspensa: ${reason}`;sessionStorage.removeItem('gremory:banReason')}
+    clearUserSubscriptions();
+    return;
+  }
+
+  // Abre o site imediatamente após o Auth. Dados complementares carregam em seguida.
+  document.body.classList.add('authenticated');
+  $('appShell').setAttribute('aria-hidden','false');
+  setTimeout(()=>{const gif=$('authGif');if(gif)gif.removeAttribute('src')},250);
+
+  if(!state.profile){
+    state.profile={
+      uid:user.uid,
+      nome:user.displayName||user.email?.split('@')[0]||'Usuário',
+      username:'',avatar:user.photoURL||'',bio:'',favoriteAnime:'',email:user.email||'',
+      raidWhatsappNotify:false,createdAt:user.metadata?.creationTime||nowIso()
+    };
+  }
+  renderAccount();
   renderAdminAccess();
-  if(!state.profile?.username)setTimeout(()=>{toast('Escolha seu nome de usuário para completar a conta.',5000);setDrawer(true)},700);
-  document.body.classList.add('authenticated');$('appShell').setAttribute('aria-hidden','false');setTimeout(()=>{const gif=$('authGif');if(gif)gif.removeAttribute('src')},250);startUserSubscriptions();await loadPokemonSources();
+  startUserSubscriptions();
+
+  withTimeout(readUserData(user),12000,'DB_TIMEOUT').then(()=>{
+    renderAccount();
+    if(!state.profile?.username)setTimeout(()=>{toast('Escolha seu nome de usuário para completar a conta.',5000);setDrawer(true)},700);
+  }).catch(e=>{
+    console.warn('[GREMORY AUTH] Perfil ainda não sincronizado:',e);
+    toast('Conta conectada. Algumas informações ainda estão sincronizando.',4000);
+  });
+
+  state.ttt.lastResultId=localStorage.getItem(`gremory:tttSeen:${user.uid}`)||'';
+  loadPokemonSources().catch(()=>{});
+
   const params=new URLSearchParams(location.search);
   const watchInvite=params.get('watch');
   const rpgInvite=params.get('rpg');
-  if(watchInvite){navigate('watch');await joinWatchRoom(watchInvite.toUpperCase())}
-  else if(rpgInvite){navigate('rpg');await joinRoom(rpgInvite.toUpperCase())}
+  if(watchInvite){navigate('watch');joinWatchRoom(watchInvite.toUpperCase()).catch(()=>{})}
+  else if(rpgInvite){navigate('rpg');joinRoom(rpgInvite.toUpperCase()).catch(()=>{})}
 });
-
 
 function generatedTone(freq=720,duration=.12){
   try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;const ctx=new Ctx(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.frequency.value=freq;gain.gain.value=.035;osc.connect(gain);gain.connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+duration);setTimeout(()=>ctx.close().catch(()=>{}),Math.ceil((duration+.15)*1000))}catch{}
