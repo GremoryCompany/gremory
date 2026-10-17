@@ -39,7 +39,7 @@ const state = {
   roomCode:null, room:null, roomUnsubs:[],
   userUnsubs:[], duel:null, duelUnsub:null,
   bridgeResults:{}, siteInventory:{}, siteCustomization:{},
-  teamDraft:[], pokemonEncounter:null, pokemonHealing:{}, pokemonAudio:{encounterId:''},
+  teamDraft:[], pokemonEncounter:null, pokemonHealing:{}, pokemonAudio:{encounterId:''}, siteRaid:null, siteRaidConfig:{},
   ttt:{game:null,unsub:null,index:{},lastResultId:''},
   notificationFilter:'team',
   admin:{reports:{},updates:{},directory:{},bans:{},selectedUid:''},
@@ -80,6 +80,8 @@ function renderAdminAccess(){
   const ok=isSiteAdmin();
   if($('adminNavBtn'))$('adminNavBtn').hidden=!ok;
   if($('adminDrawerBtn'))$('adminDrawerBtn').hidden=!ok;
+  if($('mobileAdminBtn'))$('mobileAdminBtn').hidden=!ok;
+  if($('siteRaidAdmin'))$('siteRaidAdmin').hidden=!ok;
 }
 
 function avatarFor(p=state.profile){return p?.avatar||state.user?.photoURL||DEFAULT_AVATAR}
@@ -96,15 +98,13 @@ function permissionMessage(err, fallback='Acesso negado pelo Firebase.'){
 }
 
 const routeMeta={
-  home:['GREMORY','Início'],charlotte:['CHARLOTTE','Charlotte'],pokemon:['POKÉMON','Centro Pokémon'],friends:['AMIGOS','Pessoas'],tinder:['TINDER','Descobrir pessoas'],updates:['ATUALIZAÇÕES','Novidades'],downloads:['DOWNLOADS','Downloads'],games:['JOGOS','Jogos'],watch:['WATCH PARTY','Assistir com amigos'],rpg:['RPG','Mesas'],premium:['PREMIUM','Gremory Premium'],personalize:['PERSONALIZAR','Loja de rúpias'],support:['SUPORTE','Gremory oficial'],admin:['ADMINISTRAÇÃO','Painel do host']
+  home:['GREMORY','Início'],charlotte:['CHARLOTTE','Charlotte'],pokemon:['POKÉMON','Centro Pokémon'],friends:['AMIGOS','Pessoas'],tinder:['TINDER','Descobrir pessoas'],updates:['ATUALIZAÇÕES','Novidades'],downloads:['DOWNLOADS','Downloads'],studio:['STUDIO','PDF & Canvas'],games:['JOGOS','Jogos'],watch:['WATCH PARTY','Assistir com amigos'],rpg:['RPG','Mesas'],premium:['PREMIUM','Gremory Premium'],personalize:['PERSONALIZAR','Loja de rúpias'],support:['SUPORTE','Gremory oficial'],admin:['ADMINISTRAÇÃO','Painel do host']
 };
 function navigate(route){
   if(route==='admin'&&!isSiteAdmin()){toast('Acesso restrito ao host.');route='home'}
   if(!routeMeta[route]) route='home'; state.route=route;
   $$('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===route));
   $$('[data-route]').forEach(el=>el.classList.toggle('active',el.dataset.route===route));
-  const mobileActive=document.querySelector('.mobile-nav-v5 [data-route].active');
-  if(mobileActive&&window.matchMedia('(max-width:820px)').matches)setTimeout(()=>mobileActive.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'}),0);
   const [eye,title]=routeMeta[route]; $('pageEyebrow').textContent=eye; $('pageTitle').textContent=title;
   history.replaceState(null,'',`#${route}`); window.scrollTo({top:0,behavior:'auto'});
   if(route==='pokemon') {loadPokemonSources(); renderDuelFriendSelect();}
@@ -112,6 +112,7 @@ function navigate(route){
   if(route==='tinder'){loadOwnTinderProfile();loadTinderProfile();}
   if(route==='updates') renderUpdates();
   if(route==='games') renderTttFriendSelect();
+  if(route==='studio') renderDesignCanvas();
   if(route==='watch'&&state.user&&!state.watchCode) loadWatchRooms();
   if(route==='rpg'&&state.user&&!state.roomCode) loadMyRooms();
   if(route==='premium'&&state.user&&state.charlottePublic?.status==='linked') requestAccountSync().catch(()=>{});
@@ -119,6 +120,13 @@ function navigate(route){
   if(route==='admin') loadAdminDashboard();
 }
 $$('[data-route]').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.route)));
+function setMobileMore(open){const sh=$('mobileMoreSheet');if(!sh)return;sh.classList.toggle('open',!!open);sh.setAttribute('aria-hidden',open?'false':'true')}
+$('mobileMoreBtn')?.addEventListener('click',()=>setMobileMore(true));
+$('mobileMoreBackdrop')?.addEventListener('click',()=>setMobileMore(false));
+$('mobileMoreClose')?.addEventListener('click',()=>setMobileMore(false));
+$('mobileMoreSheet')?.querySelectorAll('[data-route]')?.forEach(b=>b.addEventListener('click',()=>setMobileMore(false)));
+$('mobileMoreSheet')?.querySelector('#mobileAccountBtn')?.addEventListener('click',()=>{setMobileMore(false);setDrawer(true)});
+
 ['topAccountBtn','mobileAccountBtn','homeProfileBtn','sideAccountBtn'].forEach(id=>$(id)?.addEventListener('click',()=>setDrawer(true)));
 $('accountDrawerBackdrop')?.addEventListener('click',()=>setDrawer(false));
 $('accountDrawerClose')?.addEventListener('click',()=>setDrawer(false));
@@ -182,7 +190,7 @@ $('registerForm').addEventListener('submit',async ev=>{
     const stamp=Date.now();
     await updateProfile(cred.user,{displayName:name});
     await set(ref(db,`usernames/${username}`),{uid:cred.user.uid,username,updatedAt:stamp});
-    const p={uid:cred.user.uid,nome:name,username,usernameChangedAt:stamp,avatar:'',bio:'',favoriteAnime:'',createdAt:nowIso(),updatedAt:nowIso()};
+    const p={uid:cred.user.uid,nome:name,username,usernameChangedAt:stamp,avatar:'',bio:'',favoriteAnime:'',email:cred.user.email||email,raidWhatsappNotify:false,createdAt:nowIso(),updatedAt:nowIso()};
     await set(ref(db,`profiles/${cred.user.uid}`),p);
     await set(ref(db,`directory/${cred.user.uid}`),publicProfile(p));
     $('authStatus').textContent='';
@@ -199,8 +207,9 @@ function publicProfile(p){return{uid:p.uid,nome:p.nome||'Usuário',username:norm
 async function readUserData(user){
   const [ps,old]=await Promise.all([get(ref(db,`profiles/${user.uid}`)).catch(()=>null),get(ref(db,`users/${user.uid}`)).catch(()=>null)]);
   const p=ps?.exists()?ps.val():{};const o=old?.exists()?old.val():{};
-  const merged={uid:user.uid,nome:p.nome||o.nome||user.displayName||'Usuário',username:normalizeUsername(p.username||o.username||''),usernameChangedAt:Number(p.usernameChangedAt||o.usernameChangedAt||0),avatar:p.avatar||o.avatar||user.photoURL||'',bio:p.bio||o.bio||'',favoriteAnime:p.favoriteAnime||o.favoriteAnime||o.animeFavorito||'',createdAt:p.createdAt||o.createdAt||user.metadata?.creationTime||nowIso()};
+  const merged={uid:user.uid,nome:p.nome||o.nome||user.displayName||'Usuário',username:normalizeUsername(p.username||o.username||''),usernameChangedAt:Number(p.usernameChangedAt||o.usernameChangedAt||0),avatar:p.avatar||o.avatar||user.photoURL||'',bio:p.bio||o.bio||'',favoriteAnime:p.favoriteAnime||o.favoriteAnime||o.animeFavorito||'',email:p.email||user.email||'',raidWhatsappNotify:Boolean(p.raidWhatsappNotify),createdAt:p.createdAt||o.createdAt||user.metadata?.creationTime||nowIso()};
   if(!ps?.exists()) await set(ref(db,`profiles/${user.uid}`),{...merged,updatedAt:nowIso()}).catch(()=>{});
+  else if((!p.email&&user.email)||p.raidWhatsappNotify==null) await update(ref(db,`profiles/${user.uid}`),{email:user.email||p.email||'',raidWhatsappNotify:Boolean(p.raidWhatsappNotify),updatedAt:nowIso()}).catch(()=>{});
   await set(ref(db,`directory/${user.uid}`),publicProfile(merged)).catch(()=>{});
   state.profile=merged;state.privateData=o;renderAccount();
 }
@@ -217,7 +226,7 @@ function accountSnapshot(){
 }
 function renderAccount(){
   const p=state.profile||{};const avatar=avatarFor(p);const name=p.nome||'Usuário';const acc=accountSnapshot();const premium=acc.premium;const level=acc.level;const balance=acc.balance;
-  ['sideAvatar','topAvatar','profileAvatarPreview'].forEach(id=>{if($(id))$(id).src=avatar});$('sideName').textContent=name;$('sideStatus').textContent=premium?'Premium':usernameLabel(p);$('profileNameView').textContent=name;if($('profileUsernameView'))$('profileUsernameView').textContent=usernameLabel(p);$('profilePlanView').textContent=premium?'Premium':'Padrão';$('profileName').value=name;if($('profileUsername'))$('profileUsername').value=normalizeUsername(p.username||'');if($('profileUsernameHint'))$('profileUsernameHint').textContent=formatCooldown(usernameCooldownRemaining(p));$('profileAvatar').value=p.avatar||'';$('profileBio').value=p.bio||'';$('profileFavoriteAnime').value=p.favoriteAnime||'';renderAdminAccess();$('profileLevel').textContent=formatNumber(level);$('profileBalance').textContent=`₹ ${formatNumber(balance)}`;$('homePlan').textContent=premium?'Premium':'Padrão';$('homeLevel').textContent=formatNumber(level);$('homeBalance').textContent=`₹ ${formatNumber(balance)}`;$('homeGreeting').textContent=`Olá, ${name}.`;
+  ['sideAvatar','topAvatar','profileAvatarPreview'].forEach(id=>{if($(id))$(id).src=avatar});$('sideName').textContent=name;$('sideStatus').textContent=premium?'Premium':usernameLabel(p);$('profileNameView').textContent=name;if($('profileUsernameView'))$('profileUsernameView').textContent=usernameLabel(p);$('profilePlanView').textContent=premium?'Premium':'Padrão';$('profileName').value=name;if($('profileUsername'))$('profileUsername').value=normalizeUsername(p.username||'');if($('profileUsernameHint'))$('profileUsernameHint').textContent=formatCooldown(usernameCooldownRemaining(p));$('profileAvatar').value=p.avatar||'';$('profileBio').value=p.bio||'';$('profileFavoriteAnime').value=p.favoriteAnime||'';if($('profileRaidWhatsapp'))$('profileRaidWhatsapp').checked=Boolean(p.raidWhatsappNotify);if($('raidWhatsappNotify'))$('raidWhatsappNotify').checked=Boolean(p.raidWhatsappNotify);renderAdminAccess();$('profileLevel').textContent=formatNumber(level);$('profileBalance').textContent=`₹ ${formatNumber(balance)}`;$('homePlan').textContent=premium?'Premium':'Padrão';$('homeLevel').textContent=formatNumber(level);$('homeBalance').textContent=`₹ ${formatNumber(balance)}`;$('homeGreeting').textContent=`Olá, ${name}.`;
   if($('storeBalance'))$('storeBalance').textContent=`₹ ${formatNumber(balance)}`;
   if($('premiumStatusPill'))$('premiumStatusPill').textContent=premium?'Premium':'Padrão';
   if($('premiumStatusTitle'))$('premiumStatusTitle').textContent=premium?'Premium ativo':'Plano padrão';
@@ -241,7 +250,7 @@ $('profileForm').addEventListener('submit',async ev=>{
       await set(ref(db,`usernames/${username}`),{uid:state.user.uid,username,updatedAt:Date.now()});
       reservedNew=true;
     }
-    const payload={uid:state.user.uid,nome:$('profileName').value.trim().slice(0,40)||'Usuário',username,usernameChangedAt:changing?Date.now():Number(oldProfile.usernameChangedAt||Date.now()),avatar:$('profileAvatar').value.trim(),bio:$('profileBio').value.trim().slice(0,180),favoriteAnime:$('profileFavoriteAnime').value.trim().slice(0,80),createdAt:oldProfile.createdAt||nowIso(),updatedAt:nowIso()};
+    const payload={uid:state.user.uid,nome:$('profileName').value.trim().slice(0,40)||'Usuário',username,usernameChangedAt:changing?Date.now():Number(oldProfile.usernameChangedAt||Date.now()),avatar:$('profileAvatar').value.trim(),bio:$('profileBio').value.trim().slice(0,180),favoriteAnime:$('profileFavoriteAnime').value.trim().slice(0,80),email:state.user.email||oldProfile.email||'',raidWhatsappNotify:Boolean($('profileRaidWhatsapp')?.checked),createdAt:oldProfile.createdAt||nowIso(),updatedAt:nowIso()};
     await set(ref(db,`profiles/${state.user.uid}`),payload);
     await set(ref(db,`directory/${state.user.uid}`),publicProfile(payload));
     if(changing&&oldUsername)await remove(ref(db,`usernames/${oldUsername}`)).catch(()=>{});
@@ -260,7 +269,7 @@ $('profileForm').addEventListener('submit',async ev=>{
   }
 });
 
-function clearUserSubscriptions(){if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonHealing={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.ban=null;state.watchCode=null;state.watchRoom=null}
+function clearUserSubscriptions(){if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.ban=null;state.watchCode=null;state.watchRoom=null}
 function startUserSubscriptions(){
   clearUserSubscriptions();const uid=state.user.uid;
   state.userUnsubs.push(onValue(ref(db,`friends/${uid}`),s=>{state.friends=s.exists()?s.val():{};renderFriends();renderDuelFriendSelect();$('homeFriendsText').textContent=`${Object.keys(state.friends).length} amigo${Object.keys(state.friends).length===1?'':'s'}`}));
@@ -274,6 +283,9 @@ function startUserSubscriptions(){
   state.userUnsubs.push(onValue(ref(db,`pokemonSiteDuelIndex/${uid}`),s=>handleDuelIndex(s.exists()?s.val():{})));
   state.userUnsubs.push(onValue(ref(db,`pokemonSiteEncounter/${uid}`),s=>{state.pokemonEncounter=s.exists()?s.val():null;renderWildEncounter()}));
   state.userUnsubs.push(onValue(ref(db,`pokemonHealing/${uid}`),s=>{state.pokemonHealing=s.exists()?s.val():{};renderHealingList();renderCollection()}));
+  state.userUnsubs.push(onValue(ref(db,'pokemonSiteRaid/current'),s=>{state.siteRaid=s.exists()?s.val():null;renderSiteRaid()}));
+  state.userUnsubs.push(onValue(ref(db,'pokemonSiteRaidConfig'),s=>{state.siteRaidConfig=s.exists()?s.val():{};renderSiteRaid()}));
+
   state.userUnsubs.push(onValue(ref(db,`ticTacToeIndex/${uid}`),s=>{state.ttt.index=s.exists()?s.val():{};handleTttIndex(state.ttt.index)}));
   state.userUnsubs.push(onValue(query(ref(db,'siteUpdates'),orderByChild('createdAt'),limitToLast(60)),s=>{state.updates=s.exists()?s.val():{};renderUpdates()}));
   let notificationBoot=true;
@@ -638,7 +650,13 @@ async function loadPokemonSources(){
   else{const sn=await get(ref(db,`pokemonWeb/${state.user.uid}/team`)).catch(()=>null);state.webTeam=sn?.exists()?sn.val():{};list=Object.values(state.webTeam||{})}
   state.teamDraft=(list||[]).map(normalizeMon).slice(0,6);renderTeam(state.teamDraft,source);renderCollection();renderHealingList();
 }
-function normalizeMon(m){return{uid:m.uid||String(m.id||m.dex||m.name),id:Number(m.dex||m.id||m.pokedexId||0),name:m.nome||m.name||'Pokémon',sprite:m.sprite||m.image||m.imagem||m.gif||m.front||'',types:m.types||m.tipos||[],level:Number(m.level||1),hp:Number(m.hpAtual??m.hp??m.maxHp??1),maxHp:Math.max(1,Number(m.maxHp??m.hpMax??m.hp??1)),fainted:Boolean(m.fainted)||Number(m.hpAtual??m.hp??1)<=0,moves:Array.isArray(m.moves)?m.moves:[]}}
+const POKEMON_TYPE_LABEL={normal:'Normal',fire:'Fogo',water:'Água',electric:'Elétrico',grass:'Planta',ice:'Gelo',fighting:'Lutador',poison:'Veneno',ground:'Terra',flying:'Voador',psychic:'Psíquico',bug:'Inseto',rock:'Pedra',ghost:'Fantasma',dragon:'Dragão',dark:'Sombrio',steel:'Aço',fairy:'Fada'};
+const POKEMON_TYPE_EMOJI={normal:'⚪',fire:'🔥',water:'💧',electric:'⚡',grass:'🌿',ice:'❄️',fighting:'🥊',poison:'☠️',ground:'🌍',flying:'🪽',psychic:'🔮',bug:'🐛',rock:'🪨',ghost:'👻',dragon:'🐉',dark:'🌑',steel:'⚙️',fairy:'✨'};
+function normalizeTypeValue(v){if(v&&typeof v==='object')v=v.name||v.type?.name||v.tipo||'';return String(v||'').trim().toLowerCase().replace('fogo','fire').replace('água','water').replace('agua','water').replace('elétrico','electric').replace('eletrico','electric').replace('planta','grass').replace('gelo','ice').replace('lutador','fighting').replace('veneno','poison').replace('terra','ground').replace('voador','flying').replace('psíquico','psychic').replace('psiquico','psychic').replace('inseto','bug').replace('pedra','rock').replace('fantasma','ghost').replace('dragão','dragon').replace('dragao','dragon').replace('sombrio','dark').replace('aço','steel').replace('aco','steel').replace('fada','fairy')}
+function monTypes(m={}){let raw=m.types??m.tipos??m.tipo??m.tipoTxt??m.type??[];if(!Array.isArray(raw))raw=String(raw||'').split(/[\/,|+]/);const extra=[m.tipo1,m.tipo2,m.type1,m.type2];return [...raw,...extra].map(normalizeTypeValue).filter((x,i,a)=>x&&a.indexOf(x)===i).slice(0,2)}
+function typeLabel(type){const t=normalizeTypeValue(type);return `${POKEMON_TYPE_EMOJI[t]||'⚪'} ${POKEMON_TYPE_LABEL[t]||t||'Normal'}`}
+function typeBadgesHtml(types=[]){return (types||[]).map(t=>`<span class="pokemon-type type-${escText(normalizeTypeValue(t))}">${escText(typeLabel(t))}</span>`).join('')}
+function normalizeMon(m){return{uid:m.uid||String(m.id||m.dex||m.name),id:Number(m.dex||m.id||m.pokedexId||0),name:m.nome||m.name||'Pokémon',sprite:m.sprite||m.image||m.imagem||m.gif||m.front||'',types:monTypes(m),level:Number(m.level||1),hp:Number(m.hpAtual??m.hp??m.maxHp??1),maxHp:Math.max(1,Number(m.maxHp??m.hpMax??m.hp??1)),fainted:Boolean(m.fainted)||Number(m.hpAtual??m.hp??1)<=0,moves:Array.isArray(m.moves)?m.moves:[]}}
 function hpPct(p){return Math.max(0,Math.min(100,(Number(p.hp||0)/Math.max(1,Number(p.maxHp||1)))*100))}
 function renderTeam(list,source='Charlotte'){
   const wrap=$('pokemonTeam');if(!wrap)return;wrap.innerHTML='';const normalized=(list||[]).map(normalizeMon).slice(0,6);$('teamSourceLabel').textContent=source;$('teamCount').textContent=`${normalized.length}/6`;
@@ -678,8 +696,15 @@ function setActiveDuel(duel){
 function duelTeam(player){if(Array.isArray(player?.team)&&player.team.length)return player.team.map(normalizeMon);return player?.pokemon?[normalizeMon(player.pokemon)]:[]}
 function duelCurrent(player){const team=duelTeam(player);return team.find(x=>String(x.uid)===String(player?.currentUid))||team[Math.max(0,Number(player?.activeIndex||0))]||team[0]||normalizeMon({})}
 function renderDuelTeamStrip(id,player){const box=$(id);if(!box)return;box.innerHTML='';const cur=duelCurrent(player);duelTeam(player).forEach(p=>{const d=document.createElement('div');d.className='duel-team-ball'+(String(p.uid)===String(cur.uid)?' active':'')+(p.fainted||p.hp<=0?' fainted':'');d.title=`${p.name} • ${Math.max(0,p.hp)}/${p.maxHp}`;const img=document.createElement('img');img.src=p.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`;img.alt='';d.appendChild(img);box.appendChild(d)})}
-function renderDuel(d){const me=d.players?.[state.user?.uid];const enemy=Object.values(d.players||{}).find(x=>x.uid!==state.user?.uid);if(!me||!enemy)return;const mp=duelCurrent(me),ep=duelCurrent(enemy);$('duelMyName').textContent=mp.name;$('duelMyOwner').textContent=me.name||'Você';$('duelMySprite').src=mp.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${mp.id}.png`;$('duelMyHp').textContent=`${Math.max(0,mp.hp)} / ${mp.maxHp}`;$('duelMyHpBar').style.width=`${hpPct(mp)}%`;$('duelEnemyName').textContent=ep.name;$('duelEnemyOwner').textContent=enemy.name||'Adversário';$('duelEnemySprite').src=ep.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${ep.id}.png`;$('duelEnemyHp').textContent=`${Math.max(0,ep.hp)} / ${ep.maxHp}`;$('duelEnemyHpBar').style.width=`${hpPct(ep)}%`;renderDuelTeamStrip('duelMyTeam',me);renderDuelTeamStrip('duelEnemyTeam',enemy);
-  const acts=$('duelMoveButtons');acts.innerHTML='';const moves=mp.moves.length?mp.moves:[{name:'Ataque rápido',power:40},{name:'Investida',power:45}];moves.slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn'+(i===0?' primary':'');b.textContent=m.nome||m.name||`Golpe ${i+1}`;b.disabled=d.status!=='active'||d.turnUid!==state.user?.uid||mp.fainted||mp.hp<=0;b.onclick=()=>duelJob('duel_move',{duelId:d.id,moveIndex:i});acts.appendChild(b)});
+function renderDuel(d){
+  const me=d.players?.[state.user?.uid];const enemy=Object.values(d.players||{}).find(x=>x.uid!==state.user?.uid);if(!me||!enemy)return;
+  const mp=duelCurrent(me),ep=duelCurrent(enemy);
+  $('duelMyName').textContent=mp.name;$('duelMyOwner').textContent=me.name||'Você';$('duelMySprite').src=mp.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${mp.id}.png`;$('duelMyHp').textContent=`${Math.max(0,mp.hp)} / ${mp.maxHp}`;$('duelMyHpBar').style.width=`${hpPct(mp)}%`;
+  $('duelEnemyName').textContent=ep.name;$('duelEnemyOwner').textContent=enemy.name||'Adversário';$('duelEnemySprite').src=ep.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${ep.id}.png`;$('duelEnemyHp').textContent=`${Math.max(0,ep.hp)} / ${ep.maxHp}`;$('duelEnemyHpBar').style.width=`${hpPct(ep)}%`;
+  if($('duelMyTypes'))$('duelMyTypes').innerHTML=typeBadgesHtml(mp.types);if($('duelEnemyTypes'))$('duelEnemyTypes').innerHTML=typeBadgesHtml(ep.types);
+  renderDuelTeamStrip('duelMyTeam',me);renderDuelTeamStrip('duelEnemyTeam',enemy);
+  const acts=$('duelMoveButtons');acts.innerHTML='';const moves=mp.moves.length?mp.moves:[{name:'Ataque rápido',power:40,type:'normal'},{name:'Investida',power:45,type:'normal'}];
+  moves.slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn duel-move-btn'+(i===0?' primary':'');const mt=normalizeTypeValue(m.type||m.tipo||'normal');b.innerHTML=`<b>${escText(m.nome||m.name||`Golpe ${i+1}`)}</b><small>${escText(typeLabel(mt))} • Poder ${Number(m.power||m.poder||0)}</small>`;b.disabled=d.status!=='active'||d.turnUid!==state.user?.uid||mp.fainted||mp.hp<=0;b.onclick=()=>duelJob('duel_move',{duelId:d.id,moveIndex:i});acts.appendChild(b)});
   const sw=$('duelSwitcher');sw.innerHTML='';duelTeam(me).filter(x=>x.hp>0&&!x.fainted&&String(x.uid)!==String(mp.uid)).forEach(p=>{const b=document.createElement('button');b.className='mini-btn';b.textContent=`${p.name} • ${p.hp}/${p.maxHp}`;b.disabled=d.turnUid!==state.user?.uid;b.onclick=()=>duelJob('duel_switch',{duelId:d.id,monUid:p.uid});sw.appendChild(b)});$('duelSwitchBtn').disabled=d.turnUid!==state.user?.uid||!sw.children.length;
   const log=$('duelLog');const rows=Object.values(d.log||{});log.innerHTML=rows.length?rows.slice(-12).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join(''):'<div>A batalha 6x6 começou.</div>';
 }
@@ -843,14 +868,36 @@ function renderWildEncounter(){
   const encounterSoundId=String(e.id||`${wild.uid||wild.id}:${e.createdAt||''}`);
   if(encounterSoundId&&state.pokemonAudio.encounterId!==encounterSoundId){state.pokemonAudio.encounterId=encounterSoundId;playPokemonSound('encounter')}
   $('wildStatusPill').textContent='Batalha';box.innerHTML='';
-  const stage=document.createElement('div');stage.className='wild-battle-stage';stage.innerHTML=`<div class="wild-mon"><img src="${escText(wild.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${wild.id}.png`)}" alt=""><strong>${escText(wild.name)}</strong><small>Lv.${wild.level} • HP ${Math.max(0,wild.hp)}/${wild.maxHp}</small></div><div class="wild-vs">VS</div><div class="wild-mon mine"><img src="${escText(mine.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${mine.id}.png`)}" alt=""><strong>${escText(mine.name||'Sua equipe')}</strong><small>${mine.uid?`HP ${Math.max(0,mine.hp)}/${mine.maxHp}`:'Escolha uma equipe saudável'}</small></div>`;
+  const stage=document.createElement('div');stage.className='wild-battle-stage';stage.innerHTML=`<div class="wild-mon"><img src="${escText(wild.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${wild.id}.png`)}" alt=""><strong>${escText(wild.name)}</strong><div class="pokemon-type-row">${typeBadgesHtml(wild.types)}</div><small>Lv.${wild.level} • HP ${Math.max(0,wild.hp)}/${wild.maxHp}</small></div><div class="wild-vs">VS</div><div class="wild-mon mine"><img src="${escText(mine.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${mine.id}.png`)}" alt=""><strong>${escText(mine.name||'Sua equipe')}</strong><div class="pokemon-type-row">${typeBadgesHtml(mine.types)}</div><small>${mine.uid?`HP ${Math.max(0,mine.hp)}/${mine.maxHp}`:'Escolha uma equipe saudável'}</small></div>`;
   const acts=document.createElement('div');acts.className='wild-actions';
-  if(mine.uid){(mine.moves.length?mine.moves:[{name:'Ataque rápido'},{name:'Investida'}]).slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn';b.textContent=m.nome||m.name||`Golpe ${i+1}`;b.onclick=async()=>{try{await bridgeRequest('pokemon_wild_move',{moveIndex:i},30000);playPokemonSound('hit')}catch(er){toast(er.message)}};acts.appendChild(b)})}
+  if(mine.uid){(mine.moves.length?mine.moves:[{name:'Ataque rápido'},{name:'Investida'}]).slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn';b.textContent=`${m.nome||m.name||`Golpe ${i+1}`} • ${typeLabel(m.type||m.tipo||'normal')}`;b.onclick=async()=>{try{await bridgeRequest('pokemon_wild_move',{moveIndex:i},30000);playPokemonSound('hit')}catch(er){toast(er.message)}};acts.appendChild(b)})}
   ['pokebola','greatball','ultraball'].forEach(ball=>{const b=document.createElement('button');b.className=ball==='ultraball'?'btn primary':'btn';b.textContent=ball==='pokebola'?'Pokébola':ball==='greatball'?'Great Ball':'Ultra Ball';b.onclick=async()=>{try{playPokemonSound('ball');const r=await bridgeRequest('pokemon_capture',{ball},30000);toast(r.captured?'Pokémon capturado!':`Escapou! Chance ${r.chance||'?'}%.`);if(r.captured){playPokemonSound('capture');await requestAccountSync().catch(()=>{})}}catch(er){toast(er.message)}};acts.appendChild(b)});
   const flee=document.createElement('button');flee.className='btn danger-ghost';flee.type='button';flee.textContent='Fugir';flee.onclick=async()=>{try{await bridgeRequest('pokemon_wild_exit',{},20000);toast('Você saiu da batalha.')}catch(er){toast(er.message)}};acts.appendChild(flee);
   box.append(stage,acts);
 }
 
+
+
+function raidTimeLeft(raid){const ms=Math.max(0,Number(raid?.expiresAt||0)-Date.now());const min=Math.floor(ms/60000),sec=Math.floor((ms%60000)/1000);return `${min}:${String(sec).padStart(2,'0')}`}
+function renderSiteRaid(){
+  const box=$('siteRaidStage');if(!box)return;const raid=state.siteRaid,cfg=state.siteRaidConfig||{};
+  if($('siteRaidAutoToggle'))$('siteRaidAutoToggle').checked=Boolean(cfg.auto);
+  if($('raidWhatsappNotify'))$('raidWhatsappNotify').checked=Boolean(state.profile?.raidWhatsappNotify);
+  if($('siteRaidAdmin'))$('siteRaidAdmin').hidden=!isSiteAdmin();
+  if(!raid||raid.status!=='active'||Number(raid.expiresAt||0)<=Date.now()){$('siteRaidStatus').textContent='Aguardando';box.innerHTML='<div class="empty-state small">Nenhuma raid ativa. O modo automático pode iniciar uma nova raid a cada hora.</div>';return}
+  $('siteRaidStatus').textContent=`Tier ${raid.tier||1}`;
+  const boss=normalizeMon(raid.boss||{}),max=Math.max(1,Number(raid.maxHp||boss.maxHp||1)),hp=Math.max(0,Number(raid.hp||0)),pct=Math.max(0,Math.min(100,hp/max*100));const mine=raid.participants?.[state.user?.uid]||{};
+  box.innerHTML=`<div class="site-raid-boss"><img src="${escText(boss.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${boss.id}.png`)}" alt=""><div class="site-raid-copy"><strong>${escText(boss.name)}</strong><div class="pokemon-type-row">${typeBadgesHtml(boss.types)}</div><small>Lv.${boss.level} • termina em ${raidTimeLeft(raid)}</small><div class="hpbar raid-hp"><i style="width:${pct}%"></i></div><b>${formatNumber(hp)} / ${formatNumber(max)} HP</b><small>Seu dano: ${formatNumber(mine.damage||0)} • ${Object.keys(raid.participants||{}).length} participante(s)</small></div></div>`;
+  const acts=document.createElement('div');acts.className='site-raid-actions';const team=(state.charlotteSync?.pokemon?.team||[]).map(normalizeMon),active=team.find(x=>x.hp>0&&!x.fainted)||team[0];const moves=active?.moves?.length?active.moves:[{name:'Ataque rápido',power:40,type:'normal'}];
+  if(!linkedCharlotte()){const b=document.createElement('button');b.className='btn primary';b.textContent='Vincular Charlotte para atacar';b.onclick=()=>navigate('charlotte');acts.appendChild(b)}else moves.slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn'+(i===0?' primary':'');b.innerHTML=`<b>${escText(m.nome||m.name||`Golpe ${i+1}`)}</b><small>${escText(typeLabel(m.type||m.tipo||'normal'))} • ${Number(m.power||m.poder||0)}</small>`;b.onclick=async()=>{try{b.disabled=true;const r=await bridgeRequest('site_raid_attack',{moveIndex:i},30000);if(r?.damage)toast(`Ataque: ${r.damage} de dano${r.effectText?' • '+r.effectText:''}`)}catch(e){toast(e.message)}finally{setTimeout(()=>b.disabled=false,1200)}};acts.appendChild(b)});
+  box.appendChild(acts);
+}
+$('siteRaidStartBtn')?.addEventListener('click',async()=>{try{await bridgeRequest('site_raid_start',{},30000,false);toast('Raid iniciada.')}catch(e){toast(e.message)}});
+$('siteRaidAutoToggle')?.addEventListener('change',async e=>{try{await bridgeRequest('site_raid_auto',{enabled:e.target.checked},20000,false);toast(e.target.checked?'Raids automáticas ativadas.':'Raids automáticas desativadas.')}catch(err){e.target.checked=!e.target.checked;toast(err.message)}});
+async function saveRaidNotifyPreference(enabled){if(!state.user)return;const payload={...(state.profile||{}),uid:state.user.uid,email:state.user.email||state.profile?.email||'',raidWhatsappNotify:Boolean(enabled),updatedAt:nowIso()};await set(ref(db,`profiles/${state.user.uid}`),payload);state.profile=payload;renderAccount()}
+$('raidWhatsappNotify')?.addEventListener('change',e=>saveRaidNotifyPreference(e.target.checked).then(()=>toast('Preferência de raid salva.')).catch(err=>toast(permissionMessage(err))));
+$('profileRaidWhatsapp')?.addEventListener('change',e=>{if($('raidWhatsappNotify'))$('raidWhatsappNotify').checked=e.target.checked});
+setInterval(()=>{if(state.siteRaid?.status==='active')renderSiteRaid()},1000);
 
 // Perfis públicos
 let currentPublicProfile=null;
@@ -1859,5 +1906,21 @@ $('shareScreenBtn')?.addEventListener('click',toggleScreen);
 $('leaveVoiceBtn')?.addEventListener('click',()=>leaveVoice(false));
 window.addEventListener('beforeunload',()=>{if(state.rtc.joined&&state.user&&state.roomCode)remove(ref(db,`rpgVoice/${state.roomCode}/${state.user.uid}`)).catch(()=>{});if(state.watchRtc.joined&&state.user&&state.watchCode)remove(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`)).catch(()=>{})});
 voiceUi();
+
+
+let pdfLibPromise=null,pdfJsPromise=null,designBgImage=null;
+async function getPdfLib(){if(!pdfLibPromise)pdfLibPromise=import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm');return pdfLibPromise}
+async function getPdfJs(){if(!pdfJsPromise)pdfJsPromise=import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs').then(m=>{m.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';return m});return pdfJsPromise}
+function downloadBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1200)}
+async function fileBytes(file){return new Uint8Array(await file.arrayBuffer())}
+$('pdfMergeBtn')?.addEventListener('click',async()=>{const files=[...($('pdfMergeFiles')?.files||[])];if(files.length<2)return toast('Escolha pelo menos 2 PDFs.');try{const{PDFDocument}=await getPdfLib(),out=await PDFDocument.create();for(const f of files){const src=await PDFDocument.load(await fileBytes(f));const pages=await out.copyPages(src,src.getPageIndices());pages.forEach(pg=>out.addPage(pg))}downloadBlob(new Blob([await out.save()],{type:'application/pdf'}),'gremory-juntado.pdf');toast('PDF criado.')}catch(e){toast('Não consegui juntar: '+e.message)}});
+$('imagesToPdfBtn')?.addEventListener('click',async()=>{const files=[...($('imagesToPdfFiles')?.files||[])];if(!files.length)return toast('Escolha imagens.');try{const{PDFDocument}=await getPdfLib(),doc=await PDFDocument.create();for(const f of files){const bytes=await fileBytes(f),img=f.type==='image/png'?await doc.embedPng(bytes):await doc.embedJpg(bytes),page=doc.addPage([img.width,img.height]);page.drawImage(img,{x:0,y:0,width:img.width,height:img.height})}downloadBlob(new Blob([await doc.save()],{type:'application/pdf'}),'gremory-imagens.pdf');toast('PDF criado.')}catch(e){toast('Não consegui criar o PDF: '+e.message)}});
+$('pdfEditBtn')?.addEventListener('click',async()=>{const f=$('pdfEditFile')?.files?.[0];if(!f)return toast('Escolha um PDF.');try{const{PDFDocument,StandardFonts,rgb,degrees}=await getPdfLib(),doc=await PDFDocument.load(await fileBytes(f)),remove=String($('pdfRemovePages')?.value||'').split(',').map(x=>Number(x.trim())-1).filter(x=>Number.isInteger(x)&&x>=0&&x<doc.getPageCount()).sort((a,b)=>b-a);[...new Set(remove)].forEach(i=>doc.removePage(i));const txt=String($('pdfEditText')?.value||'').trim();if(txt){const font=await doc.embedFont(StandardFonts.HelveticaBold);for(const page of doc.getPages()){const{width,height}=page.getSize();page.drawText(txt,{x:Math.max(20,width*.08),y:height*.52,size:Math.max(18,Math.min(54,width/16)),font,color:rgb(.72,.72,.72),opacity:.24,rotate:degrees(-28)})}}downloadBlob(new Blob([await doc.save()],{type:'application/pdf'}),'gremory-editado.pdf');toast('PDF editado.')}catch(e){toast('Não consegui editar: '+e.message)}});
+$('pdfToImageBtn')?.addEventListener('click',async()=>{const f=$('pdfToImageFile')?.files?.[0],box=$('pdfImageResults');if(!f)return toast('Escolha um PDF.');try{box.innerHTML='<small>Convertendo...</small>';const pdfjs=await getPdfJs(),pdf=await pdfjs.getDocument({data:await fileBytes(f)}).promise;box.innerHTML='';for(let n=1;n<=pdf.numPages;n++){const page=await pdf.getPage(n),vp=page.getViewport({scale:1.8}),c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;const a=document.createElement('a');a.className='btn';a.textContent=`Baixar página ${n}`;a.download=`gremory-pagina-${n}.png`;a.href=c.toDataURL('image/png');box.appendChild(a)}toast(`${pdf.numPages} página(s) convertida(s).`)}catch(e){box.innerHTML='';toast('Não consegui converter: '+e.message)}});
+$('pdfToTextBtn')?.addEventListener('click',async()=>{const f=$('pdfToImageFile')?.files?.[0];if(!f)return toast('Escolha um PDF.');try{const pdfjs=await getPdfJs(),pdf=await pdfjs.getDocument({data:await fileBytes(f)}).promise;const pages=[];for(let n=1;n<=pdf.numPages;n++){const page=await pdf.getPage(n),content=await page.getTextContent();pages.push(`--- Página ${n} ---\n`+content.items.map(x=>x.str).join(' '))}downloadBlob(new Blob([pages.join('\n\n')],{type:'text/plain;charset=utf-8'}),'gremory-pdf.txt');toast('Texto extraído do PDF.')}catch(e){toast('Não consegui extrair o texto: '+e.message)}});
+$('openBotPdfBtn')?.addEventListener('click',()=>wa('/pdf'));
+function renderDesignCanvas(){const c=$('designCanvas');if(!c)return;const preset=String($('canvasPreset')?.value||'1080x1080').split('x').map(Number);if(preset.length===2&&preset.every(Number.isFinite)&&((c.width!==preset[0])||(c.height!==preset[1]))){c.width=preset[0];c.height=preset[1]}const ctx=c.getContext('2d');ctx.fillStyle=$('canvasBgColor')?.value||'#17121f';ctx.fillRect(0,0,c.width,c.height);if(designBgImage){const scale=Math.max(c.width/designBgImage.width,c.height/designBgImage.height),w=designBgImage.width*scale,h=designBgImage.height*scale;ctx.drawImage(designBgImage,(c.width-w)/2,(c.height-h)/2,w,h);ctx.fillStyle='rgba(0,0,0,.2)';ctx.fillRect(0,0,c.width,c.height)}const txt=String($('canvasText')?.value||'Gremory'),size=Math.max(20,Math.min(240,Number($('canvasFontSize')?.value||82)));ctx.fillStyle=$('canvasTextColor')?.value||'#fff';ctx.font=`700 ${size}px system-ui, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';const lines=txt.match(/.{1,28}(?:\s|$)/g)||[txt];const lh=size*1.16,base=c.height/2-(lines.length-1)*lh/2;lines.forEach((line,i)=>ctx.fillText(line.trim(),c.width/2,base+i*lh,c.width*.88))}
+$('canvasPreset')?.addEventListener('change',renderDesignCanvas);$('canvasRenderBtn')?.addEventListener('click',renderDesignCanvas);['canvasText','canvasFontSize','canvasTextColor','canvasBgColor'].forEach(id=>$(id)?.addEventListener('input',renderDesignCanvas));$('canvasImageFile')?.addEventListener('change',e=>{const f=e.target.files?.[0];if(!f){designBgImage=null;return renderDesignCanvas()}const img=new Image();img.onload=()=>{designBgImage=img;renderDesignCanvas();URL.revokeObjectURL(img.src)};img.src=URL.createObjectURL(f)});$('canvasExportBtn')?.addEventListener('click',()=>{renderDesignCanvas();$('designCanvas')?.toBlob(blob=>blob&&downloadBlob(blob,'gremory-arte.png'),'image/png')});
+renderDesignCanvas();
 
 const initialRoute=(location.hash||'#home').slice(1);navigate(routeMeta[initialRoute]?initialRoute:'home');

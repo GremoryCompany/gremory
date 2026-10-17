@@ -436,3 +436,60 @@ body.fx-badge-demon #profileNameView::after,body.fx-badge-demon #sideName::after
 .rpg-system-panel{border:1px solid #282e38;border-radius:15px;background:linear-gradient(150deg,#11151c,#0a0d12);padding:12px;margin:12px 0}.rpg-system-panel .panel-head{margin-bottom:5px}.rpg-system-panel p{font-size:11px;line-height:1.5;margin:4px 0 10px}.rpg-system-actions{display:flex;gap:7px;flex-wrap:wrap}.rpg-stat-roll{min-width:48px}.character-system-fields{border-top:1px solid #292f38;padding-top:14px}.character-system-title{display:flex;justify-content:space-between;gap:12px;align-items:end;margin-bottom:9px}.character-system-title small{color:var(--muted);font-size:10px}.character-stat-grid{display:grid;grid-template-columns:repeat(6,minmax(70px,1fr));gap:8px}.character-stat-grid.extras{margin-top:8px;grid-template-columns:repeat(3,minmax(100px,1fr))}.character-stat-grid label{font-size:10px}.character-stat-grid input{margin-top:4px}
 @media(max-width:900px){.tinder-layout-v10{grid-template-columns:1fr}.character-stat-grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:520px){.character-stat-grid,.character-stat-grid.extras{grid-template-columns:repeat(2,1fr)}.rpg-system-actions{display:grid;grid-template-columns:repeat(3,1fr)}.rpg-system-actions .mini-btn{width:100%}.tinder-profile-editor,.tinder-site-panel{border-radius:16px}}
+
+/* =========================================================
+   V11 — Mobile UX + Pokémon types/raid + Studio
+   ========================================================= */
+.pokemon-type-row{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:5px}
+.pokemon-type{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border:1px solid rgba(255,255,255,.12);border-radius:999px;background:rgba(255,255,255,.055);font-size:10px;font-weight:750;line-height:1.1;white-space:nowrap}
+.duel-move-btn{min-height:54px;display:flex!important;flex-direction:column;justify-content:center;align-items:flex-start;gap:2px;text-align:left}
+.duel-move-btn small{opacity:.72;font-size:10px;font-weight:600}
+
+.site-raid-panel{overflow:hidden}
+.site-raid-stage{display:grid;gap:12px;margin-top:10px}
+.site-raid-boss{display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:18px;align-items:center;padding:16px;border-radius:18px;background:linear-gradient(135deg,rgba(185,46,78,.13),rgba(70,50,110,.12));border:1px solid rgba(255,255,255,.08)}
+.site-raid-boss>img{width:100%;max-height:170px;object-fit:contain;image-rendering:auto;filter:drop-shadow(0 14px 25px rgba(0,0,0,.3))}
+.site-raid-copy{display:grid;gap:7px}.site-raid-copy>strong{font-size:23px}.site-raid-copy>b{font-size:13px}.site-raid-copy>small{color:var(--muted)}
+.site-raid-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.site-raid-actions .btn{min-height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}.site-raid-actions small{font-size:9px;opacity:.72}
+.site-raid-prefs{display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap;padding-top:10px}.site-raid-admin{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.raid-hp{height:12px;margin:2px 0}.raid-hp i{transition:width .25s ease}
+
+.studio-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.studio-card{display:grid;align-content:start;gap:12px}.studio-card input[type=file]{width:100%;padding:11px;border:1px dashed rgba(255,255,255,.16);border-radius:12px;background:rgba(255,255,255,.025)}
+.studio-card label{display:grid;gap:6px;font-size:11px;color:var(--muted)}
+.canvas-studio-card{grid-column:1/-1}.canvas-tools{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 2fr;gap:10px;align-items:end}
+.canvas-preview-wrap{width:100%;max-height:520px;overflow:auto;display:grid;place-items:center;border-radius:16px;background:#09090c;padding:12px;border:1px solid rgba(255,255,255,.08)}
+#designCanvas{display:block;max-width:100%;max-height:480px;width:auto;height:auto;box-shadow:0 10px 40px rgba(0,0,0,.32)}
+.studio-downloads{display:flex;gap:8px;flex-wrap:wrap}.studio-downloads .btn{font-size:10px}
+
+.mobile-more-sheet{display:none}
+
+@media(max-width:1100px){
+  .canvas-tools{grid-template-columns:repeat(2,minmax(0,1fr))}.canvas-tools label:last-child{grid-column:1/-1}
+  .site-raid-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+@media(max-width:820px){
+  body{padding-bottom:calc(70px + env(safe-area-inset-bottom))}
+  .content{padding:12px 12px 24px!important}
+  .topbar{padding:10px 12px!important;min-height:62px}.topbar h1{font-size:19px}.eyebrow{font-size:9px}.top-actions{gap:6px}.top-pill{padding:7px 8px}.top-pill b{display:none}
+  .section-head{align-items:flex-start;gap:10px;margin-bottom:12px}.section-head h2{font-size:24px}.section-actions{width:100%;display:grid!important;grid-template-columns:1fr 1fr;gap:7px}.section-actions .btn{width:100%}
+  .panel{border-radius:16px!important;padding:13px!important}.panel-head{gap:8px;align-items:flex-start}.panel-head h3{font-size:16px}
+  .pokemon-top-grid,.friends-layout,.games-grid,.admin-grid,.tinder-layout-v10,.watch-layout,.watch-layout-v2,.rpg-layout,.studio-grid{grid-template-columns:1fr!important}
+  .site-raid-boss{grid-template-columns:110px 1fr;gap:11px;padding:12px}.site-raid-copy>strong{font-size:18px}.site-raid-boss>img{max-height:125px}
+  .site-raid-prefs{align-items:flex-start;flex-direction:column}.site-raid-admin{width:100%;display:grid;grid-template-columns:1fr}.site-raid-admin .btn{width:100%}
+  .duel-arena-v5{gap:10px}.duel-player{min-width:0}.duel-player img{max-width:135px;max-height:135px}.duel-actions{grid-template-columns:repeat(2,minmax(0,1fr))!important}.duel-move-btn{padding:9px!important}
+  .wild-battle-stage{gap:8px}.wild-mon img{max-width:125px!important;max-height:125px!important}.wild-actions{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .collection-grid{grid-template-columns:1fr!important}.collection-mon{min-width:0}
+  .canvas-studio-card{grid-column:auto}.canvas-tools{grid-template-columns:1fr 1fr}.canvas-preview-wrap{padding:7px;max-height:65vh}#designCanvas{max-height:60vh}
+
+  .mobile-nav.mobile-nav-v5{display:grid!important;grid-template-columns:repeat(5,1fr)!important;overflow:visible!important;gap:0!important;padding:5px 7px calc(5px + env(safe-area-inset-bottom))!important;height:auto!important;min-height:64px!important;background:rgba(10,9,14,.96)!important;backdrop-filter:blur(18px);border-top:1px solid rgba(255,255,255,.08)}
+  .mobile-nav.mobile-nav-v5 button{min-width:0!important;width:auto!important;padding:6px 2px!important;gap:2px!important;border-radius:12px!important}.mobile-nav.mobile-nav-v5 button span{font-size:19px!important}.mobile-nav.mobile-nav-v5 button small{font-size:9px!important;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+
+  .mobile-more-sheet{display:block;position:fixed;inset:0;z-index:2500;pointer-events:none;visibility:hidden}.mobile-more-sheet.open{pointer-events:auto;visibility:visible}.mobile-more-backdrop{position:absolute;inset:0;border:0;background:rgba(0,0,0,.58);opacity:0;transition:.18s}.mobile-more-sheet.open .mobile-more-backdrop{opacity:1}.mobile-more-card{position:absolute;left:8px;right:8px;bottom:calc(68px + env(safe-area-inset-bottom));max-height:min(72vh,620px);overflow:auto;padding:15px;border-radius:22px;background:#141119;border:1px solid rgba(255,255,255,.1);box-shadow:0 -20px 60px rgba(0,0,0,.5);transform:translateY(22px);opacity:0;transition:.18s}.mobile-more-sheet.open .mobile-more-card{transform:translateY(0);opacity:1}.mobile-more-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.mobile-more-head h3{margin:2px 0 0}.mobile-more-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.mobile-more-grid button{display:grid;place-items:center;gap:7px;min-height:82px;border-radius:15px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035);color:inherit}.mobile-more-grid button span{font-size:22px}.mobile-more-grid button b{font-size:10px;font-weight:700}.mobile-more-grid button:active{transform:scale(.97);background:rgba(255,255,255,.08)}
+}
+
+@media(max-width:460px){
+  .content{padding-left:9px!important;padding-right:9px!important}.panel{padding:11px!important;border-radius:14px!important}.section-head h2{font-size:21px}.section-actions{grid-template-columns:1fr}.site-raid-boss{grid-template-columns:92px 1fr}.site-raid-actions,.duel-actions,.wild-actions{grid-template-columns:1fr 1fr!important}.canvas-tools{grid-template-columns:1fr}.canvas-tools label:last-child{grid-column:auto}.mobile-more-grid{grid-template-columns:repeat(3,1fr)}.mobile-more-grid button{min-height:75px}.mobile-more-card{left:5px;right:5px;padding:12px}
+}
