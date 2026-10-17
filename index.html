@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261017-v11-1">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261017-v11-3">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -70,21 +70,43 @@
       </button>
 
       <nav class="side-nav">
-        <button class="nav-item active" data-route="home"><span>⌂</span><b>Início</b></button>
-        <button class="nav-item" data-route="charlotte"><span>✦</span><b>Charlotte</b></button>
-        <button class="nav-item" data-route="pokemon"><span>◉</span><b>Pokémon</b></button>
-        <button class="nav-item" data-route="friends"><span>◇</span><b>Amigos</b></button>
-        <button class="nav-item" data-route="tinder"><span>♥</span><b>Tinder</b></button>
-        <button class="nav-item" data-route="updates"><span>◌</span><b>Atualizações</b></button>
-        <button class="nav-item" data-route="downloads"><span>↓</span><b>Downloads</b></button>
-        <button class="nav-item" data-route="studio"><span>▤</span><b>PDF & Canvas</b></button>
-        <button class="nav-item" data-route="games"><span>✕</span><b>Jogos</b></button>
-        <button class="nav-item" data-route="watch"><span>▶</span><b>Watch Party</b></button>
-        <button class="nav-item" data-route="rpg"><span>⚄</span><b>RPG</b></button>
-        <button class="nav-item" data-route="premium"><span>♛</span><b>Premium</b></button>
-        <button class="nav-item" data-route="personalize"><span>✧</span><b>Personalizar</b></button>
-        <button class="nav-item" data-route="support"><span>?</span><b>Suporte</b></button>
-        <button class="nav-item" data-route="admin" id="adminNavBtn" hidden><span>⚙</span><b>Administração</b></button>
+        <div class="nav-section">
+          <span class="nav-section-label">Principal</span>
+          <button class="nav-item active" data-route="home"><span>⌂</span><b>Início</b></button>
+          <button class="nav-item" data-route="charlotte"><span>✦</span><b>Charlotte</b></button>
+        </div>
+
+        <div class="nav-section nav-section-featured">
+          <span class="nav-section-label">Conta</span>
+          <button class="nav-item nav-premium" data-route="premium"><span>♛</span><b>Premium</b></button>
+          <button class="nav-item" data-route="personalize"><span>✧</span><b>Personalizar</b></button>
+        </div>
+
+        <div class="nav-section">
+          <span class="nav-section-label">Social</span>
+          <button class="nav-item" data-route="friends"><span>◇</span><b>Amigos</b></button>
+          <button class="nav-item" data-route="tinder"><span>♥</span><b>Tinder</b></button>
+        </div>
+
+        <div class="nav-section">
+          <span class="nav-section-label">Entretenimento</span>
+          <button class="nav-item" data-route="pokemon"><span>◉</span><b>Pokémon</b></button>
+          <button class="nav-item" data-route="watch"><span>▶</span><b>Watch Party</b></button>
+          <button class="nav-item" data-route="games"><span>✕</span><b>Jogos</b></button>
+          <button class="nav-item" data-route="rpg"><span>⚄</span><b>RPG</b></button>
+        </div>
+
+        <div class="nav-section">
+          <span class="nav-section-label">Ferramentas</span>
+          <button class="nav-item" data-route="studio"><span>▤</span><b>PDF & Canvas</b></button>
+          <button class="nav-item" data-route="downloads"><span>↓</span><b>Downloads</b></button>
+          <button class="nav-item" data-route="updates"><span>◌</span><b>Atualizações</b></button>
+          <button class="nav-item" data-route="support"><span>?</span><b>Suporte</b></button>
+        </div>
+
+        <div class="nav-section nav-admin-section">
+          <button class="nav-item" data-route="admin" id="adminNavBtn" hidden><span>⚙</span><b>Administração</b></button>
+        </div>
       </nav>
 
       <button class="account-mini" id="sideAccountBtn" type="button" aria-label="Abrir perfil">
@@ -128,16 +150,17 @@
 
           <div class="home-cards">
             <button class="home-card" data-route="charlotte"><span class="home-card-icon">✦</span><div><strong>Charlotte</strong><small id="homeCharlotteText">Não vinculada</small></div><b>›</b></button>
+            <button class="home-card home-card-premium" data-route="premium"><span class="home-card-icon">♛</span><div><strong>Premium</strong><small>Planos e benefícios</small></div><b>›</b></button>
+            <button class="home-card" data-route="personalize"><span class="home-card-icon">✧</span><div><strong>Personalizar</strong><small>Estilos e efeitos de perfil</small></div><b>›</b></button>
             <button class="home-card" data-route="pokemon"><span class="home-card-icon">◉</span><div><strong>Pokémon</strong><small id="homePokemonText">Abrir centro</small></div><b>›</b></button>
             <button class="home-card" data-route="friends"><span class="home-card-icon">◇</span><div><strong>Amigos</strong><small id="homeFriendsText">Ver pessoas</small></div><b>›</b></button>
-            <button class="home-card" data-route="tinder"><span class="home-card-icon">♥</span><div><strong>Tinder</strong><small>Perfis sincronizados com a Charlotte</small></div><b>›</b></button>
-            <button class="home-card" data-route="updates"><span class="home-card-icon">◌</span><div><strong>Atualizações</strong><small>Novidades do projeto</small></div><b>›</b></button>
-            <button class="home-card" data-route="studio"><span class="home-card-icon">▤</span><div><strong>PDF & Canvas</strong><small>Documentos e criação visual</small></div><b>›</b></button>
-            <button class="home-card" data-route="games"><span class="home-card-icon">✕</span><div><strong>Jogos</strong><small>Jogo da velha com amigos</small></div><b>›</b></button>
+            <button class="home-card" data-route="tinder"><span class="home-card-icon">♥</span><div><strong>Tinder</strong><small>Descobrir perfis</small></div><b>›</b></button>
             <button class="home-card" data-route="watch"><span class="home-card-icon">▶</span><div><strong>Watch Party</strong><small id="homeWatchRecent">Assistir e conversar</small></div><b>›</b></button>
+            <button class="home-card" data-route="games"><span class="home-card-icon">✕</span><div><strong>Jogos</strong><small>Partidas com amigos</small></div><b>›</b></button>
             <button class="home-card" data-route="rpg"><span class="home-card-icon">⚄</span><div><strong>RPG</strong><small id="homeRpgRecent">Suas mesas</small></div><b>›</b></button>
-            <button class="home-card" data-route="personalize"><span class="home-card-icon">✧</span><div><strong>Personalizar</strong><small>Use suas rúpias</small></div><b>›</b></button>
-            <button class="home-card" data-route="support"><span class="home-card-icon">?</span><div><strong>Suporte</strong><small>Grupo e comunidade</small></div><b>›</b></button>
+            <button class="home-card" data-route="studio"><span class="home-card-icon">▤</span><div><strong>PDF & Canvas</strong><small>Documentos e criação visual</small></div><b>›</b></button>
+            <button class="home-card" data-route="downloads"><span class="home-card-icon">↓</span><div><strong>Downloads</strong><small>Mídias e arquivos</small></div><b>›</b></button>
+            <button class="home-card" data-route="updates"><span class="home-card-icon">◌</span><div><strong>Atualizações</strong><small>Novidades da Gremory</small></div><b>›</b></button>
           </div>
 
           <div class="home-dashboard">
@@ -177,20 +200,42 @@
 
             <article class="panel command-launcher">
               <div class="panel-head"><div><span class="tag">CHARLOTTE</span><h3>Ações no site</h3></div><span class="pill">dados do bot</span></div>
-              <div class="command-grid">
-                <button data-site-action="profile">Perfil</button>
-                <button data-site-action="daily">Daily</button>
-                <button data-site-action="achievements">Conquistas</button>
-                <button data-route="pokemon">Pokémon</button>
-                <button data-site-action="team">Meus Pokémon</button>
-                <button data-site-action="collection">PC Pokémon</button>
-                <button data-route="premium">Premium</button>
-                <button data-site-action="vip">Meu VIP</button>
-                <button data-route="premium">Loja Premium</button>
-                <button data-route="personalize">Loja de rúpias</button>
-                <button data-bot-command="/pdf">PDF no bot</button>
-                <button data-bot-command="/tinder">Tinder no bot</button>
-                <button data-bot-command="/sorteios">Sorteios no bot</button>
+              <div class="command-groups">
+                <section class="command-group command-group-account">
+                  <span class="command-group-title">Conta</span>
+                  <div class="command-grid">
+                    <button data-site-action="profile">Perfil</button>
+                    <button data-site-action="daily">Daily</button>
+                    <button data-site-action="achievements">Conquistas</button>
+                  </div>
+                </section>
+
+                <section class="command-group command-group-premium">
+                  <span class="command-group-title">Premium</span>
+                  <div class="command-grid">
+                    <button data-route="premium">Planos Premium</button>
+                    <button data-site-action="vip">Meu VIP</button>
+                    <button data-route="personalize">Personalizações</button>
+                  </div>
+                </section>
+
+                <section class="command-group">
+                  <span class="command-group-title">Pokémon</span>
+                  <div class="command-grid">
+                    <button data-route="pokemon">Centro Pokémon</button>
+                    <button data-site-action="team">Minha equipe</button>
+                    <button data-site-action="collection">PC Pokémon</button>
+                  </div>
+                </section>
+
+                <section class="command-group">
+                  <span class="command-group-title">Ferramentas</span>
+                  <div class="command-grid">
+                    <button data-route="studio">PDF & Canvas</button>
+                    <button data-bot-command="/tinder">Tinder no bot</button>
+                    <button data-bot-command="/sorteios">Sorteios no bot</button>
+                  </div>
+                </section>
               </div>
               <div class="site-command-result" id="siteCommandResult">
                 <div class="empty-state small">Escolha uma ação acima.</div>
@@ -401,68 +446,80 @@
             <button class="btn" id="openBotPdfBtn" type="button">Abrir PDF Studio</button>
           </article>
 
-          <div class="studio-section-label canvas-section-label"><span>CRIAÇÃO</span><h3>Canvas</h3></div>
-          <article class="panel canvas-pro" id="canvasStudio">
-            <header class="canvas-pro-head">
-              <div><span class="tag">CANVAS</span><h3>Editor de arte</h3></div>
+          <div class="studio-section-label canvas-section-label"><span>CRIAÇÃO</span><h3>Design Studio</h3></div>
+          <article class="panel canvas-pro design-studio" id="canvasStudio">
+            <header class="canvas-pro-head design-studio-head">
+              <div><span class="tag">EDITOR</span><h3>Apresentações e artes</h3></div>
               <div class="canvas-head-actions">
-                <label class="canvas-preset-label">Formato
-                  <select id="canvasPreset">
-                    <option value="1080x1080">Post 1:1 · 1080×1080</option>
-                    <option value="1080x1350">Feed 4:5 · 1080×1350</option>
-                    <option value="1080x1920">Story · 1080×1920</option>
-                    <option value="1920x1080">Paisagem · 1920×1080</option>
-                  </select>
-                </label>
-                <button class="btn primary" id="canvasExportBtn" type="button">Exportar PNG</button>
+                <button class="btn" id="designExportPngBtn" type="button">PNG</button>
+                <button class="btn" id="designExportPdfBtn" type="button">PDF</button>
+                <button class="btn primary" id="designExportPptxBtn" type="button">PowerPoint</button>
               </div>
             </header>
 
-            <div class="canvas-pro-layout">
-              <aside class="canvas-controls">
-                <section class="canvas-control-group">
-                  <div class="canvas-control-title"><span>01</span><b>Conteúdo</b></div>
-                  <label>Título<textarea id="canvasText" rows="2" maxlength="120" placeholder="Título principal">Gremory</textarea></label>
-                  <label>Subtítulo<input id="canvasSubtitle" maxlength="120" placeholder="Uma mensagem curta"></label>
-                  <label>Etiqueta<input id="canvasBadge" maxlength="32" placeholder="DESTAQUE"></label>
-                </section>
-
-                <section class="canvas-control-group">
-                  <div class="canvas-control-title"><span>02</span><b>Tipografia</b></div>
-                  <div class="canvas-control-grid">
-                    <label>Tamanho<input id="canvasFontSize" type="number" min="28" max="240" value="92"></label>
-                    <label>Peso<select id="canvasFontWeight"><option value="500">Médio</option><option value="700" selected>Negrito</option><option value="800">Extra bold</option><option value="900">Black</option></select></label>
-                    <label>Alinhamento<select id="canvasAlign"><option value="left">Esquerda</option><option value="center" selected>Centro</option><option value="right">Direita</option></select></label>
-                    <label>Cor<input id="canvasTextColor" type="color" value="#ffffff"></label>
-                  </div>
-                </section>
-
-                <section class="canvas-control-group">
-                  <div class="canvas-control-title"><span>03</span><b>Fundo</b></div>
-                  <div class="canvas-control-grid">
-                    <label>Cor de fundo<input id="canvasBgColor" type="color" value="#17121f"></label>
-                    <label>Cor de destaque<input id="canvasAccentColor" type="color" value="#ff4f78"></label>
-                    <label>Ajuste da imagem<select id="canvasImageFit"><option value="cover">Preencher</option><option value="contain">Encaixar</option></select></label>
-                    <label>Escurecer <span id="canvasOverlayValue">24%</span><input id="canvasOverlay" type="range" min="0" max="70" value="24"></label>
-                  </div>
-                  <label class="studio-upload canvas-upload"><span>Imagem de fundo</span><input id="canvasImageFile" type="file" accept="image/*"></label>
-                  <button class="text-button canvas-clear-image" id="canvasClearImageBtn" type="button">Remover imagem</button>
-                </section>
-
-                <section class="canvas-control-group">
-                  <div class="canvas-control-title"><span>04</span><b>Composição</b></div>
-                  <label>Posição vertical <span id="canvasPositionValue">50%</span><input id="canvasPositionY" type="range" min="20" max="80" value="50"></label>
-                  <div class="canvas-control-actions">
-                    <button class="btn" id="canvasResetBtn" type="button">Restaurar</button>
-                    <button class="btn" id="canvasRenderBtn" type="button">Atualizar</button>
-                  </div>
-                </section>
+            <div class="design-studio-layout">
+              <aside class="design-pages-panel">
+                <div class="design-panel-title"><strong>Slides</strong><span id="designSlideCount">1</span></div>
+                <div class="design-page-actions">
+                  <button class="mini-btn primary" id="designAddSlideBtn" type="button">+ Novo</button>
+                  <button class="mini-btn" id="designDuplicateSlideBtn" type="button">Duplicar</button>
+                </div>
+                <div class="design-slide-list" id="designSlideList"></div>
+                <button class="mini-btn danger" id="designDeleteSlideBtn" type="button">Excluir slide</button>
               </aside>
 
-              <div class="canvas-preview-area">
-                <div class="canvas-preview-top"><span id="canvasSizeLabel">1080 × 1080</span><span>Prévia</span></div>
-                <div class="canvas-preview-wrap"><canvas id="designCanvas" width="1080" height="1080"></canvas></div>
-              </div>
+              <section class="design-workspace">
+                <div class="design-toolbar">
+                  <button type="button" data-design-add="title">Título</button>
+                  <button type="button" data-design-add="text">Texto</button>
+                  <button type="button" data-design-add="rect">Retângulo</button>
+                  <button type="button" data-design-add="circle">Círculo</button>
+                  <button type="button" id="designAddImageBtn">Imagem</button>
+                  <span class="design-toolbar-sep"></span>
+                  <button type="button" id="designDuplicateObjectBtn">Duplicar</button>
+                  <button type="button" id="designDeleteObjectBtn">Excluir</button>
+                  <button type="button" id="designBringFrontBtn">Frente</button>
+                  <button type="button" id="designSendBackBtn">Fundo</button>
+                </div>
+                <input id="designImageInput" type="file" accept="image/*" hidden>
+                <div class="design-canvas-stage" id="designCanvasStage">
+                  <div class="design-canvas-frame"><canvas id="designCanvas" width="1280" height="720"></canvas></div>
+                </div>
+                <div class="design-statusbar"><span id="canvasSizeLabel">1280 × 720</span><span id="designSelectionLabel">Nenhum elemento selecionado</span></div>
+              </section>
+
+              <aside class="design-inspector">
+                <div class="design-panel-title"><strong>Propriedades</strong></div>
+                <label>Formato
+                  <select id="canvasPreset">
+                    <option value="1280x720">Apresentação 16:9</option>
+                    <option value="1024x768">Apresentação 4:3</option>
+                    <option value="1080x1080">Post 1:1</option>
+                    <option value="1080x1350">Feed 4:5</option>
+                    <option value="1080x1920">Story</option>
+                  </select>
+                </label>
+                <label>Fundo<input id="designBackgroundColor" type="color" value="#11131a"></label>
+                <div class="design-inspector-divider"></div>
+                <label>Cor do elemento<input id="designObjectColor" type="color" value="#ffffff"></label>
+                <label>Tamanho do texto<input id="designFontSize" type="number" min="10" max="240" value="48"></label>
+                <label>Fonte
+                  <select id="designFontFamily">
+                    <option value="Arial">Arial</option>
+                    <option value="Inter">Inter</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Trebuchet MS">Trebuchet</option>
+                    <option value="Courier New">Courier</option>
+                  </select>
+                </label>
+                <label>Opacidade<input id="designOpacity" type="range" min="10" max="100" value="100"></label>
+                <label>Alinhamento
+                  <select id="designTextAlign"><option value="left">Esquerda</option><option value="center">Centro</option><option value="right">Direita</option></select>
+                </label>
+                <div class="design-inspector-divider"></div>
+                <button class="btn full" id="designClearSlideBtn" type="button">Limpar slide</button>
+              </aside>
             </div>
           </article>
         </section>
@@ -479,6 +536,28 @@
               <div class="panel-head"><div><h3 id="tttTitle">Partida</h3><small id="tttTurnText">Aguardando...</small></div><button class="btn danger-ghost" id="tttExitBtn" type="button">Sair</button></div>
               <div class="ttt-board" id="tttBoard"></div>
               <div class="duel-log" id="tttLog"></div>
+            </article>
+          </div>
+
+          <div class="studio-section-label game-section-label"><span>ARCADE</span><h3>Jogos rápidos</h3></div>
+          <div class="arcade-grid">
+            <article class="panel arcade-card hangman-card">
+              <div class="panel-head"><div><span class="tag">FORCA</span><h3>Forca</h3></div><span class="pill" id="hangmanLives">6 vidas</span></div>
+              <div class="hangman-word" id="hangmanWord">—</div>
+              <div class="hangman-keyboard" id="hangmanKeyboard"></div>
+              <div class="arcade-actions"><button class="btn primary" id="hangmanNewBtn" type="button">Nova palavra</button></div>
+            </article>
+
+            <article class="panel arcade-card blackjack-card">
+              <div class="panel-head"><div><span class="tag">21</span><h3>Vinte e um</h3></div><span class="pill" id="blackjackStatus">Pronto</span></div>
+              <div class="card-table"><div><small>Mesa</small><div class="playing-cards" id="blackjackDealer"></div><strong id="blackjackDealerScore">0</strong></div><div><small>Você</small><div class="playing-cards" id="blackjackPlayer"></div><strong id="blackjackPlayerScore">0</strong></div></div>
+              <div class="arcade-actions"><button class="btn primary" id="blackjackNewBtn" type="button">Nova partida</button><button class="btn" id="blackjackHitBtn" type="button">Pedir carta</button><button class="btn" id="blackjackStandBtn" type="button">Parar</button></div>
+            </article>
+
+            <article class="panel arcade-card slots-card">
+              <div class="panel-head"><div><span class="tag">SLOTS</span><h3>Slots Gremory</h3></div><span class="pill" id="slotsStatus">Arcade</span></div>
+              <div class="slot-machine"><div class="slot-reel" id="slotReel1">✦</div><div class="slot-reel" id="slotReel2">♛</div><div class="slot-reel" id="slotReel3">◆</div></div>
+              <div class="arcade-actions"><button class="btn primary full" id="slotsSpinBtn" type="button">Girar</button></div>
             </article>
           </div>
         </section>
@@ -541,6 +620,7 @@
                       </div>
                     </div>
                     <video id="watchScreenVideo" autoplay playsinline></video>
+                    <audio id="watchScreenAudio" autoplay></audio>
                   </div>
                 </div>
 
@@ -663,21 +743,60 @@
         </section>
 
         <section class="view" data-view="personalize">
-          <div class="section-head"><div><span class="tag">PERSONALIZAR</span><h2>Loja de rúpias</h2></div><button class="btn" id="refreshStoreBtn" type="button">Atualizar saldo</button></div>
-          <article class="panel store-balance-card"><span>Seu saldo sincronizado</span><strong id="storeBalance">₹ 0</strong><small>Compras são validadas pelo bot. O navegador não altera seu saldo.</small></article>
-          <div class="store-grid" id="storeGrid">
-            <article class="store-item" data-store-item="frame_crimson"><div class="store-preview frame-crimson">G</div><div><small>MOLDURA</small><strong>Carmesim</strong><span>₹350</span></div><button class="btn" data-buy-customization="frame_crimson">Comprar</button></article>
-            <article class="store-item" data-store-item="scale_dragon"><div class="store-preview scale-dragon">◇</div><div><small>EFEITO</small><strong>Escamas Gremory</strong><span>₹600</span></div><button class="btn" data-buy-customization="scale_dragon">Comprar</button></article>
-            <article class="store-item" data-store-item="name_gold"><div class="store-preview name-gold">G</div><div><small>PERFIL</small><strong>Nome Dourado</strong><span>₹900</span></div><button class="btn" data-buy-customization="name_gold">Comprar</button></article>
-            <article class="store-item" data-store-item="aura_rose"><div class="store-preview aura-rose">✦</div><div><small>AURA</small><strong>Rosa Demoníaca</strong><span>₹1200</span></div><button class="btn" data-buy-customization="aura_rose">Comprar</button></article>
-            <article class="store-item" data-store-item="frame_obsidian"><div class="store-preview frame-obsidian">G</div><div><small>MOLDURA</small><strong>Obsidiana</strong><span>₹1650</span></div><button class="btn" data-buy-customization="frame_obsidian">Comprar</button></article>
-            <article class="store-item" data-store-item="frame_royal"><div class="store-preview frame-royal">♛</div><div><small>MOLDURA</small><strong>Imperial</strong><span>₹3200</span></div><button class="btn" data-buy-customization="frame_royal">Comprar</button></article>
-            <article class="store-item" data-store-item="effect_stars"><div class="store-preview effect-stars">✦</div><div><small>EFEITO</small><strong>Estrelas Demoníacas</strong><span>₹1450</span></div><button class="btn" data-buy-customization="effect_stars">Comprar</button></article>
-            <article class="store-item" data-store-item="effect_embers"><div class="store-preview effect-embers">✧</div><div><small>EFEITO</small><strong>Brasas Carmesim</strong><span>₹2800</span></div><button class="btn" data-buy-customization="effect_embers">Comprar</button></article>
-            <article class="store-item" data-store-item="name_rose"><div class="store-preview name-rose">G</div><div><small>NOME</small><strong>Nome Rosa</strong><span>₹1350</span></div><button class="btn" data-buy-customization="name_rose">Comprar</button></article>
-            <article class="store-item" data-store-item="name_ice"><div class="store-preview name-ice">G</div><div><small>NOME</small><strong>Nome Glacial</strong><span>₹2100</span></div><button class="btn" data-buy-customization="name_ice">Comprar</button></article>
-            <article class="store-item" data-store-item="aura_void"><div class="store-preview aura-void">◉</div><div><small>AURA</small><strong>Aura do Vazio</strong><span>₹2600</span></div><button class="btn" data-buy-customization="aura_void">Comprar</button></article>
-            <article class="store-item" data-store-item="badge_demon"><div class="store-preview badge-demon">♛</div><div><small>SELO</small><strong>Selo Demoníaco</strong><span>₹4200</span></div><button class="btn" data-buy-customization="badge_demon">Comprar</button></article>
+          <div class="section-head personalize-head">
+            <div><span class="tag">PERSONALIZAR</span><h2>Estilo do perfil</h2><p class="muted">Monte sua identidade na Gremory.</p></div>
+            <button class="btn" id="refreshStoreBtn" type="button">Atualizar saldo</button>
+          </div>
+
+          <div class="personalize-top-grid">
+            <article class="panel store-balance-card">
+              <span>Saldo</span><strong id="storeBalance">₹ 0</strong><small>Rúpias disponíveis</small>
+            </article>
+            <article class="panel equipped-card">
+              <span class="tag">ATIVOS</span>
+              <div id="equippedCustomizationSummary" class="equipped-summary"><span>Padrão</span></div>
+              <button class="text-button" id="openOwnPublicProfileBtn" type="button">Ver meu perfil</button>
+            </article>
+          </div>
+
+          <div class="store-toolbar" role="tablist" aria-label="Categorias de personalização">
+            <button class="active" data-store-filter="all" type="button">Todos</button>
+            <button data-store-filter="frame" type="button">Molduras</button>
+            <button data-store-filter="name" type="button">Nomes</button>
+            <button data-store-filter="aura" type="button">Auras</button>
+            <button data-store-filter="effect" type="button">Efeitos</button>
+            <button data-store-filter="theme" type="button">Temas</button>
+            <button data-store-filter="animated" type="button">Animados</button>
+          </div>
+
+          <div class="store-grid store-grid-pro" id="storeGrid">
+            <article class="store-item" data-store-category="frame" data-store-item="frame_crimson"><div class="store-preview frame-crimson">G</div><div><small>MOLDURA</small><strong>Carmesim</strong><span>₹350</span></div><button class="btn" data-buy-customization="frame_crimson">Comprar</button></article>
+            <article class="store-item" data-store-category="frame" data-store-item="frame_obsidian"><div class="store-preview frame-obsidian">G</div><div><small>MOLDURA</small><strong>Obsidiana</strong><span>₹1650</span></div><button class="btn" data-buy-customization="frame_obsidian">Comprar</button></article>
+            <article class="store-item" data-store-category="frame" data-store-item="frame_royal"><div class="store-preview frame-royal">♛</div><div><small>MOLDURA</small><strong>Imperial</strong><span>₹3200</span></div><button class="btn" data-buy-customization="frame_royal">Comprar</button></article>
+
+            <article class="store-item" data-store-category="name" data-store-item="name_gold"><div class="store-preview name-gold">Aa</div><div><small>NOME</small><strong>Dourado</strong><span>₹900</span></div><button class="btn" data-buy-customization="name_gold">Comprar</button></article>
+            <article class="store-item" data-store-category="name" data-store-item="name_rose"><div class="store-preview name-rose">Aa</div><div><small>NOME</small><strong>Rosa</strong><span>₹1350</span></div><button class="btn" data-buy-customization="name_rose">Comprar</button></article>
+            <article class="store-item" data-store-category="name" data-store-item="name_ice"><div class="store-preview name-ice">Aa</div><div><small>NOME</small><strong>Glacial</strong><span>₹2100</span></div><button class="btn" data-buy-customization="name_ice">Comprar</button></article>
+
+            <article class="store-item" data-store-category="aura" data-store-item="aura_rose"><div class="store-preview aura-rose">✦</div><div><small>AURA</small><strong>Rosa Demoníaca</strong><span>₹1200</span></div><button class="btn" data-buy-customization="aura_rose">Comprar</button></article>
+            <article class="store-item" data-store-category="aura" data-store-item="aura_void"><div class="store-preview aura-void">◉</div><div><small>AURA</small><strong>Vazio</strong><span>₹2600</span></div><button class="btn" data-buy-customization="aura_void">Comprar</button></article>
+
+            <article class="store-item" data-store-category="effect" data-store-item="scale_dragon"><div class="store-preview scale-dragon">◇</div><div><small>EFEITO</small><strong>Escamas Gremory</strong><span>₹600</span></div><button class="btn" data-buy-customization="scale_dragon">Comprar</button></article>
+            <article class="store-item" data-store-category="effect" data-store-item="effect_stars"><div class="store-preview effect-stars">✦</div><div><small>EFEITO</small><strong>Estrelas Demoníacas</strong><span>₹1450</span></div><button class="btn" data-buy-customization="effect_stars">Comprar</button></article>
+            <article class="store-item" data-store-category="effect" data-store-item="effect_petals"><div class="store-preview effect-petals">❀</div><div><small>EFEITO</small><strong>Pétalas Carmesim</strong><span>₹1900</span></div><button class="btn" data-buy-customization="effect_petals">Comprar</button></article>
+            <article class="store-item" data-store-category="effect" data-store-item="effect_snow"><div class="store-preview effect-snow">❄</div><div><small>EFEITO</small><strong>Neve Lunar</strong><span>₹1750</span></div><button class="btn" data-buy-customization="effect_snow">Comprar</button></article>
+            <article class="store-item" data-store-category="effect" data-store-item="effect_embers"><div class="store-preview effect-embers">✧</div><div><small>EFEITO</small><strong>Brasas Carmesim</strong><span>₹2800</span></div><button class="btn" data-buy-customization="effect_embers">Comprar</button></article>
+            <article class="store-item" data-store-category="effect" data-store-item="effect_nebula"><div class="store-preview effect-nebula">✺</div><div><small>EFEITO</small><strong>Nebulosa</strong><span>₹2300</span></div><button class="btn" data-buy-customization="effect_nebula">Comprar</button></article>
+            <article class="store-item" data-store-category="effect" data-store-item="effect_scanline"><div class="store-preview effect-scanline">▤</div><div><small>EFEITO</small><strong>Cyber Scan</strong><span>₹2050</span></div><button class="btn" data-buy-customization="effect_scanline">Comprar</button></article>
+
+            <article class="store-item" data-store-category="theme" data-store-item="theme_crimson"><div class="store-preview theme-crimson">G</div><div><small>TEMA</small><strong>Carmesim Profundo</strong><span>₹2400</span></div><button class="btn" data-buy-customization="theme_crimson">Comprar</button></article>
+            <article class="store-item" data-store-category="theme" data-store-item="theme_midnight"><div class="store-preview theme-midnight">◐</div><div><small>TEMA</small><strong>Meia-noite</strong><span>₹2600</span></div><button class="btn" data-buy-customization="theme_midnight">Comprar</button></article>
+            <article class="store-item" data-store-category="theme" data-store-item="theme_neon"><div class="store-preview theme-neon">G</div><div><small>TEMA</small><strong>Neon Noturno</strong><span>₹3100</span></div><button class="btn" data-buy-customization="theme_neon">Comprar</button></article>
+
+            <article class="store-item" data-store-category="animated" data-store-item="profile_motion_crimson"><div class="store-preview profile-motion-crimson"><span>GIF</span></div><div><small>ANIMADO</small><strong>Motion Carmesim</strong><span>₹3600</span></div><button class="btn" data-buy-customization="profile_motion_crimson">Comprar</button></article>
+
+            <article class="store-item external-asset-item" data-store-category="animated" data-store-item="gif_profile_1" data-store-asset="gif_profile_1" hidden><div class="store-preview external-asset-preview"><span>GIF</span></div><div><small>ANIMADO</small><strong data-asset-name>GIF Especial</strong><span>₹3900</span></div><button class="btn" data-buy-customization="gif_profile_1">Comprar</button></article>
+            <article class="store-item external-asset-item" data-store-category="animated" data-store-item="sprite_profile_1" data-store-asset="sprite_profile_1" hidden><div class="store-preview external-asset-preview"><span>SPR</span></div><div><small>SPRITE</small><strong data-asset-name>Sprite Especial</strong><span>₹4300</span></div><button class="btn" data-buy-customization="sprite_profile_1">Comprar</button></article>
           </div>
         </section>
 
@@ -754,17 +873,17 @@
     <section class="mobile-more-card">
       <div class="mobile-more-head"><div><span class="tag">GREMORY</span><h3>Mais</h3></div><button class="modal-close static" id="mobileMoreClose" type="button">×</button></div>
       <div class="mobile-more-grid">
+        <button class="mobile-more-premium" data-route="premium"><span>♛</span><b>Premium</b></button>
+        <button data-route="personalize"><span>✧</span><b>Personalizar</b></button>
         <button data-route="friends"><span>◇</span><b>Amigos</b></button>
         <button data-route="tinder"><span>♥</span><b>Tinder</b></button>
-        <button data-route="updates"><span>◌</span><b>Novidades</b></button>
-        <button data-route="downloads"><span>⇩</span><b>Downloads</b></button>
-        <button data-route="studio"><span>▤</span><b>PDF & Canvas</b></button>
         <button data-route="games"><span>▦</span><b>Jogos</b></button>
         <button data-route="rpg"><span>⚄</span><b>RPG</b></button>
-        <button data-route="premium"><span>♛</span><b>Premium</b></button>
-        <button data-route="personalize"><span>✧</span><b>Personalizar</b></button>
+        <button data-route="studio"><span>▤</span><b>PDF & Canvas</b></button>
+        <button data-route="downloads"><span>⇩</span><b>Downloads</b></button>
+        <button data-route="updates"><span>◌</span><b>Novidades</b></button>
         <button data-route="support"><span>?</span><b>Suporte</b></button>
-        <button id="mobileAccountBtn" type="button"><span>●</span><b>Conta</b></button>
+        <button id="mobileAccountBtn"><span>●</span><b>Conta</b></button>
         <button data-route="admin" id="mobileAdminBtn" type="button" hidden><span>⚙</span><b>Admin</b></button>
       </div>
     </section>
@@ -778,8 +897,12 @@
       <form id="profileForm" class="profile-form">
         <label>Nome<input id="profileName" maxlength="40"></label><label>Nome de usuário<input id="profileUsername" maxlength="20" autocomplete="username" placeholder="usuario"><small class="field-hint" id="profileUsernameHint">Pode ser alterado uma vez a cada 7 dias.</small></label>
         <label>Foto (URL)<input id="profileAvatar" type="url" placeholder="https://..."></label>
-        <label>Bio<textarea id="profileBio" maxlength="180" rows="3" placeholder="Seu recado"></textarea></label>
+        <label>Bio<textarea id="profileBio" maxlength="500" rows="3" placeholder="Seu recado"></textarea></label>
         <label>Anime favorito<input id="profileFavoriteAnime" maxlength="80"></label>
+        <div class="profile-preferences">
+          <label class="check-row"><input id="profileBrowserNotify" type="checkbox"><span>Notificações do navegador</span></label>
+          <label class="check-row"><input id="profileRaidWhatsapp" type="checkbox"><span>Avisar novas raids no WhatsApp</span></label>
+        </div>
         <div class="profile-stats"><div><span>Nível</span><strong id="profileLevel">0</strong></div><div><span>Rupias</span><strong id="profileBalance">0</strong></div></div>
         <button class="btn primary full" type="submit">Salvar</button><button class="btn full" id="adminDrawerBtn" type="button" hidden>Administração</button><button class="btn full danger-ghost" id="logoutBtn" type="button">Sair</button>
       </form>
@@ -792,17 +915,47 @@
 
   <div class="modal" id="sceneModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="sceneModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="sceneModal">×</button><span class="tag">CENA</span><h2>Editar cena</h2><form id="sceneForm" class="stack-form"><label>Título<input id="sceneTitleInput" maxlength="80"></label><label>Descrição<textarea id="sceneDescriptionInput" rows="3" maxlength="300"></textarea></label><label>Imagem (URL)<input id="sceneImageInput" type="url" placeholder="https://..."></label><button class="btn primary full" type="submit">Salvar cena</button></form></div></div>
 
-  <div class="modal" id="publicProfileModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="publicProfileModal"></button><div class="modal-card profile-public-card"><button class="modal-close" data-close-modal="publicProfileModal">×</button><div class="public-profile-hero"><img id="publicProfileAvatar" src="/assets/img/profile.jpg" alt=""><div><span class="tag">PERFIL GREMORY</span><h2 id="publicProfileName">Usuário</h2><div class="public-username" id="publicProfileUsername">@usuario</div><p id="publicProfileBio">Conta Gremory</p></div></div><div class="public-profile-details"><div><span>Anime favorito</span><strong id="publicProfileAnime">—</strong></div><div><span>Na Gremory desde</span><strong id="publicProfileSince">—</strong></div></div><div class="modal-actions"><button class="btn primary" id="publicProfileActionBtn" type="button">Adicionar amigo</button><button class="btn" id="publicProfileDuelBtn" type="button">Desafiar Pokémon</button><button class="btn danger-ghost" id="publicProfileReportBtn" type="button">Denunciar</button></div></div></div>
+  <div class="modal" id="publicProfileModal" aria-hidden="true">
+    <button class="modal-backdrop" data-close-modal="publicProfileModal"></button>
+    <div class="modal-card profile-public-card" id="publicProfileCard">
+      <button class="modal-close" data-close-modal="publicProfileModal">×</button>
+      <div class="public-profile-cover" id="publicProfileCover"><div class="public-profile-media" id="publicProfileMedia" aria-hidden="true"></div><span>GREMORY</span></div>
+      <div class="public-profile-hero">
+        <img id="publicProfileAvatar" src="/assets/img/profile.jpg" alt="">
+        <div class="public-profile-identity">
+          <span class="tag" id="publicProfileStatus">PERFIL GREMORY</span>
+          <h2 id="publicProfileName">Usuário</h2>
+          <div class="public-username" id="publicProfileUsername">@usuario</div>
+        </div>
+      </div>
+      <section class="public-profile-about"><span>Bio</span><p id="publicProfileBio">Conta Gremory</p></section>
+      <div class="public-profile-details">
+        <div><span>Anime favorito</span><strong id="publicProfileAnime">—</strong></div>
+        <div><span>Na Gremory desde</span><strong id="publicProfileSince">—</strong></div>
+        <div><span>Relação</span><strong id="publicProfileRelation">Visitante</strong></div>
+        <div><span>Estilo</span><strong id="publicProfileStyle">Padrão</strong></div>
+      </div>
+      <div class="modal-actions"><button class="btn primary" id="publicProfileActionBtn" type="button">Adicionar amigo</button><button class="btn" id="publicProfileDuelBtn" type="button">Desafiar Pokémon</button><button class="btn danger-ghost" id="publicProfileReportBtn" type="button">Denunciar</button></div>
+    </div>
+  </div>
 
   <div class="modal" id="watchCreateModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="watchCreateModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="watchCreateModal">×</button><span class="tag">WATCH PARTY</span><h2>Criar sala</h2><form id="watchCreateForm" class="stack-form"><label>Nome da sala<input id="watchNameInput" maxlength="60" placeholder="Ex: Noite de filmes" required></label><button class="btn primary full" type="submit">Criar sala</button></form></div></div>
 
   <div class="modal" id="gameResultModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="gameResultModal"></button><div class="modal-card result-card"><button class="modal-close" data-close-modal="gameResultModal">×</button><div class="result-icon" id="gameResultIcon">★</div><span class="tag">RESULTADO</span><h2 id="gameResultTitle">Vitória!</h2><p id="gameResultText"></p><button class="btn primary full" data-close-modal="gameResultModal">Continuar</button></div></div>
 
-  <div class="modal" id="notificationModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="notificationModal"></button><div class="modal-card notification-modal-card"><button class="modal-close" data-close-modal="notificationModal">×</button><span class="tag">CAIXA DE ENTRADA</span><h2>Notificações</h2><div class="notification-tabs"><button class="active" type="button" data-notification-filter="team">Equipe <span id="notificationTeamCount">0</span></button><button type="button" data-notification-filter="social">Amigos <span id="notificationSocialCount">0</span></button><button type="button" data-notification-filter="all">Tudo</button></div><div class="notification-list" id="notificationList"></div></div></div>
+  <div class="modal" id="notificationModal" aria-hidden="true">
+    <button class="modal-backdrop" data-close-modal="notificationModal"></button>
+    <div class="modal-card notification-modal-card">
+      <button class="modal-close" data-close-modal="notificationModal">×</button>
+      <div class="notification-modal-head"><div><span class="tag">CAIXA DE ENTRADA</span><h2>Notificações</h2></div><div class="notification-head-actions"><button class="mini-btn" id="notificationMarkAllBtn" type="button">Marcar como vistas</button><button class="mini-btn danger" id="notificationClearAllBtn" type="button">Apagar todas</button></div></div>
+      <div class="notification-tabs"><button class="active" type="button" data-notification-filter="team">Equipe <span id="notificationTeamCount">0</span></button><button type="button" data-notification-filter="social">Amigos <span id="notificationSocialCount">0</span></button><button type="button" data-notification-filter="all">Tudo</button></div>
+      <div class="notification-list" id="notificationList"></div>
+    </div>
+  </div>
 
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261017-v11-1"></script>
+  <script type="module" src="/assets/js/app.js?v=20261017-v11-3"></script>
 </body>
 </html>

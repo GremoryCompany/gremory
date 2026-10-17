@@ -143,7 +143,17 @@ const CUSTOMIZATION_CATALOG={
   name_ice:{name:'Nome Glacial',price:2100,slot:'name'},
   aura_rose:{name:'Rosa Demoníaca',price:1200,slot:'aura'},
   aura_void:{name:'Aura do Vazio',price:2600,slot:'aura'},
-  badge_demon:{name:'Selo Demoníaco',price:4200,slot:'badge'}
+  badge_demon:{name:'Selo Demoníaco',price:4200,slot:'badge'},
+  effect_petals:{name:'Pétalas Carmesim',price:1900,slot:'effect'},
+  effect_snow:{name:'Neve Lunar',price:1750,slot:'effect'},
+  theme_crimson:{name:'Carmesim Profundo',price:2400,slot:'theme'},
+  theme_midnight:{name:'Meia-noite',price:2600,slot:'theme'},
+  theme_neon:{name:'Neon Noturno',price:3100,slot:'theme'},
+  effect_nebula:{name:'Nebulosa',price:2300,slot:'effect'},
+  effect_scanline:{name:'Cyber Scan',price:2050,slot:'effect'},
+  profile_motion_crimson:{name:'Motion Carmesim',price:3600,slot:'cover'},
+  gif_profile_1:{name:'GIF Especial',price:3900,slot:'cover'},
+  sprite_profile_1:{name:'Sprite Especial',price:4300,slot:'decor'}
 };
 const VIP_PLANS={
   '1':{nome:'💎 VIP 1 Dia',dias:1,valor:2},'7':{nome:'💎 VIP 7 Dias',dias:7,valor:5},'15':{nome:'👑 VIP 15 Dias',dias:15,valor:8},'30':{nome:'🔥 VIP 30 Dias',dias:30,valor:12}

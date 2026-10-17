@@ -4,9 +4,9 @@
     ".write": false,
     "profiles": {
       "$uid": {
-        ".read": "auth != null",
+        ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'losermodder@gmail.com')",
         ".write": "auth != null && auth.uid === $uid",
-        ".validate": "newData.hasChildren(['uid','nome','createdAt']) && newData.child('uid').val() === auth.uid && newData.child('nome').isString() && newData.child('nome').val().length <= 40 && (!newData.child('bio').exists() || (newData.child('bio').isString() && newData.child('bio').val().length <= 180)) && (!newData.child('favoriteAnime').exists() || (newData.child('favoriteAnime').isString() && newData.child('favoriteAnime').val().length <= 80)) && (!newData.child('username').exists() || (newData.child('username').isString() && newData.child('username').val().matches(/^[a-z][a-z0-9_]{2,19}$/) && root.child('usernames').child(newData.child('username').val()).child('uid').val() === auth.uid)) && (!data.child('username').exists() || !newData.child('username').exists() || newData.child('username').val() === data.child('username').val() || !data.child('usernameChangedAt').exists() || now - data.child('usernameChangedAt').val() >= 604800000)"
+        ".validate": "newData.hasChildren(['uid','nome','createdAt']) && newData.child('uid').val() === auth.uid && newData.child('nome').isString() && newData.child('nome').val().length <= 40 && (!newData.child('bio').exists() || (newData.child('bio').isString() && newData.child('bio').val().length <= 500)) && (!newData.child('favoriteAnime').exists() || (newData.child('favoriteAnime').isString() && newData.child('favoriteAnime').val().length <= 80)) && (!newData.child('username').exists() || (newData.child('username').isString() && newData.child('username').val().matches(/^[a-z][a-z0-9_]{2,19}$/) && root.child('usernames').child(newData.child('username').val()).child('uid').val() === auth.uid)) && (!data.child('username').exists() || !newData.child('username').exists() || newData.child('username').val() === data.child('username').val() || !data.child('usernameChangedAt').exists() || now - data.child('usernameChangedAt').val() >= 604800000) && (!newData.child('email').exists() || (newData.child('email').isString() && newData.child('email').val() === auth.token.email)) && (!newData.child('raidWhatsappNotify').exists() || newData.child('raidWhatsappNotify').isBoolean())"
       },
       ".read": "auth != null && auth.token.email === 'losermodder@gmail.com'"
     },
@@ -72,7 +72,7 @@
         ".read": "auth != null && auth.uid === $uid",
         "$jobId": {
           ".write": "auth != null && auth.uid === $uid",
-          ".validate": "!newData.exists() || (newData.child('type').isString() && (newData.child('type').val() === 'sync_pokemon' || newData.child('type').val() === 'sync_account' || newData.child('type').val() === 'daily_claim' || newData.child('type').val() === 'buy_customization' || newData.child('type').val() === 'equip_customization' || newData.child('type').val() === 'premium_checkout' || newData.child('type').val() === 'send_download_link' || newData.child('type').val() === 'youtube_bot_download' || newData.child('type').val() === 'pokemon_set_team' || newData.child('type').val() === 'pokemon_explore' || newData.child('type').val() === 'pokemon_wild_move' || newData.child('type').val() === 'pokemon_wild_exit' || newData.child('type').val() === 'pokemon_capture' || newData.child('type').val() === 'pokemon_heal_start' || newData.child('type').val() === 'duel_challenge' || newData.child('type').val() === 'duel_accept' || newData.child('type').val() === 'duel_decline' || newData.child('type').val() === 'duel_move' || newData.child('type').val() === 'duel_switch' || newData.child('type').val() === 'duel_exit' || newData.child('type').val() === 'ttt_create' || newData.child('type').val() === 'ttt_move' || newData.child('type').val() === 'ttt_exit' || newData.child('type').val() === 'tinder_feed' || newData.child('type').val() === 'tinder_like' || newData.child('type').val() === 'watch_music_activate' || newData.child('type').val() === 'watch_music_add' || newData.child('type').val() === 'watch_music_skip' || newData.child('type').val() === 'watch_music_advance' || newData.child('type').val() === 'sync_identity' || newData.child('type').val() === 'tinder_profile_get' || newData.child('type').val() === 'tinder_profile_save'))"
+          ".validate": "!newData.exists() || (newData.child('type').isString() && (newData.child('type').val() === 'sync_pokemon' || newData.child('type').val() === 'sync_account' || newData.child('type').val() === 'daily_claim' || newData.child('type').val() === 'buy_customization' || newData.child('type').val() === 'equip_customization' || newData.child('type').val() === 'premium_checkout' || newData.child('type').val() === 'send_download_link' || newData.child('type').val() === 'youtube_bot_download' || newData.child('type').val() === 'pokemon_set_team' || newData.child('type').val() === 'pokemon_explore' || newData.child('type').val() === 'pokemon_wild_move' || newData.child('type').val() === 'pokemon_wild_exit' || newData.child('type').val() === 'pokemon_capture' || newData.child('type').val() === 'pokemon_heal_start' || newData.child('type').val() === 'duel_challenge' || newData.child('type').val() === 'duel_accept' || newData.child('type').val() === 'duel_decline' || newData.child('type').val() === 'duel_move' || newData.child('type').val() === 'duel_switch' || newData.child('type').val() === 'duel_exit' || newData.child('type').val() === 'ttt_create' || newData.child('type').val() === 'ttt_move' || newData.child('type').val() === 'ttt_exit' || newData.child('type').val() === 'tinder_feed' || newData.child('type').val() === 'tinder_like' || newData.child('type').val() === 'watch_music_activate' || newData.child('type').val() === 'watch_music_add' || newData.child('type').val() === 'watch_music_skip' || newData.child('type').val() === 'watch_music_advance' || newData.child('type').val() === 'sync_identity' || newData.child('type').val() === 'tinder_profile_get' || newData.child('type').val() === 'tinder_profile_save' || newData.child('type').val() === 'site_raid_start' || newData.child('type').val() === 'site_raid_auto' || newData.child('type').val() === 'site_raid_attack'))"
         }
       }
     },
@@ -290,6 +290,14 @@
     "tinderBackups": {
       ".read": "auth != null && auth.token.email === 'losermodder@gmail.com'",
       ".write": "auth != null && auth.token.email === 'losermodder@gmail.com'"
+    },
+    "pokemonSiteRaid": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "pokemonSiteRaidConfig": {
+      ".read": "auth != null",
+      ".write": false
     }
   }
 }
