@@ -41,6 +41,8 @@ const state = {
   bridgeResults:{}, siteInventory:{}, siteCustomization:{}, storeCatalog:{},
   teamDraft:[], pokemonEncounter:null, pokemonHealing:{}, pokemonAudio:{encounterId:''}, siteRaid:null, siteRaidConfig:{},
   ttt:{game:null,unsub:null,index:{},lastResultId:'',seenActiveIds:new Set()},
+  blackjack:{game:null,unsub:null,index:{},seenActiveIds:new Set()},
+  hangman:{game:null,unsub:null,index:{},seenActiveIds:new Set()},
   duelSeenActiveIds:new Set(),
   notificationFilter:'team',
   browserNotificationLastAt:0,
@@ -126,7 +128,7 @@ function navigate(route){
   if(route==='friends') loadDirectory();
   if(route==='tinder'){loadOwnTinderProfile();loadTinderProfile();}
   if(route==='updates') renderUpdates();
-  if(route==='games') renderTttFriendSelect();
+  if(route==='games') renderGameFriendSelects();
   if(route==='studio') initGremoryDesignStudio().catch(e=>toast(e.message||'Não foi possível abrir o Design Studio.'));
   if(route==='watch'&&state.user&&!state.watchCode) loadWatchRooms();
   if(route==='rpg'&&state.user&&!state.roomCode) loadMyRooms();
@@ -237,7 +239,7 @@ $('registerForm').addEventListener('submit',async ev=>{
       nome:name,
       ...(usernameOk?{username,usernameChangedAt:stamp}:{}),
       avatar:'',bio:'',favoriteAnime:'',email:cred.user.email||email,
-      raidWhatsappNotify:false,createdAt:nowIso(),updatedAt:nowIso()
+      whatsappSiteNotify:false,raidWhatsappNotify:false,createdAt:nowIso(),updatedAt:nowIso()
     };
 
     // Não bloqueia a entrada no site indefinidamente por causa do RTDB.
@@ -284,9 +286,9 @@ async function syncPublicCustomization(){
 async function readUserData(user){
   const [ps,old,dirSnap]=await Promise.all([get(ref(db,`profiles/${user.uid}`)).catch(()=>null),get(ref(db,`users/${user.uid}`)).catch(()=>null),get(ref(db,`directory/${user.uid}`)).catch(()=>null)]);
   const p=ps?.exists()?ps.val():{};const o=old?.exists()?old.val():{};const oldDirectory=dirSnap?.exists()?dirSnap.val():{};
-  const merged={uid:user.uid,nome:p.nome||o.nome||user.displayName||'Usuário',username:normalizeUsername(p.username||o.username||''),usernameChangedAt:Number(p.usernameChangedAt||o.usernameChangedAt||0),avatar:p.avatar||o.avatar||user.photoURL||'',bio:p.bio||o.bio||'',favoriteAnime:p.favoriteAnime||o.favoriteAnime||o.animeFavorito||'',email:p.email||user.email||'',raidWhatsappNotify:Boolean(p.raidWhatsappNotify),createdAt:p.createdAt||o.createdAt||user.metadata?.creationTime||nowIso()};
+  const merged={uid:user.uid,nome:p.nome||o.nome||user.displayName||'Usuário',username:normalizeUsername(p.username||o.username||''),usernameChangedAt:Number(p.usernameChangedAt||o.usernameChangedAt||0),avatar:p.avatar||o.avatar||user.photoURL||'',bio:p.bio||o.bio||'',favoriteAnime:p.favoriteAnime||o.favoriteAnime||o.animeFavorito||'',email:p.email||user.email||'',whatsappSiteNotify:Boolean(p.whatsappSiteNotify),raidWhatsappNotify:Boolean(p.raidWhatsappNotify),createdAt:p.createdAt||o.createdAt||user.metadata?.creationTime||nowIso()};
   if(!ps?.exists()) await set(ref(db,`profiles/${user.uid}`),{...merged,updatedAt:nowIso()}).catch(()=>{});
-  else if((!p.email&&user.email)||p.raidWhatsappNotify==null) await update(ref(db,`profiles/${user.uid}`),{email:user.email||p.email||'',raidWhatsappNotify:Boolean(p.raidWhatsappNotify),updatedAt:nowIso()}).catch(()=>{});
+  else if((!p.email&&user.email)||p.raidWhatsappNotify==null||p.whatsappSiteNotify==null) await update(ref(db,`profiles/${user.uid}`),{email:user.email||p.email||'',whatsappSiteNotify:Boolean(p.whatsappSiteNotify),raidWhatsappNotify:Boolean(p.raidWhatsappNotify),updatedAt:nowIso()}).catch(()=>{});
   await set(ref(db,`directory/${user.uid}`),publicProfile(merged,publicCustomizationIds().length?publicCustomizationIds():(Array.isArray(oldDirectory?.style)?oldDirectory.style:[]))).catch(()=>{});
   state.profile=merged;state.privateData=o;renderAccount();
 }
@@ -303,8 +305,9 @@ function accountSnapshot(){
 }
 function renderAccount(){
   const p=state.profile||{};const avatar=avatarFor(p);const name=p.nome||'Usuário';const acc=accountSnapshot();const premium=acc.premium;const level=acc.level;const balance=acc.balance;
-  ['sideAvatar','topAvatar','profileAvatarPreview'].forEach(id=>{if($(id))$(id).src=avatar});$('sideName').textContent=name;$('sideStatus').textContent=premium?'Premium':usernameLabel(p);$('profileNameView').textContent=name;if($('profileUsernameView'))$('profileUsernameView').textContent=usernameLabel(p);$('profilePlanView').textContent=premium?'Premium':'Padrão';$('profileName').value=name;if($('profileUsername'))$('profileUsername').value=normalizeUsername(p.username||'');if($('profileUsernameHint'))$('profileUsernameHint').textContent=formatCooldown(usernameCooldownRemaining(p));$('profileAvatar').value=p.avatar||'';$('profileBio').value=p.bio||'';$('profileFavoriteAnime').value=p.favoriteAnime||'';if($('profileRaidWhatsapp'))$('profileRaidWhatsapp').checked=Boolean(p.raidWhatsappNotify);if($('profileBrowserNotify'))$('profileBrowserNotify').checked=browserNotificationsEnabled();if($('raidWhatsappNotify'))$('raidWhatsappNotify').checked=Boolean(p.raidWhatsappNotify);renderAdminAccess();$('profileLevel').textContent=formatNumber(level);$('profileBalance').textContent=`₹ ${formatNumber(balance)}`;$('homePlan').textContent=premium?'Premium':'Padrão';$('homeLevel').textContent=formatNumber(level);$('homeBalance').textContent=`₹ ${formatNumber(balance)}`;$('homeGreeting').textContent=`Olá, ${name}.`;
+  ['sideAvatar','topAvatar','profileAvatarPreview'].forEach(id=>{if($(id))$(id).src=avatar});$('sideName').textContent=name;$('sideStatus').textContent=premium?'Premium':usernameLabel(p);$('profileNameView').textContent=name;if($('profileUsernameView'))$('profileUsernameView').textContent=usernameLabel(p);$('profilePlanView').textContent=premium?'Premium':'Padrão';$('profileName').value=name;if($('profileUsername'))$('profileUsername').value=normalizeUsername(p.username||'');if($('profileUsernameHint'))$('profileUsernameHint').textContent=formatCooldown(usernameCooldownRemaining(p));$('profileAvatar').value=p.avatar||'';$('profileBio').value=p.bio||'';$('profileFavoriteAnime').value=p.favoriteAnime||'';if($('profileWhatsappSiteNotify'))$('profileWhatsappSiteNotify').checked=Boolean(p.whatsappSiteNotify);if($('profileRaidWhatsapp'))$('profileRaidWhatsapp').checked=Boolean(p.raidWhatsappNotify);if($('profileBrowserNotify'))$('profileBrowserNotify').checked=browserNotificationsEnabled();if($('raidWhatsappNotify'))$('raidWhatsappNotify').checked=Boolean(p.raidWhatsappNotify);renderAdminAccess();$('profileLevel').textContent=formatNumber(level);$('profileBalance').textContent=`₹ ${formatNumber(balance)}`;$('homePlan').textContent=premium?'Premium':'Padrão';$('homeLevel').textContent=formatNumber(level);$('homeBalance').textContent=`₹ ${formatNumber(balance)}`;$('homeGreeting').textContent=`Olá, ${name}.`;
   if($('storeBalance'))$('storeBalance').textContent=`₹ ${formatNumber(balance)}`;
+  if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(balance)}`;
   if($('premiumStatusPill'))$('premiumStatusPill').textContent=premium?'Premium':'Padrão';
   if($('premiumStatusTitle'))$('premiumStatusTitle').textContent=premium?'Premium ativo':'Plano padrão';
   if($('premiumStatusText'))$('premiumStatusText').textContent=state.charlottePublic?.status==='linked'?(premium?'Seu Premium está sincronizado com a Charlotte.':'Escolha um plano abaixo. O pagamento é criado pelo bot com Mercado Pago.'):'Vincule a Charlotte para comprar e sincronizar o Premium pelo site.';
@@ -328,7 +331,7 @@ $('profileForm').addEventListener('submit',async ev=>{
       await set(ref(db,`usernames/${username}`),{uid:state.user.uid,username,updatedAt:Date.now()});
       reservedNew=true;
     }
-    const payload={uid:state.user.uid,nome:$('profileName').value.trim().slice(0,40)||'Usuário',username,usernameChangedAt:changing?Date.now():Number(oldProfile.usernameChangedAt||Date.now()),avatar:$('profileAvatar').value.trim(),bio:$('profileBio').value.trim().slice(0,500),favoriteAnime:$('profileFavoriteAnime').value.trim().slice(0,80),email:state.user.email||oldProfile.email||'',raidWhatsappNotify:Boolean($('profileRaidWhatsapp')?.checked),createdAt:oldProfile.createdAt||nowIso(),updatedAt:nowIso()};
+    const payload={uid:state.user.uid,nome:$('profileName').value.trim().slice(0,40)||'Usuário',username,usernameChangedAt:changing?Date.now():Number(oldProfile.usernameChangedAt||Date.now()),avatar:$('profileAvatar').value.trim(),bio:$('profileBio').value.trim().slice(0,500),favoriteAnime:$('profileFavoriteAnime').value.trim().slice(0,80),email:state.user.email||oldProfile.email||'',whatsappSiteNotify:Boolean($('profileWhatsappSiteNotify')?.checked),raidWhatsappNotify:Boolean($('profileRaidWhatsapp')?.checked),createdAt:oldProfile.createdAt||nowIso(),updatedAt:nowIso()};
     await set(ref(db,`profiles/${state.user.uid}`),payload);
     await set(ref(db,`directory/${state.user.uid}`),publicProfile(payload));
     if(changing&&oldUsername)await remove(ref(db,`usernames/${oldUsername}`)).catch(()=>{});
@@ -347,7 +350,7 @@ $('profileForm').addEventListener('submit',async ev=>{
   }
 });
 
-function clearUserSubscriptions(){try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null}
+function clearUserSubscriptions(){try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null}
 function startUserSubscriptions(){
   clearUserSubscriptions();const uid=state.user.uid;
   state.userUnsubs.push(onValue(ref(db,`friends/${uid}`),s=>{state.friends=s.exists()?s.val():{};renderFriends();renderDuelFriendSelect();$('homeFriendsText').textContent=`${Object.keys(state.friends).length} amigo${Object.keys(state.friends).length===1?'':'s'}`}));
@@ -367,6 +370,8 @@ function startUserSubscriptions(){
   state.userUnsubs.push(onValue(ref(db,'pokemonSiteRaidConfig'),s=>{state.siteRaidConfig=s.exists()?s.val():{};renderSiteRaid()}));
 
   state.userUnsubs.push(onValue(ref(db,`ticTacToeIndex/${uid}`),s=>{state.ttt.index=s.exists()?s.val():{};handleTttIndex(state.ttt.index)}));
+  state.userUnsubs.push(onValue(ref(db,`blackjackIndex/${uid}`),s=>{state.blackjack.index=s.exists()?s.val():{};handleBlackjackIndex(state.blackjack.index)}));
+  state.userUnsubs.push(onValue(ref(db,`hangmanIndex/${uid}`),s=>{state.hangman.index=s.exists()?s.val():{};handleHangmanIndex(state.hangman.index)}));
   state.userUnsubs.push(onValue(query(ref(db,'siteUpdates'),orderByChild('createdAt'),limitToLast(60)),s=>{state.updates=s.exists()?s.val():{};renderUpdates()}));
   let notificationBoot=true,notificationNewestAt=0;
   state.userUnsubs.push(onValue(query(ref(db,`siteNotifications/${uid}`),orderByChild('createdAt'),limitToLast(100)),s=>{
@@ -438,6 +443,7 @@ function playSiteSound(name,fallbackFreq=720){
 }
 function playNotificationTone(){playSiteSound('notification',720)}
 function playVictoryTone(){playSiteSound('victory',920)}
+function playDefeatTone(){playSiteSound('defeat',190)}
 function playPokemonSound(kind){
   const map={
     encounter:['pokemon-encounter',620],
@@ -460,7 +466,7 @@ function isNotificationUnread(n){return Number(n?.createdAt||0)>notificationLast
 function notificationSignature(n){return [String(n?.type||''),String(n?.title||''),String(n?.text||''),String(n?.link||''),String(n?.imageUrl||'')].join('\u241f')}
 function notificationCategory(n){
   const type=String(n?.type||'').toLowerCase();
-  if(['friend_request','pokemon_duel','ttt','tinder_match','friend','social'].includes(type))return'social';
+  if(['friend_request','pokemon_duel','ttt','blackjack','hangman','tinder_match','friend','social'].includes(type))return'social';
   return'team';
 }
 function notificationCategoryLabel(n){return notificationCategory(n)==='social'?'Amigos':'Equipe'}
@@ -805,7 +811,7 @@ $('pokemonSyncBtn')?.addEventListener('click',async()=>{try{await requestAccount
 $('pokemonExploreBotBtn').onclick=async()=>{try{const r=await bridgeRequest('pokemon_explore',{},30000);if(r.encounter)state.pokemonEncounter=r.encounter;renderWildEncounter();toast('Um Pokémon selvagem apareceu!')}catch(e){toast(e.message)}};
 
 // Duelo Pokémon 6x6 via bridge do bot
-function renderDuelFriendSelect(){const sel=$('duelFriendSelect');if(!sel)return;const current=sel.value;sel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';sel.appendChild(o)});if(state.friends[current])sel.value=current;renderTttFriendSelect()}
+function renderDuelFriendSelect(){const sel=$('duelFriendSelect');if(!sel)return;const current=sel.value;sel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';sel.appendChild(o)});if(state.friends[current])sel.value=current;renderGameFriendSelects()}
 $('sendDuelChallengeBtn').addEventListener('click',async()=>{const targetUid=$('duelFriendSelect').value;if(!targetUid)return toast('Escolha um amigo.');if(state.charlottePublic?.status!=='linked')return toast('Vincule a Charlotte primeiro.');try{await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type:'duel_challenge',targetUid,createdAt:nowIso()});toast('Desafio 6x6 enviado.')}catch(e){toast(permissionMessage(e))}});
 function renderDuelInbox(obj){const box=$('duelInbox');box.innerHTML='';const rows=Object.entries(obj||{});if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhum desafio.</div>';return}rows.forEach(([id,c])=>{const r=document.createElement('div');r.className='duel-request';const cp=document.createElement('div');const st=document.createElement('strong');st.textContent=c.fromName||'Desafiante';const sm=document.createElement('small');sm.textContent='quer batalhar 6x6';cp.append(st,sm);const acts=document.createElement('div');acts.className='person-actions';const a=document.createElement('button');a.className='mini-btn primary';a.textContent='Aceitar';a.onclick=()=>duelJob('duel_accept',{challengeId:id});const d=document.createElement('button');d.className='mini-btn';d.textContent='Recusar';d.onclick=()=>duelJob('duel_decline',{challengeId:id});acts.append(a,d);r.append(cp,acts);box.appendChild(r)})}
 async function duelJob(type,data){try{await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type,...data,createdAt:nowIso()});if(type==='duel_move')playPokemonSound('hit');toast(type==='duel_move'?'Golpe enviado.':type==='duel_switch'?'Troca enviada.':'Processando...')}catch(e){toast(permissionMessage(e))}}
@@ -1114,12 +1120,14 @@ function burstConfetti(){
   for(let i=0;i<34;i++){const bit=document.createElement('i');bit.className='confetti-piece';bit.style.setProperty('--x',`${Math.random()*100}%`);bit.style.setProperty('--delay',`${Math.random()*.45}s`);bit.style.setProperty('--spin',`${Math.round(Math.random()*720+180)}deg`);bit.style.setProperty('--dur',`${1.2+Math.random()*.9}s`);bit.style.background=`hsl(${Math.floor(Math.random()*360)} 78% 62%)`;root.appendChild(bit)}
   document.body.appendChild(root);setTimeout(()=>root.remove(),2600)
 }
-function showGameResult({title='Partida encerrada',text='',win=false,icon='★'}={}){
-  if($('gameResultTitle'))$('gameResultTitle').textContent=title;if($('gameResultText'))$('gameResultText').textContent=text;if($('gameResultIcon'))$('gameResultIcon').textContent=icon;openModal('gameResultModal');if(win){burstConfetti();playVictoryTone()}
+function showGameResult({title='Partida encerrada',text='',win=false,neutral=false,icon='★'}={}){
+  if($('gameResultTitle'))$('gameResultTitle').textContent=title;if($('gameResultText'))$('gameResultText').textContent=text;if($('gameResultIcon'))$('gameResultIcon').textContent=icon;openModal('gameResultModal');if(win){burstConfetti();playVictoryTone()}else if(!neutral){playDefeatTone()}
 }
 
 // Jogo da velha seguro pelo bridge
-function renderTttFriendSelect(){const sel=$('tttFriendSelect');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';sel.appendChild(o)});if(state.friends[cur])sel.value=cur}
+function renderGameFriendSelect(selectId){const sel=$(selectId);if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';sel.appendChild(o)});if(state.friends[cur])sel.value=cur}
+function renderTttFriendSelect(){renderGameFriendSelect('tttFriendSelect')}
+function renderGameFriendSelects(){renderTttFriendSelect();renderGameFriendSelect('blackjackFriendSelect');renderGameFriendSelect('hangmanFriendSelect')}
 $('tttCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('tttFriendSelect').value;if(!targetUid)return toast('Escolha um amigo.');try{await bridgeRequest('ttt_create',{targetUid},25000,false);toast('Partida criada.')}catch(e){toast(e.message)}});
 function handleTttIndex(obj){
   const rows=Object.entries(obj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0));
@@ -1131,7 +1139,7 @@ function setTttGame(g){
   state.ttt.game=g;const panel=$('tttGamePanel');
   if(!g||g.status!=='active'){
     panel.hidden=true;const won=!!g&&g.winnerUid===state.user?.uid;const draw=!!g&&!g.winnerUid;$('tttStatus').textContent=won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';
-    if(g?.status==='finished'&&g.id&&state.ttt.seenActiveIds.has(g.id)){state.ttt.seenActiveIds.delete(g.id);state.ttt.lastResultId=g.id;if(state.user)localStorage.setItem(`gremory:tttSeen:${state.user.uid}`,g.id);const reward=g.reward||{};showGameResult({title:draw?'Empate!':won?'Vitória!':'Partida encerrada',text:draw?'Ninguém venceu essa rodada.':won?(reward.rupias?`Você ganhou ₹${reward.rupias}.`:'Você venceu. O limite diário de recompensa pode ter sido atingido.'):'Seu amigo venceu esta rodada.',win:won,icon:draw?'＝':won?'✦':'✕'})}
+    if(g?.status==='finished'&&g.id&&state.ttt.seenActiveIds.has(g.id)){state.ttt.seenActiveIds.delete(g.id);state.ttt.lastResultId=g.id;if(state.user)localStorage.setItem(`gremory:tttSeen:${state.user.uid}`,g.id);const reward=g.reward||{};showGameResult({title:draw?'Empate!':won?'Vitória!':'Partida encerrada',text:draw?'Ninguém venceu essa rodada.':won?(reward.rupias?`Você ganhou ₹${reward.rupias}.`:'Você venceu. O limite diário de recompensa pode ter sido atingido.'):'Seu amigo venceu esta rodada.',win:won,neutral:draw,icon:draw?'＝':won?'✦':'✕'})}
     return
   }
   state.ttt.seenActiveIds.add(g.id);panel.hidden=false;$('tttStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderTtt(g)
@@ -2143,12 +2151,80 @@ window.addEventListener('resize',()=>{if(designCanvasApp&&state.route==='studio'
 $('studioCanvasShortcut')?.addEventListener('click',()=>{$('canvasStudio')?.scrollIntoView({behavior:'smooth',block:'start'});initGremoryDesignStudio().catch(()=>{})});
 $$('[data-studio-scroll]').forEach(btn=>btn.addEventListener('click',()=>$(btn.dataset.studioScroll)?.scrollIntoView({behavior:'smooth',block:'start'})));
 
-// Arcade local
-const HANGMAN_WORDS=['CHARLOTTE','POKEMON','GREMORY','DRAGAO','MAGIA','ANIME','AVENTURA','MISTERIO','AMIZADE','BATALHA','ESTRELA','VITORIA','CASTELO','DEMONIO','TREINADOR'];let hangman={word:'',hits:new Set(),misses:new Set()};
-function normalizeLetter(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase()}
-function renderHangman(){const w=hangman.word,done=[...w].every(ch=>!/[A-Z]/.test(ch)||hangman.hits.has(ch)),lost=hangman.misses.size>=6;if($('hangmanWord'))$('hangmanWord').textContent=[...w].map(ch=>/[A-Z]/.test(ch)?(hangman.hits.has(ch)||lost?ch:'_'):ch).join(' ');if($('hangmanLives'))$('hangmanLives').textContent=done?'Você venceu':lost?'Fim de jogo':`${6-hangman.misses.size} vidas`;const kb=$('hangmanKeyboard');if(!kb)return;kb.innerHTML='';'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(ch=>{const b=document.createElement('button');b.type='button';b.textContent=ch;b.disabled=done||lost||hangman.hits.has(ch)||hangman.misses.has(ch);b.onclick=()=>{if(w.includes(ch))hangman.hits.add(ch);else hangman.misses.add(ch);renderHangman()};kb.appendChild(b)})}
-function newHangman(){hangman={word:HANGMAN_WORDS[Math.floor(Math.random()*HANGMAN_WORDS.length)],hits:new Set(),misses:new Set()};renderHangman()}$('hangmanNewBtn')?.addEventListener('click',newHangman);newHangman();
-let bjDeck=[],bjPlayer=[],bjDealer=[],bjDone=true;const SUITS=['♠','♥','♦','♣'],RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];function makeDeck(){return SUITS.flatMap(s=>RANKS.map(r=>({s,r}))).sort(()=>Math.random()-.5)}function bjScore(cards){let n=cards.reduce((t,c)=>t+(c.r==='A'?11:['J','Q','K'].includes(c.r)?10:Number(c.r)),0),aces=cards.filter(c=>c.r==='A').length;while(n>21&&aces--){n-=10}return n}function cardHtml(c){const red=c.s==='♥'||c.s==='♦';return `<i class="playing-card ${red?'red':''}"><b>${c.r}</b><span>${c.s}</span></i>`}function renderBlackjack(){const ps=bjScore(bjPlayer),ds=bjScore(bjDealer);$('blackjackPlayer').innerHTML=bjPlayer.map(cardHtml).join('');$('blackjackDealer').innerHTML=bjDealer.map(cardHtml).join('');$('blackjackPlayerScore').textContent=String(ps);$('blackjackDealerScore').textContent=String(ds);$('blackjackHitBtn').disabled=bjDone;$('blackjackStandBtn').disabled=bjDone;if(!bjDone)$('blackjackStatus').textContent=ps===21?'21!':'Sua vez'}function finishBlackjack(){while(bjScore(bjDealer)<17)bjDealer.push(bjDeck.pop());bjDone=true;const p=bjScore(bjPlayer),d=bjScore(bjDealer);$('blackjackStatus').textContent=p>21?'Estourou':d>21||p>d?'Você venceu':p===d?'Empate':'Mesa venceu';renderBlackjack()}function newBlackjack(){bjDeck=makeDeck();bjPlayer=[bjDeck.pop(),bjDeck.pop()];bjDealer=[bjDeck.pop(),bjDeck.pop()];bjDone=false;renderBlackjack();if(bjScore(bjPlayer)===21)finishBlackjack()}$('blackjackNewBtn')?.addEventListener('click',newBlackjack);$('blackjackHitBtn')?.addEventListener('click',()=>{if(bjDone)return;bjPlayer.push(bjDeck.pop());renderBlackjack();if(bjScore(bjPlayer)>=21)finishBlackjack()});$('blackjackStandBtn')?.addEventListener('click',()=>{if(!bjDone)finishBlackjack()});newBlackjack();
-const SLOT_SYMBOLS=['♛','✦','◆','♥','☾','⚡','7'];let slotBusy=false;$('slotsSpinBtn')?.addEventListener('click',async()=>{if(slotBusy)return;slotBusy=true;const btn=$('slotsSpinBtn'),els=[$('slotReel1'),$('slotReel2'),$('slotReel3')];btn.disabled=true;els.forEach(e=>e?.classList.add('spinning'));for(let i=0;i<18;i++){els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]});await new Promise(r=>setTimeout(r,45+i*4))}const result=els.map(e=>e.textContent);els.forEach(e=>e?.classList.remove('spinning'));$('slotsStatus').textContent=result.every(x=>x===result[0])?'Trinca!':new Set(result).size===2?'Dupla':'Tente outra vez';btn.disabled=false;slotBusy=false});
+// Jogos online + Slots seguro pelo bridge
+function gameRows(obj){return Object.entries(obj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0))}
+function cardHtml(c){if(!c)return'';const red=c.s==='♥'||c.s==='♦';return `<i class="playing-card ${red?'red':''}"><b>${escText(c.r||'?')}</b><span>${escText(c.s||'')}</span></i>`}
+
+// 21 PvP
+$('blackjackCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('blackjackFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');try{await bridgeRequest('blackjack_create',{targetUid},25000,false);toast('Partida de 21 criada.')}catch(e){toast(e.message)}});
+function handleBlackjackIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.blackjack.game?.id!==active.id)subscribeBlackjack(active.id);return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.blackjack.game?.id!==finished.id)subscribeBlackjack(finished.id);else if(!finished)setBlackjackGame(null)}
+function subscribeBlackjack(id){if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}}state.blackjack.unsub=onValue(ref(db,`blackjackGames/${id}`),sn=>setBlackjackGame(sn.exists()?{id,...sn.val()}:null))}
+function setBlackjackGame(g){
+  state.blackjack.game=g;const panel=$('blackjackGamePanel'),lobby=$('blackjackLobby');
+  if(!g||g.status!=='active'){
+    if(panel)panel.hidden=true;if(lobby)lobby.hidden=false;
+    const won=!!g&&g.winnerUid===state.user?.uid,draw=!!g&&!g.winnerUid;
+    if($('blackjackStatus'))$('blackjackStatus').textContent=won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';
+    if(g?.status==='finished'&&g.id&&state.blackjack.seenActiveIds.has(g.id)){state.blackjack.seenActiveIds.delete(g.id);showGameResult({title:draw?'Empate no 21!':won?'Você venceu no 21!':'Você perdeu no 21',text:draw?'Os dois terminaram com a mesma pontuação.':won?'Sua mão ficou mais perto de 21.':'Seu adversário ficou mais perto de 21.',win:won,neutral:draw,icon:draw?'＝':won?'21':'✕'})}
+    return
+  }
+  state.blackjack.seenActiveIds.add(g.id);if(panel)panel.hidden=false;if(lobby)lobby.hidden=true;if($('blackjackStatus'))$('blackjackStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderBlackjackGame(g)
+}
+function renderBlackjackGame(g){
+  const me=g.players?.[state.user?.uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==state.user?.uid)||{};
+  if($('blackjackTitle'))$('blackjackTitle').textContent=`${me.name||'Você'} × ${other.name||'Amigo'}`;
+  if($('blackjackTurnText'))$('blackjackTurnText').textContent=g.turnUid===state.user?.uid?'Sua vez de jogar':`Vez de ${other.name||'seu amigo'}`;
+  if($('blackjackOpponentName'))$('blackjackOpponentName').textContent=other.name||'Adversário';
+  if($('blackjackPlayer'))$('blackjackPlayer').innerHTML=(me.cards||[]).map(cardHtml).join('');
+  if($('blackjackDealer'))$('blackjackDealer').innerHTML=(other.cards||[]).map(cardHtml).join('');
+  if($('blackjackPlayerScore'))$('blackjackPlayerScore').textContent=String(me.score??0);if($('blackjackDealerScore'))$('blackjackDealerScore').textContent=String(other.score??0);
+  if($('blackjackMyState'))$('blackjackMyState').textContent=me.busted?'Estourou':me.stood?'Parou':'Jogando';if($('blackjackOpponentState'))$('blackjackOpponentState').textContent=other.busted?'Estourou':other.stood?'Parou':'Jogando';
+  const myTurn=g.turnUid===state.user?.uid&&g.status==='active'&&!me.stood&&!me.busted;if($('blackjackHitBtn'))$('blackjackHitBtn').disabled=!myTurn;if($('blackjackStandBtn'))$('blackjackStandBtn').disabled=!myTurn;
+  const log=$('blackjackLog');if(log)log.innerHTML=Object.values(g.log||{}).slice(-10).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'
+}
+$('blackjackHitBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;try{await bridgeRequest('blackjack_move',{gameId:g.id,action:'hit'},20000,false)}catch(e){toast(e.message)}});
+$('blackjackStandBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;try{await bridgeRequest('blackjack_move',{gameId:g.id,action:'stand'},20000,false)}catch(e){toast(e.message)}});
+$('blackjackExitBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;try{await bridgeRequest('blackjack_exit',{gameId:g.id},20000,false)}catch(e){toast(e.message)}});
+
+// Forca PvP
+$('hangmanCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('hangmanFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');try{await bridgeRequest('hangman_create',{targetUid},25000,false);toast('Partida de Forca criada.')}catch(e){toast(e.message)}});
+function handleHangmanIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.hangman.game?.id!==active.id)subscribeHangman(active.id);return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.hangman.game?.id!==finished.id)subscribeHangman(finished.id);else if(!finished)setHangmanGame(null)}
+function subscribeHangman(id){if(state.hangman.unsub){try{state.hangman.unsub()}catch{}}state.hangman.unsub=onValue(ref(db,`hangmanGames/${id}`),sn=>setHangmanGame(sn.exists()?{id,...sn.val()}:null))}
+function setHangmanGame(g){
+  state.hangman.game=g;const panel=$('hangmanGamePanel'),lobby=$('hangmanLobby');
+  if(!g||g.status!=='active'){
+    if(panel)panel.hidden=true;if(lobby)lobby.hidden=false;
+    const won=!!g&&g.winnerUid===state.user?.uid,draw=!!g&&!g.winnerUid;if($('hangmanLives'))$('hangmanLives').textContent=won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';
+    if(g?.status==='finished'&&g.id&&state.hangman.seenActiveIds.has(g.id)){state.hangman.seenActiveIds.delete(g.id);showGameResult({title:draw?'Empate na Forca!':won?'Você venceu a Forca!':'Você perdeu a Forca',text:`A palavra era ${g.answer||'a palavra secreta'}.`,win:won,neutral:draw,icon:draw?'＝':won?'A':'✕'})}
+    return
+  }
+  state.hangman.seenActiveIds.add(g.id);if(panel)panel.hidden=false;if(lobby)lobby.hidden=true;renderHangmanGame(g)
+}
+function renderHangmanGame(g){
+  const me=g.players?.[state.user?.uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==state.user?.uid)||{},misses=Array.isArray(g.misses)?g.misses:Object.values(g.misses||{}),max=Number(g.maxMisses||6),guessed=g.guessed||{};
+  if($('hangmanTitle'))$('hangmanTitle').textContent=`${me.name||'Você'} × ${other.name||'Amigo'}`;if($('hangmanTurnText'))$('hangmanTurnText').textContent=g.turnUid===state.user?.uid?'Sua vez de escolher uma letra':`Vez de ${other.name||'seu amigo'}`;
+  if($('hangmanLives'))$('hangmanLives').textContent=`${Math.max(0,max-misses.length)} erros restantes`;if($('hangmanWord'))$('hangmanWord').textContent=String(g.mask||'').split('').map(ch=>ch===' '?'  ':ch).join(' ');
+  if($('hangmanMeName'))$('hangmanMeName').textContent=me.name||'Você';if($('hangmanOpponentName'))$('hangmanOpponentName').textContent=other.name||'Adversário';if($('hangmanMeScore'))$('hangmanMeScore').textContent=String(me.score||0);if($('hangmanOpponentScore'))$('hangmanOpponentScore').textContent=String(other.score||0);
+  const kb=$('hangmanKeyboard');if(kb){kb.innerHTML='';'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(ch=>{const b=document.createElement('button');b.type='button';b.textContent=ch;const used=guessed[ch];if(used)b.classList.add(used==='hit'?'correct':'wrong');b.disabled=!!used||g.turnUid!==state.user?.uid||g.status!=='active';b.onclick=async()=>{try{await bridgeRequest('hangman_guess',{gameId:g.id,letter:ch},20000,false)}catch(e){toast(e.message)}};kb.appendChild(b)})}
+  const log=$('hangmanLog');if(log)log.innerHTML=Object.values(g.log||{}).slice(-10).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'
+}
+$('hangmanExitBtn')?.addEventListener('click',async()=>{const g=state.hangman.game;if(!g)return;try{await bridgeRequest('hangman_exit',{gameId:g.id},20000,false)}catch(e){toast(e.message)}});
+
+// Slots solo — o resultado e o saldo são definidos pelo bridge, nunca pelo navegador.
+const SLOT_SYMBOLS=['♛','✦','◆','♥','☾','⚡','7'];let slotBusy=false;
+$$('[data-slot-bet]').forEach(btn=>btn.addEventListener('click',()=>{if($('slotsBetInput'))$('slotsBetInput').value=btn.dataset.slotBet||'50'}));
+$('slotsSpinBtn')?.addEventListener('click',async()=>{
+  if(slotBusy)return;const bet=Math.floor(Number($('slotsBetInput')?.value||0));if(!Number.isFinite(bet)||bet<10||bet>5000)return toast('A aposta deve ficar entre ₹10 e ₹5.000.');if(!linkedCharlotte())return toast('Vincule a Charlotte para usar suas Rupias nos Slots.');
+  slotBusy=true;const btn=$('slotsSpinBtn'),els=[$('slotReel1'),$('slotReel2'),$('slotReel3')];if(btn)btn.disabled=true;els.forEach(e=>e?.classList.add('spinning'));if($('slotsStatus'))$('slotsStatus').textContent='Girando...';if($('slotsLastWin'))$('slotsLastWin').textContent=`Apostando ₹${formatNumber(bet)}...`;
+  const timer=setInterval(()=>els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]}),80);
+  try{
+    const r=await bridgeRequest('slots_spin',{bet},25000,true);clearInterval(timer);
+    for(let i=0;i<8;i++){els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]});await new Promise(res=>setTimeout(res,55+i*12))}
+    const symbols=Array.isArray(r.symbols)?r.symbols:['✦','✦','✦'];symbols.forEach((v,i)=>{if(els[i])els[i].textContent=v});els.forEach(e=>e?.classList.remove('spinning'));
+    const payout=Number(r.payout||0),balance=Number(r.balance||0),jackpot=!!r.jackpot;if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(balance)}`;if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':payout>0?'Você ganhou!':'Sem prêmio';if($('slotsLastWin'))$('slotsLastWin').textContent=payout>0?`Prêmio: ₹${formatNumber(payout)} • saldo ₹${formatNumber(balance)}`:`Não foi dessa vez • saldo ₹${formatNumber(balance)}`;
+    if(jackpot){showGameResult({title:'JACKPOT!',text:`Você ganhou ₹${formatNumber(payout)} nos Slots.`,win:true,icon:'7'})}else if(payout>0){playVictoryTone()}else playDefeatTone();
+    requestAccountSync().catch(()=>{});
+  }catch(e){clearInterval(timer);els.forEach(x=>x?.classList.remove('spinning'));if($('slotsStatus'))$('slotsStatus').textContent='Erro';if($('slotsLastWin'))$('slotsLastWin').textContent=e.message;toast(e.message,5000)}finally{slotBusy=false;if(btn)btn.disabled=false}
+});
 
 const initialRoute=(location.hash||'#home').slice(1);navigate(routeMeta[initialRoute]?initialRoute:'home');
