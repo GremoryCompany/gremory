@@ -1,9 +1,9 @@
-const CACHE='gremory-v12-1-games-pro-20261018';
+const CACHE='gremory-v12-2-site-games-20261018';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261018-v12-1-games-pro',
-  '/assets/js/app.js?v=20261018-v12-1-games-pro',
+  '/assets/css/app.css?v=20261018-v12-2-site-games',
+  '/assets/js/app.js?v=20261018-v12-2-site-games',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
   '/manifest.webmanifest'
