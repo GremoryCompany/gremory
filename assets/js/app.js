@@ -75,7 +75,7 @@ function usernameCooldownRemaining(p=state.profile){
   const at=Number(p?.usernameChangedAt||0);if(!at)return 0;
   return Math.max(0,USERNAME_COOLDOWN_MS-(Date.now()-at));
 }
-if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}),{once:true})}
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').then(reg=>reg.update().catch(()=>{})).catch(()=>{}),{once:true})}
 
 function formatCooldown(ms){
   if(ms<=0)return'Você pode alterar agora.';
@@ -373,7 +373,7 @@ function startUserSubscriptions(){
   state.userUnsubs.push(onValue(ref(db,`ticTacToeIndex/${uid}`),s=>{state.ttt.index=s.exists()?s.val():{};handleTttIndex(state.ttt.index)}));
   state.userUnsubs.push(onValue(ref(db,`blackjackIndex/${uid}`),s=>{state.blackjack.index=s.exists()?s.val():{};handleBlackjackIndex(state.blackjack.index)}));
   state.userUnsubs.push(onValue(ref(db,`hangmanIndex/${uid}`),s=>{state.hangman.index=s.exists()?s.val():{};handleHangmanIndex(state.hangman.index)}));
-  state.userUnsubs.push(onValue(ref(db,`siteGameChallenges/${uid}`),s=>{state.siteGameChallenges=s.exists()?s.val():{};renderSiteGameChallenges()}));
+  state.userUnsubs.push(onValue(ref(db,`siteGameChallenges/${uid}`),s=>{state.siteGameChallenges=s.exists()?s.val():{};renderSiteGameChallenges();renderNotifications()}));
   state.userUnsubs.push(onValue(query(ref(db,'siteUpdates'),orderByChild('createdAt'),limitToLast(60)),s=>{state.updates=s.exists()?s.val():{};renderUpdates()}));
   let notificationBoot=true,notificationNewestAt=0;
   state.userUnsubs.push(onValue(query(ref(db,`siteNotifications/${uid}`),orderByChild('createdAt'),limitToLast(100)),s=>{
@@ -468,7 +468,7 @@ function isNotificationUnread(n){return Number(n?.createdAt||0)>notificationLast
 function notificationSignature(n){return [String(n?.type||''),String(n?.title||''),String(n?.text||''),String(n?.link||''),String(n?.imageUrl||'')].join('\u241f')}
 function notificationCategory(n){
   const type=String(n?.type||'').toLowerCase();
-  if(['friend_request','pokemon_duel','ttt','blackjack','hangman','tinder_match','friend','social'].includes(type))return'social';
+  if(['friend_request','pokemon_duel','ttt','blackjack','hangman','game_challenge','tinder_match','friend','social'].includes(type))return'social';
   return'team';
 }
 function notificationCategoryLabel(n){return notificationCategory(n)==='social'?'Amigos':'Equipe'}
@@ -485,11 +485,32 @@ function showBrowserNotification(n){
   if(!browserNotificationsEnabled()||!n)return;
   try{
     const notice=new Notification(n.title||'Gremory',{body:String(n.text||'').slice(0,180),icon:'/assets/icons/icon-192.png',badge:'/assets/icons/icon-192.png',tag:`gremory-${n.id||n.createdAt||Date.now()}`,renotify:false});
-    notice.onclick=()=>{window.focus();if(n.link?.startsWith('#'))navigate(n.link.slice(1));notice.close()}
+    notice.onclick=()=>{window.focus();if(n.type==='game_challenge'){state.notificationFilter='social';renderNotifications();openModal('notificationModal')}else if(n.link?.startsWith('#'))navigate(n.link.slice(1));notice.close()}
   }catch{}
 }
+function siteGameChallengeNotificationRows(){
+  return Object.entries(state.siteGameChallenges||{}).map(([challengeId,ch])=>{
+    const meta=SITE_GAME_META[ch?.type]||{};
+    return {
+      id:`game_${challengeId}`,
+      type:'game_challenge',
+      gameType:ch?.type||'',
+      challengeId,
+      title:`Convite para ${meta.label||'jogo'}`,
+      text:`${ch?.fromName||'Um amigo'} desafiou você para ${meta.label||'uma partida'}.`,
+      link:'#friends',
+      actorUid:ch?.fromUid||'',
+      createdAt:Number(ch?.createdAt||0),
+      sound:true,
+      virtual:true
+    };
+  });
+}
 function uniqueNotificationRows(source=state.notifications){
-  const rows=Object.entries(source||{}).map(([id,v])=>({id,...(v||{})})).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
+  const rows=[
+    ...Object.entries(source||{}).map(([id,v])=>({id,...(v||{})})),
+    ...siteGameChallengeNotificationRows()
+  ].sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
   const latestBySignature=new Map(),unique=[];
   for(const n of rows){const sig=notificationSignature(n),created=Number(n.createdAt||0),latest=latestBySignature.get(sig);if(latest!=null&&Math.abs(latest-created)<=30000)continue;latestBySignature.set(sig,created);unique.push(n)}
   return unique;
@@ -514,12 +535,23 @@ function renderNotifications(){
   rows.slice(0,60).forEach(n=>{
     const row=document.createElement('div');row.className='notification-row-wrap'+(isNotificationUnread(n)?' unread':'');
     const d=document.createElement('button');d.type='button';d.className='notification-row';const head=document.createElement('div');head.className='notification-row-head';const st=document.createElement('strong');st.textContent=n.title||'Notificação';const kind=document.createElement('em');kind.textContent=notificationCategoryLabel(n);head.append(st,kind);const sm=document.createElement('span');sm.textContent=n.text||'';const time=document.createElement('small');time.textContent=shortDateTime(n.createdAt);d.append(head,sm,time);
-    d.onclick=()=>{markNotificationRead(n.id);if(n.imageUrl||n.type==='admin_notice'||n.type==='site_update'){openNotificationDetail(n);return}if(n.link?.startsWith('#')){closeModal('notificationModal');navigate(n.link.slice(1));return}openNotificationDetail(n)};
-    const del=document.createElement('button');del.className='notification-delete';del.type='button';del.title='Apagar';del.textContent='×';del.onclick=ev=>{ev.stopPropagation();deleteSiteNotification(n.id)};row.append(d,del);box.appendChild(row)
+    d.onclick=()=>{markNotificationRead(n.id);if(n.type==='game_challenge')return;if(n.imageUrl||n.type==='admin_notice'||n.type==='site_update'){openNotificationDetail(n);return}if(n.link?.startsWith('#')){closeModal('notificationModal');navigate(n.link.slice(1));return}openNotificationDetail(n)};
+    row.appendChild(d);
+    if(n.type==='game_challenge'&&n.challengeId){
+      const actions=document.createElement('div');actions.className='notification-game-actions';
+      const yes=document.createElement('button');yes.type='button';yes.className='btn primary';yes.textContent='Aceitar';
+      yes.onclick=async ev=>{ev.stopPropagation();const ch=state.siteGameChallenges?.[n.challengeId];if(!ch)return toast('Esse convite não está mais disponível.');try{yes.disabled=true;no.disabled=true;markNotificationRead(n.id);await acceptSiteGameChallenge({id:n.challengeId,...ch});closeModal('notificationModal');navigate('games')}catch(e){toast(permissionMessage(e,e.message||'Não foi possível aceitar.'))}finally{yes.disabled=false;no.disabled=false}};
+      const no=document.createElement('button');no.type='button';no.className='btn';no.textContent='Recusar';
+      no.onclick=async ev=>{ev.stopPropagation();try{yes.disabled=true;no.disabled=true;markNotificationRead(n.id);await rejectSiteGameChallenge(n.challengeId)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível recusar.'))}finally{yes.disabled=false;no.disabled=false}};
+      actions.append(yes,no);row.appendChild(actions);
+    }else{
+      const del=document.createElement('button');del.className='notification-delete';del.type='button';del.title='Apagar';del.textContent='×';del.onclick=ev=>{ev.stopPropagation();deleteSiteNotification(n.id)};row.appendChild(del)
+    }
+    box.appendChild(row)
   })
 }
 $$('[data-notification-filter]').forEach(btn=>btn.addEventListener('click',()=>{state.notificationFilter=btn.dataset.notificationFilter||'team';renderNotifications()}));
-$('notificationBtn')?.addEventListener('click',()=>{markAllNotificationsSeen();openModal('notificationModal')});
+$('notificationBtn')?.addEventListener('click',()=>{const all=uniqueNotificationRows();const hasGameInvite=all.some(n=>n.type==='game_challenge');const hasUnreadSocial=all.some(n=>notificationCategory(n)==='social'&&isNotificationUnread(n));if(hasGameInvite||hasUnreadSocial)state.notificationFilter='social';markAllNotificationsSeen();renderNotifications();openModal('notificationModal')});
 $('notificationMarkAllBtn')?.addEventListener('click',()=>{markAllNotificationsSeen();toast('Notificações marcadas como vistas.')});
 $('notificationClearAllBtn')?.addEventListener('click',()=>clearSiteNotifications());
 $('profileBrowserNotify')?.addEventListener('change',e=>setBrowserNotifications(e.target.checked));
@@ -1123,7 +1155,14 @@ function burstConfetti(){
   document.body.appendChild(root);setTimeout(()=>root.remove(),2600)
 }
 function showGameResult({title='Partida encerrada',text='',win=false,neutral=false,icon='★'}={}){
-  if($('gameResultTitle'))$('gameResultTitle').textContent=title;if($('gameResultText'))$('gameResultText').textContent=text;if($('gameResultIcon'))$('gameResultIcon').textContent=icon;openModal('gameResultModal');if(win){burstConfetti();playVictoryTone()}else if(!neutral){playDefeatTone()}
+  if($('gameResultTitle'))$('gameResultTitle').textContent=title;
+  if($('gameResultText')){
+    $('gameResultText').textContent=text;
+    $('gameResultText').style.whiteSpace='pre-line';
+  }
+  if($('gameResultIcon'))$('gameResultIcon').textContent=icon;
+  openModal('gameResultModal');
+  if(win){burstConfetti();playVictoryTone()}else if(!neutral){playDefeatTone()}
 }
 
 // Jogos PvP do site: convites, partidas e jogadas ficam no Firebase do próprio site.
@@ -1154,12 +1193,17 @@ function challengeRow(ch){
   acts.append(yes,no);row.append(copy,acts);return row
 }
 function renderSiteGameChallenges(){
-  Object.values(SITE_GAME_META).forEach(m=>{const box=$(m.inviteBox);if(box)box.innerHTML=''});
+  // Convites agora ficam centralizados no sininho > Amigos.
+  Object.values(SITE_GAME_META).forEach(m=>{const box=$(m.inviteBox);if(box){box.innerHTML='';box.hidden=true}});
   const rows=Object.values(state.siteGameChallenges||{}).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
   const fresh=rows.filter(ch=>ch?.id&&!state.siteGameChallengeSeen.has(ch.id));
   rows.forEach(ch=>{if(ch?.id)state.siteGameChallengeSeen.add(ch.id)});
-  if(fresh.length){const last=fresh[0],label=SITE_GAME_META[last.type]?.label||'jogo';toast(`${last.fromName||'Um amigo'} desafiou você para ${label}.`,5200);playNotificationTone()}
-  for(const ch of rows){const meta=SITE_GAME_META[ch.type],box=meta?$(meta.inviteBox):null;if(box)box.appendChild(challengeRow(ch))}
+  renderNotifications();
+  if(fresh.length){
+    const last=fresh[0],label=SITE_GAME_META[last.type]?.label||'jogo';
+    const notice={id:`game_${last.id}`,type:'game_challenge',gameType:last.type,challengeId:last.id,title:`Convite para ${label}`,text:`${last.fromName||'Um amigo'} desafiou você para ${label}.`,link:'#friends',createdAt:Number(last.createdAt||Date.now())};
+    toast(`${last.fromName||'Um amigo'} desafiou você para ${label}. Abra o sininho em Amigos.`,5200);playNotificationTone();showBrowserNotification(notice)
+  }
 }
 function cryptoShuffle(items){const a=[...items];const bytes=new Uint32Array(Math.max(1,a.length));crypto.getRandomValues(bytes);for(let i=a.length-1;i>0;i--){const j=bytes[i%bytes.length]%(i+1);[a[i],a[j]]=[a[j],a[i]]}return a}
 function randomPlayer(a,b){const x=new Uint8Array(1);crypto.getRandomValues(x);return x[0]%2===0?a:b}
@@ -2205,7 +2249,27 @@ function cardHtml(c){if(!c)return'';const red=c.s==='♥'||c.s==='♦';return `<
 $('blackjackCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('blackjackFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');try{await sendSiteGameChallenge('blackjack',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
 function handleBlackjackIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.blackjack.game?.id!==active.id)subscribeBlackjack(active.id);return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.blackjack.game?.id!==finished.id)subscribeBlackjack(finished.id);else if(!finished)setBlackjackGame(null)}
 function subscribeBlackjack(id){if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}}state.blackjack.unsub=onValue(ref(db,`blackjackGames/${id}`),sn=>setBlackjackGame(sn.exists()?{id,...sn.val()}:null))}
-function setBlackjackGame(g){state.blackjack.game=g;const panel=$('blackjackGamePanel'),lobby=$('blackjackLobby');if(!g||g.status!=='active'){if(panel)panel.hidden=true;if(lobby)lobby.hidden=false;const won=!!g&&g.winnerUid===state.user?.uid,draw=!!g&&!g.winnerUid;if($('blackjackStatus'))$('blackjackStatus').textContent=won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';if(g?.status==='finished'&&g.id&&state.blackjack.seenActiveIds.has(g.id)){state.blackjack.seenActiveIds.delete(g.id);showGameResult({title:draw?'Empate no 21!':won?'Você venceu no 21!':'Você perdeu no 21',text:draw?'Os dois terminaram com a mesma pontuação.':won?'Sua mão ficou mais perto de 21.':'Seu adversário ficou mais perto de 21.',win:won,neutral:draw,icon:draw?'＝':won?'21':'✕'})}return}state.blackjack.seenActiveIds.add(g.id);if(panel)panel.hidden=false;if(lobby)lobby.hidden=true;if($('blackjackStatus'))$('blackjackStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderBlackjackGame(g)}
+function blackjackCardsText(cards=[]){return(cards||[]).map(c=>`${c?.r||'?'}${c?.s||''}`).join(' + ')||'Sem cartas'}
+function blackjackResultReason(g,me,other,won,draw){
+  const myScore=Number(me?.score??blackjackScore(me?.cards||[])),otherScore=Number(other?.score??blackjackScore(other?.cards||[]));
+  if(draw){
+    if(me?.busted&&other?.busted)return `Os dois estouraram (${myScore} × ${otherScore}).`;
+    return `As duas mãos terminaram empatadas em ${myScore}.`;
+  }
+  const winner=won?me:other,loser=won?other:me,winnerScore=Number(winner?.score??0),loserScore=Number(loser?.score??0);
+  if(loser?.busted)return `${loser?.name||'O perdedor'} estourou com ${loserScore}.`;
+  if(winnerScore===21&&Array.isArray(winner?.cards)&&winner.cards.length===2)return `${winner?.name||'O vencedor'} fez Blackjack natural com 21.`;
+  if(winnerScore===21)return `${winner?.name||'O vencedor'} chegou exatamente a 21.`;
+  return `${winnerScore} venceu ${loserScore} por ficar mais perto de 21.`;
+}
+function blackjackResultText(g){
+  const me=g?.players?.[state.user?.uid]||{},other=Object.values(g?.players||{}).find(x=>x.uid!==state.user?.uid)||{};
+  const won=!!g&&g.winnerUid===state.user?.uid,draw=!!g&&!g.winnerUid;
+  const myScore=Number(me.score??blackjackScore(me.cards||[])),otherScore=Number(other.score??blackjackScore(other.cards||[]));
+  const winner=draw?null:(won?me:other),winnerScore=draw?null:Number(winner?.score??blackjackScore(winner?.cards||[]));
+  return `Sua mão: ${blackjackCardsText(me.cards)} = ${myScore}\nMão de ${other.name||'seu adversário'}: ${blackjackCardsText(other.cards)} = ${otherScore}\n\n${draw?'Resultado: EMPATE':`Mão vencedora: ${blackjackCardsText(winner?.cards)} = ${winnerScore}`}\nMotivo: ${blackjackResultReason(g,me,other,won,draw)}`;
+}
+function setBlackjackGame(g){state.blackjack.game=g;const panel=$('blackjackGamePanel'),lobby=$('blackjackLobby');if(!g||g.status!=='active'){if(panel)panel.hidden=true;if(lobby)lobby.hidden=false;const won=!!g&&g.winnerUid===state.user?.uid,draw=!!g&&!g.winnerUid;if($('blackjackStatus'))$('blackjackStatus').textContent=won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';if(g?.status==='finished'&&g.id&&state.blackjack.seenActiveIds.has(g.id)){state.blackjack.seenActiveIds.delete(g.id);showGameResult({title:draw?'Empate no 21!':won?'Você venceu no 21!':'Você perdeu no 21',text:blackjackResultText(g),win:won,neutral:draw,icon:draw?'＝':won?'21':'✕'})}return}state.blackjack.seenActiveIds.add(g.id);if(panel)panel.hidden=false;if(lobby)lobby.hidden=true;if($('blackjackStatus'))$('blackjackStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderBlackjackGame(g)}
 function renderBlackjackGame(g){const me=g.players?.[state.user?.uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==state.user?.uid)||{};if($('blackjackTitle'))$('blackjackTitle').textContent=`${me.name||'Você'} × ${other.name||'Amigo'}`;if($('blackjackTurnText'))$('blackjackTurnText').textContent=g.turnUid===state.user?.uid?'Sua vez de jogar':`Vez de ${other.name||'seu amigo'}`;if($('blackjackOpponentName'))$('blackjackOpponentName').textContent=other.name||'Adversário';if($('blackjackPlayer'))$('blackjackPlayer').innerHTML=(me.cards||[]).map(cardHtml).join('');if($('blackjackDealer'))$('blackjackDealer').innerHTML=(other.cards||[]).map(cardHtml).join('');if($('blackjackPlayerScore'))$('blackjackPlayerScore').textContent=String(me.score??0);if($('blackjackDealerScore'))$('blackjackDealerScore').textContent=String(other.score??0);if($('blackjackMyState'))$('blackjackMyState').textContent=me.busted?'Estourou':me.stood?'Parou':'Jogando';if($('blackjackOpponentState'))$('blackjackOpponentState').textContent=other.busted?'Estourou':other.stood?'Parou':'Jogando';const myTurn=g.turnUid===state.user?.uid&&g.status==='active'&&!me.stood&&!me.busted;if($('blackjackHitBtn'))$('blackjackHitBtn').disabled=!myTurn;if($('blackjackStandBtn'))$('blackjackStandBtn').disabled=!myTurn;const log=$('blackjackLog');if(log)log.innerHTML=Object.values(g.log||{}).slice(-10).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
 function blackjackWinner(g){const rows=Object.values(g.players||{}),alive=rows.filter(p=>!p.busted),best=alive.length?Math.max(...alive.map(p=>Number(p.score||0))):-1,winners=alive.filter(p=>Number(p.score||0)===best);return winners.length===1?winners[0].uid:null}
 async function directBlackjackMove(gameId,action){const uid=state.user?.uid;if(!uid)return;let reason='';const tx=await runTransaction(ref(db,`blackjackGames/${gameId}`),g=>{if(!g||g.status!=='active'){reason='Partida encerrada.';return}if(g.turnUid!==uid){reason='Aguarde sua vez.';return}const me=g.players?.[uid],otherUid=Object.keys(g.players||{}).find(x=>x!==uid),other=g.players?.[otherUid];if(!me||!other){reason='Partida inválida.';return}g.deck=Array.isArray(g.deck)?g.deck:[];if(action==='hit'){const card=g.deck.pop();if(!card){reason='O baralho acabou.';return}me.cards=[...(me.cards||[]),card];me.score=blackjackScore(me.cards);if(me.score>21)me.busted=true;if(me.score===21)me.stood=true;appendGameLog(g,`${me.name||'Jogador'} pediu uma carta.`)}else if(action==='stand'){me.stood=true;appendGameLog(g,`${me.name||'Jogador'} parou com ${me.score||0}.`)}else{reason='Jogada inválida.';return}g.updatedAt=Date.now();const meDone=me.stood||me.busted,otherDone=other.stood||other.busted;if(me.busted||(meDone&&otherDone)){g.status='finished';g.winnerUid=blackjackWinner(g);g.finishedAt=Date.now()}else if(!otherDone)g.turnUid=otherUid;else g.turnUid=uid;return g});if(!tx.committed){if(reason)throw new Error(reason);return}const final={id:gameId,...tx.snapshot.val()};if(final.status==='finished')await finishIndexes('blackjack',final)}
@@ -2224,19 +2288,64 @@ $('hangmanExitBtn')?.addEventListener('click',async()=>{const g=state.hangman.ga
 
 // Slots solo — o resultado e o saldo são definidos pelo bridge, nunca pelo navegador.
 const SLOT_SYMBOLS=['♛','✦','◆','♥','☾','⚡','7'];let slotBusy=false;
+function startSlotSpinSound(){
+  let stopped=false,ctx=null,osc=null,gain=null,tick=null;
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return()=>{};
+    ctx=new Ctx();osc=ctx.createOscillator();gain=ctx.createGain();osc.type='square';osc.frequency.value=145;gain.gain.value=.018;osc.connect(gain);gain.connect(ctx.destination);osc.start();
+    tick=setInterval(()=>{if(!stopped&&osc&&ctx)osc.frequency.setValueAtTime(125+Math.random()*95,ctx.currentTime)},95);
+  }catch{return()=>{}}
+  return()=>{if(stopped)return;stopped=true;if(tick)clearInterval(tick);try{osc?.stop()}catch{}try{ctx?.close()}catch{}};
+}
 $$('[data-slot-bet]').forEach(btn=>btn.addEventListener('click',()=>{if($('slotsBetInput'))$('slotsBetInput').value=btn.dataset.slotBet||'50'}));
 $('slotsSpinBtn')?.addEventListener('click',async()=>{
-  if(slotBusy)return;const bet=Math.floor(Number($('slotsBetInput')?.value||0));if(!Number.isFinite(bet)||bet<10||bet>5000)return toast('A aposta deve ficar entre ₹10 e ₹5.000.');if(!linkedCharlotte())return toast('Vincule a Charlotte para usar suas Rupias nos Slots.');
-  slotBusy=true;const btn=$('slotsSpinBtn'),els=[$('slotReel1'),$('slotReel2'),$('slotReel3')];if(btn)btn.disabled=true;els.forEach(e=>e?.classList.add('spinning'));if($('slotsStatus'))$('slotsStatus').textContent='Girando...';if($('slotsLastWin'))$('slotsLastWin').textContent=`Apostando ₹${formatNumber(bet)}...`;
+  if(slotBusy)return;
+  const bet=Math.floor(Number($('slotsBetInput')?.value||0));
+  if(!Number.isFinite(bet)||bet<10||bet>5000)return toast('A aposta deve ficar entre ₹10 e ₹5.000.');
+  if(!linkedCharlotte())return toast('Vincule a Charlotte para usar suas Rupias nos Slots.');
+
+  slotBusy=true;
+  const btn=$('slotsSpinBtn'),els=[$('slotReel1'),$('slotReel2'),$('slotReel3')];
+  if(btn)btn.disabled=true;
+  els.forEach(e=>e?.classList.add('spinning'));
+  if($('slotsStatus'))$('slotsStatus').textContent='Girando...';
+  if($('slotsLastWin'))$('slotsLastWin').textContent=`Apostando ₹${formatNumber(bet)}...`;
+
+  const stopSpinSound=startSlotSpinSound();
+  let visualStopped=false;
   const timer=setInterval(()=>els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]}),80);
+  const stopVisual=()=>{
+    if(visualStopped)return;visualStopped=true;clearInterval(timer);stopSpinSound();els.forEach(e=>e?.classList.remove('spinning'));
+  };
+  const visualCap=setTimeout(()=>{
+    stopVisual();
+    if($('slotsStatus'))$('slotsStatus').textContent='Confirmando Rupias...';
+    if($('slotsLastWin'))$('slotsLastWin').textContent='O giro terminou. Confirmando a aposta com sua carteira...';
+  },4200);
+
   try{
-    const r=await bridgeRequest('slots_spin',{bet},25000,true);clearInterval(timer);
-    for(let i=0;i<8;i++){els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]});await new Promise(res=>setTimeout(res,55+i*12))}
-    const symbols=Array.isArray(r.symbols)?r.symbols:['✦','✦','✦'];symbols.forEach((v,i)=>{if(els[i])els[i].textContent=v});els.forEach(e=>e?.classList.remove('spinning'));
-    const payout=Number(r.payout||0),balance=Number(r.balance||0),jackpot=!!r.jackpot;if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(balance)}`;if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':payout>0?'Você ganhou!':'Sem prêmio';if($('slotsLastWin'))$('slotsLastWin').textContent=payout>0?`Prêmio: ₹${formatNumber(payout)} • saldo ₹${formatNumber(balance)}`:`Não foi dessa vez • saldo ₹${formatNumber(balance)}`;
+    const r=await bridgeRequest('slots_spin',{bet},25000,true);
+    clearTimeout(visualCap);
+    stopVisual();
+    for(let i=0;i<6;i++){els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]});await new Promise(res=>setTimeout(res,55+i*16))}
+    const symbols=Array.isArray(r.symbols)?r.symbols:['✦','✦','✦'];
+    symbols.forEach((v,i)=>{if(els[i])els[i].textContent=v});
+    const payout=Number(r.payout||0),balance=Number(r.balance||0),jackpot=!!r.jackpot;
+    if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(balance)}`;
+    if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':payout>0?'Você ganhou!':'Sem prêmio';
+    if($('slotsLastWin'))$('slotsLastWin').textContent=payout>0?`Prêmio: ₹${formatNumber(payout)} • saldo ₹${formatNumber(balance)}`:`Não foi dessa vez • saldo ₹${formatNumber(balance)}`;
     if(jackpot){showGameResult({title:'JACKPOT!',text:`Você ganhou ₹${formatNumber(payout)} nos Slots.`,win:true,icon:'7'})}else if(payout>0){playVictoryTone()}else playDefeatTone();
     requestAccountSync().catch(()=>{});
-  }catch(e){clearInterval(timer);els.forEach(x=>x?.classList.remove('spinning'));if($('slotsStatus'))$('slotsStatus').textContent='Erro';if($('slotsLastWin'))$('slotsLastWin').textContent=e.message;toast(e.message,5000)}finally{slotBusy=false;if(btn)btn.disabled=false}
+  }catch(e){
+    clearTimeout(visualCap);stopVisual();
+    const bridgeTimeout=/Charlotte demorou para responder/i.test(String(e?.message||''));
+    const msg=bridgeTimeout?'Não foi possível confirmar a aposta com a carteira de Rupias. O giro foi encerrado e a tela foi liberada.':'Não foi possível concluir o giro: '+String(e?.message||'erro desconhecido');
+    if($('slotsStatus'))$('slotsStatus').textContent='Giro não confirmado';
+    if($('slotsLastWin'))$('slotsLastWin').textContent=msg;
+    toast(msg,6000);
+  }finally{
+    clearTimeout(visualCap);stopVisual();slotBusy=false;if(btn)btn.disabled=false;
+  }
 });
 
 const initialRoute=(location.hash||'#home').slice(1);navigate(routeMeta[initialRoute]?initialRoute:'home');
