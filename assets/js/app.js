@@ -48,7 +48,7 @@ const state = {
   notificationFilter:'team',
   browserNotificationLastAt:0,
   admin:{reports:{},updates:{},directory:{},bans:{},selectedUid:'',supportChats:{},supportSelectedUid:'',supportUnsub:null,backupStatus:{}},
-  tinder:{current:null,seen:[]},updates:{},notifications:{},ban:null,supportChat:{messages:{}},
+  tinder:{current:null,seen:[]},updates:{},notifications:{},notificationDismissed:{},ban:null,supportChat:{messages:{}},
   watchCode:null,watchRoom:null,watchUnsubs:[],watchApplying:false,
   watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false},
   watchYoutube:{lastTime:0,lastState:-1,lastPublishAt:0},
@@ -351,7 +351,7 @@ $('profileForm').addEventListener('submit',async ev=>{
   }
 });
 
-function clearUserSubscriptions(){try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null}
+function clearUserSubscriptions(){try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.notificationDismissed={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null}
 function startUserSubscriptions(){
   clearUserSubscriptions();const uid=state.user.uid;
   state.userUnsubs.push(onValue(ref(db,`friends/${uid}`),s=>{state.friends=s.exists()?s.val():{};renderFriends();renderDuelFriendSelect();$('homeFriendsText').textContent=`${Object.keys(state.friends).length} amigo${Object.keys(state.friends).length===1?'':'s'}`}));
@@ -375,6 +375,7 @@ function startUserSubscriptions(){
   state.userUnsubs.push(onValue(ref(db,`hangmanIndex/${uid}`),s=>{state.hangman.index=s.exists()?s.val():{};handleHangmanIndex(state.hangman.index)}));
   state.userUnsubs.push(onValue(ref(db,`siteGameChallenges/${uid}`),s=>{state.siteGameChallenges=s.exists()?s.val():{};renderSiteGameChallenges();renderNotifications()}));
   state.userUnsubs.push(onValue(query(ref(db,'siteUpdates'),orderByChild('createdAt'),limitToLast(60)),s=>{state.updates=s.exists()?s.val():{};renderUpdates()}));
+  state.userUnsubs.push(onValue(ref(db,`siteNotificationDismissed/${uid}`),s=>{state.notificationDismissed=s.exists()?s.val():{};renderNotifications()}));
   let notificationBoot=true,notificationNewestAt=0;
   state.userUnsubs.push(onValue(query(ref(db,`siteNotifications/${uid}`),orderByChild('createdAt'),limitToLast(100)),s=>{
     const previousNewest=notificationNewestAt;
@@ -565,10 +566,43 @@ function notificationStorageKey(suffix='seen'){
 function notificationLastSeen(){return Number(localStorage.getItem(notificationStorageKey('seen'))||0)}
 function notificationReadIds(){try{return new Set(JSON.parse(localStorage.getItem(notificationStorageKey('read'))||'[]'))}catch{return new Set()}}
 function saveNotificationReadIds(set){localStorage.setItem(notificationStorageKey('read'),JSON.stringify([...set].slice(-300)))}
-function markNotificationRead(id){if(!id)return;const set=notificationReadIds();set.add(String(id));saveNotificationReadIds(set);renderNotifications()}
-function markAllNotificationsSeen(){localStorage.setItem(notificationStorageKey('seen'),String(Date.now()));localStorage.removeItem(notificationStorageKey('read'));renderNotifications()}
-function isNotificationUnread(n){return Number(n?.createdAt||0)>notificationLastSeen()&&!notificationReadIds().has(String(n?.id||''))}
+function notificationDismissedKeys(){try{return new Set(JSON.parse(localStorage.getItem(notificationStorageKey('dismissed'))||'[]'))}catch{return new Set()}}
+function saveNotificationDismissedKeys(set){localStorage.setItem(notificationStorageKey('dismissed'),JSON.stringify([...set].slice(-500)))}
 function notificationSignature(n){return [String(n?.type||''),String(n?.title||''),String(n?.text||''),String(n?.link||''),String(n?.imageUrl||'')].join('\u241f')}
+function notificationPersistentKey(n){
+  const type=String(n?.type||'');
+  const source=type==='game_challenge'?`game:${n?.challengeId||n?.id||''}`:notificationSignature(n);
+  let h=2166136261;
+  for(let i=0;i<source.length;i++){h^=source.charCodeAt(i);h=Math.imul(h,16777619)}
+  return `n_${(h>>>0).toString(16)}`
+}
+function notificationWasDismissed(n){
+  if(!n)return false;
+  const key=notificationPersistentKey(n);
+  return Boolean(state.notificationDismissed?.[key])||notificationDismissedKeys().has(key)
+}
+function findNotificationById(id){
+  if(!id)return null;
+  const raw=state.notifications?.[id];
+  if(raw)return{id,...raw};
+  return siteGameChallengeNotificationRows().find(n=>String(n.id)===String(id))||null
+}
+async function persistNotificationDismissed(n){
+  if(!state.user||!n)return;
+  const key=notificationPersistentKey(n),local=notificationDismissedKeys();
+  local.add(key);saveNotificationDismissedKeys(local);
+  state.notificationDismissed={...(state.notificationDismissed||{}),[key]:{seenAt:Date.now(),notificationId:String(n.id||''),type:String(n.type||'')}};
+  try{await set(ref(db,`siteNotificationDismissed/${state.user.uid}/${key}`),{seenAt:Date.now(),notificationId:String(n.id||''),type:String(n.type||'')})}catch{}
+}
+function markNotificationRead(target){
+  const n=typeof target==='object'&&target?target:findNotificationById(target);
+  const id=String(n?.id||target||'');if(!id)return;
+  const setIds=notificationReadIds();setIds.add(id);saveNotificationReadIds(setIds);
+  // Convites de jogo continuam visíveis até Aceitar/Recusar; só avisos comuns somem após abrir.
+  if(n&&n.type!=='game_challenge')persistNotificationDismissed(n).finally(()=>renderNotifications());else renderNotifications()
+}
+function markAllNotificationsSeen(){localStorage.setItem(notificationStorageKey('seen'),String(Date.now()));localStorage.removeItem(notificationStorageKey('read'));renderNotifications()}
+function isNotificationUnread(n){return !notificationWasDismissed(n)&&Number(n?.createdAt||0)>notificationLastSeen()&&!notificationReadIds().has(String(n?.id||''))}
 function notificationCategory(n){
   const type=String(n?.type||'').toLowerCase();
   if(['friend_request','pokemon_duel','ttt','blackjack','hangman','game_challenge','tinder_match','friend','social'].includes(type))return'social';
@@ -588,7 +622,7 @@ function showBrowserNotification(n){
   if(!browserNotificationsEnabled()||!n)return;
   try{
     const notice=new Notification(n.title||'Gremory',{body:String(n.text||'').slice(0,180),icon:'/assets/icons/icon-192.png',badge:'/assets/icons/icon-192.png',tag:`gremory-${n.id||n.createdAt||Date.now()}`,renotify:false});
-    notice.onclick=()=>{window.focus();if(n.type==='game_challenge'){state.notificationFilter='social';renderNotifications();openModal('notificationModal')}else if(n.link?.startsWith('#'))navigate(n.link.slice(1));notice.close()}
+    notice.onclick=()=>{window.focus();markNotificationRead(n);if(n.type==='game_challenge'){state.notificationFilter='social';renderNotifications();openModal('notificationModal')}else if(n.link?.startsWith('#'))navigate(n.link.slice(1));notice.close()}
   }catch{}
 }
 function siteGameChallengeNotificationRows(){
@@ -613,7 +647,7 @@ function uniqueNotificationRows(source=state.notifications){
   const rows=[
     ...Object.entries(source||{}).map(([id,v])=>({id,...(v||{})})),
     ...siteGameChallengeNotificationRows()
-  ].sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
+  ].sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).filter(n=>!notificationWasDismissed(n));
   const latestBySignature=new Map(),unique=[];
   for(const n of rows){const sig=notificationSignature(n),created=Number(n.createdAt||0),latest=latestBySignature.get(sig);if(latest!=null&&Math.abs(latest-created)<=30000)continue;latestBySignature.set(sig,created);unique.push(n)}
   return unique;
@@ -625,10 +659,10 @@ function ensureNotificationDetailModal(){
   document.body.appendChild(modal);modal.querySelector('.modal-backdrop')?.addEventListener('click',()=>closeModal('notificationDetailModal'));modal.querySelector('.modal-close')?.addEventListener('click',()=>closeModal('notificationDetailModal'));return modal
 }
 function openNotificationDetail(n){
-  ensureNotificationDetailModal();markNotificationRead(n?.id);$('notificationDetailTitle').textContent=n?.title||'Notificação';$('notificationDetailText').textContent=n?.text||'';$('notificationDetailTime').textContent=shortDateTime(n?.createdAt);const img=$('notificationDetailImage'),url=String(n?.imageUrl||'').trim();if(img){if(url){img.src=url;img.hidden=false}else{img.removeAttribute('src');img.hidden=true}}closeModal('notificationModal');openModal('notificationDetailModal')
+  ensureNotificationDetailModal();markNotificationRead(n);$('notificationDetailTitle').textContent=n?.title||'Notificação';$('notificationDetailText').textContent=n?.text||'';$('notificationDetailTime').textContent=shortDateTime(n?.createdAt);const img=$('notificationDetailImage'),url=String(n?.imageUrl||'').trim();if(img){if(url){img.src=url;img.hidden=false}else{img.removeAttribute('src');img.hidden=true}}closeModal('notificationModal');openModal('notificationDetailModal')
 }
-async function deleteSiteNotification(id){if(!state.user||!id)return;try{await remove(ref(db,`siteNotifications/${state.user.uid}/${id}`));const read=notificationReadIds();read.delete(String(id));saveNotificationReadIds(read);toast('Notificação apagada.')}catch(e){toast(permissionMessage(e,'Não foi possível apagar a notificação.'))}}
-async function clearSiteNotifications(){if(!state.user)return;const ids=Object.keys(state.notifications||{});if(!ids.length)return toast('Sua caixa já está vazia.');try{await Promise.all(ids.map(id=>remove(ref(db,`siteNotifications/${state.user.uid}/${id}`))));localStorage.removeItem(notificationStorageKey('read'));localStorage.setItem(notificationStorageKey('seen'),String(Date.now()));toast('Notificações apagadas.')}catch(e){toast(permissionMessage(e,'Não foi possível limpar as notificações.'))}}
+async function deleteSiteNotification(id){if(!state.user||!id)return;const n=state.notifications?.[id]?{id,...state.notifications[id]}:null;try{if(n)await persistNotificationDismissed(n);await remove(ref(db,`siteNotifications/${state.user.uid}/${id}`));const read=notificationReadIds();read.delete(String(id));saveNotificationReadIds(read);renderNotifications();toast('Notificação apagada.')}catch(e){toast(permissionMessage(e,'Não foi possível apagar a notificação.'))}}
+async function clearSiteNotifications(){if(!state.user)return;const rows=Object.entries(state.notifications||{}).map(([id,v])=>({id,...(v||{})})),ids=rows.map(n=>n.id);if(!ids.length)return toast('Sua caixa já está vazia.');try{await Promise.all(rows.map(n=>persistNotificationDismissed(n)));await Promise.all(ids.map(id=>remove(ref(db,`siteNotifications/${state.user.uid}/${id}`))));localStorage.removeItem(notificationStorageKey('read'));localStorage.setItem(notificationStorageKey('seen'),String(Date.now()));renderNotifications();toast('Notificações apagadas.')}catch(e){toast(permissionMessage(e,'Não foi possível limpar as notificações.'))}}
 function renderNotifications(){
   const all=uniqueNotificationRows(),readIds=notificationReadIds();const unseen=all.filter(x=>Number(x.createdAt||0)>notificationLastSeen()&&!readIds.has(String(x.id))).length,badge=$('notificationBadge');
   if(badge){badge.hidden=!unseen;badge.textContent=String(Math.min(99,unseen))}
@@ -636,16 +670,16 @@ function renderNotifications(){
   const rows=state.notificationFilter==='all'?all:state.notificationFilter==='social'?social:team;const box=$('notificationList');if(!box)return;box.innerHTML='';
   if(!rows.length){box.innerHTML=`<div class="empty-state small">${state.notificationFilter==='social'?'Nenhuma notificação de amigos ou jogos.':'Nenhum aviso da equipe.'}</div>`;return}
   rows.slice(0,60).forEach(n=>{
-    const row=document.createElement('div');row.className='notification-row-wrap'+(isNotificationUnread(n)?' unread':'');
+    const row=document.createElement('div');row.className='notification-row-wrap'+(isNotificationUnread(n)?' unread':'')+(n.type==='game_challenge'?' game-challenge':'');
     const d=document.createElement('button');d.type='button';d.className='notification-row';const head=document.createElement('div');head.className='notification-row-head';const st=document.createElement('strong');st.textContent=n.title||'Notificação';const kind=document.createElement('em');kind.textContent=notificationCategoryLabel(n);head.append(st,kind);const sm=document.createElement('span');sm.textContent=n.text||'';const time=document.createElement('small');time.textContent=shortDateTime(n.createdAt);d.append(head,sm,time);
-    d.onclick=()=>{markNotificationRead(n.id);if(n.type==='game_challenge')return;if(n.imageUrl||n.type==='admin_notice'||n.type==='site_update'){openNotificationDetail(n);return}if(n.link?.startsWith('#')){closeModal('notificationModal');navigate(n.link.slice(1));return}openNotificationDetail(n)};
+    d.onclick=()=>{markNotificationRead(n);if(n.type==='game_challenge')return;if(n.imageUrl||n.type==='admin_notice'||n.type==='site_update'){openNotificationDetail(n);return}if(n.link?.startsWith('#')){closeModal('notificationModal');navigate(n.link.slice(1));return}openNotificationDetail(n)};
     row.appendChild(d);
     if(n.type==='game_challenge'&&n.challengeId){
       const actions=document.createElement('div');actions.className='notification-game-actions';
       const yes=document.createElement('button');yes.type='button';yes.className='btn primary';yes.textContent='Aceitar';
-      yes.onclick=async ev=>{ev.stopPropagation();const ch=state.siteGameChallenges?.[n.challengeId];if(!ch)return toast('Esse convite não está mais disponível.');try{yes.disabled=true;no.disabled=true;markNotificationRead(n.id);await acceptSiteGameChallenge({id:n.challengeId,...ch});closeModal('notificationModal');navigate('games')}catch(e){toast(permissionMessage(e,e.message||'Não foi possível aceitar.'))}finally{yes.disabled=false;no.disabled=false}};
+      yes.onclick=async ev=>{ev.stopPropagation();const ch=state.siteGameChallenges?.[n.challengeId];if(!ch)return toast('Esse convite não está mais disponível.');try{yes.disabled=true;no.disabled=true;markNotificationRead(n);await acceptSiteGameChallenge({id:n.challengeId,...ch});closeModal('notificationModal');navigate('games')}catch(e){toast(permissionMessage(e,e.message||'Não foi possível aceitar.'))}finally{yes.disabled=false;no.disabled=false}};
       const no=document.createElement('button');no.type='button';no.className='btn';no.textContent='Recusar';
-      no.onclick=async ev=>{ev.stopPropagation();try{yes.disabled=true;no.disabled=true;markNotificationRead(n.id);await rejectSiteGameChallenge(n.challengeId)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível recusar.'))}finally{yes.disabled=false;no.disabled=false}};
+      no.onclick=async ev=>{ev.stopPropagation();try{yes.disabled=true;no.disabled=true;markNotificationRead(n);await rejectSiteGameChallenge(n.challengeId)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível recusar.'))}finally{yes.disabled=false;no.disabled=false}};
       actions.append(yes,no);row.appendChild(actions);
     }else{
       const del=document.createElement('button');del.className='notification-delete';del.type='button';del.title='Apagar';del.textContent='×';del.onclick=ev=>{ev.stopPropagation();deleteSiteNotification(n.id)};row.appendChild(del)
