@@ -1,9 +1,9 @@
-const CACHE='gremory-v12-5-site-slots-20261018';
+const CACHE='gremory-v12-9-custom-game-sfx-20261018';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261018-v12-5-site-slots',
-  '/assets/js/app.js?v=20261018-v12-5-site-slots',
+  '/assets/css/app.css?v=20261018-v12-6-mobile-invites',
+  '/assets/js/app.js?v=20261018-v12-9-custom-game-sfx',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
   '/manifest.webmanifest'

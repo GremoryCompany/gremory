@@ -1,0 +1,50 @@
+GREMORY — SONS PERSONALIZADOS
+
+Coloque seus arquivos MP3 nesta mesma pasta:
+assets/audio/custom/
+
+O site tenta usar estes nomes. Se algum arquivo não existir, ele usa automaticamente o som padrão atual.
+
+GERAIS / JOGOS
+notification.mp3           = nova notificação
+victory.mp3                = vitória
+defeat.mp3                 = derrota
+select.mp3                 = seleção/clique em ação de jogo
+move.mp3                   = jogada
+turn.mp3                   = mudança / aviso de turno
+start.mp3                  = início de partida
+accept.mp3                 = convite aceito
+reject.mp3                 = convite recusado
+draw.mp3                   = empate
+switch.mp3                 = troca
+
+21
+card.mp3                   = comprar/receber carta
+stand.mp3                  = parar
+
+FORCA
+correct.mp3                = letra correta
+wrong.mp3                  = letra errada
+
+SLOTS / RUPIAS
+slot-spin.mp3              = som contínuo durante o giro da roleta
+reel-stop.mp3              = parada de cada rolo
+money-win.mp3              = entrada/ganho de Rupias
+money-lose.mp3             = perda/débito de Rupias
+jackpot.mp3                = jackpot
+
+LOJA / PERSONALIZAÇÃO
+purchase-customization.mp3 = compra de personalização concluída
+
+POKEMON
+pokemon-encounter.mp3      = encontro
+pokemon-hit.mp3            = golpe/impacto
+pokemon-ball.mp3           = lançar Pokébola
+pokemon-capture.mp3        = captura concluída
+
+DICAS
+- Use MP3 curto para clique/jogada (0,1 a 1 segundo).
+- victory/defeat/purchase/jackpot podem ser um pouco maiores.
+- slot-spin.mp3 deve ser feito para repetir em loop sem corte perceptível.
+- Evite arquivos enormes para o site continuar leve no celular.
+- Você pode substituir os MP3 quando quiser sem alterar app.js.

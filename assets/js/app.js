@@ -443,10 +443,83 @@ function generatedTone(freq=720,duration=.12){
 function playSiteSound(name,fallbackFreq=720){
   try{const audio=new Audio(`/assets/audio/${name}.mp3`);audio.volume=.35;audio.play().catch(()=>generatedTone(fallbackFreq))}catch{generatedTone(fallbackFreq)}
 }
-function playNotificationTone(){playSiteSound('notification',720)}
-function playVictoryTone(){playSiteSound('victory',920)}
-function playDefeatTone(){playSiteSound('defeat',190)}
-function startSlotSpinSound(){
+
+// Sons personalizados: basta colocar os MP3 com estes nomes em
+// /assets/audio/custom/. Se um arquivo não existir, o site usa o som padrão.
+const CUSTOM_GAME_SOUND_FILES=Object.freeze({
+  notification:'notification',victory:'victory',defeat:'defeat',select:'select',move:'move',turn:'turn',start:'start',
+  accept:'accept',reject:'reject',card:'card',stand:'stand',correct:'correct',wrong:'wrong',draw:'draw',switch:'switch',
+  reelStop:'reel-stop',coins:'money-win',debit:'money-lose',jackpot:'jackpot',purchase:'purchase-customization',
+  slotSpin:'slot-spin',pokemonEncounter:'pokemon-encounter',pokemonHit:'pokemon-hit',pokemonBall:'pokemon-ball',pokemonCapture:'pokemon-capture'
+});
+function customGameSoundPath(kind){const file=CUSTOM_GAME_SOUND_FILES[kind];return file?`/assets/audio/custom/${file}.mp3`:''}
+function tryCustomGameSound(kind,{volume=.38,loop=false,fallback=null}={}){
+  const src=customGameSoundPath(kind);if(!src){if(typeof fallback==='function')fallback();return null}
+  let audio=null,failed=false;
+  const useFallback=()=>{if(failed)return;failed=true;if(typeof fallback==='function')fallback()};
+  try{
+    audio=new Audio(src);audio.volume=Math.max(0,Math.min(1,Number(volume)||.38));audio.loop=!!loop;audio.preload='auto';
+    audio.addEventListener('error',useFallback,{once:true});
+    const promise=audio.play();if(promise?.catch)promise.catch(useFallback);
+    return audio;
+  }catch{useFallback();return null}
+}
+function playNotificationTone(){tryCustomGameSound('notification',{fallback:()=>playSiteSound('notification',720)})}
+function playVictoryTone(){tryCustomGameSound('victory',{volume:.45,fallback:()=>playSiteSound('victory',920)})}
+function playDefeatTone(){tryCustomGameSound('defeat',{volume:.45,fallback:()=>playSiteSound('defeat',190)})}
+
+// Sons leves dos jogos: primeiro tenta o MP3 personalizado; se ele não existir,
+// usa Web Audio como fallback para não obrigar o projeto a carregar vários arquivos.
+let gameSfxCtx=null;
+function gameSfxContext(){
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    if(!Ctx)return null;
+    if(!gameSfxCtx||gameSfxCtx.state==='closed')gameSfxCtx=new Ctx();
+    if(gameSfxCtx.state==='suspended')gameSfxCtx.resume().catch(()=>{});
+    return gameSfxCtx;
+  }catch{return null}
+}
+function gameSfxTone(freq,delay=0,duration=.07,volume=.028,type='sine'){
+  try{
+    const ctx=gameSfxContext();if(!ctx)return;
+    const osc=ctx.createOscillator(),gain=ctx.createGain(),t=ctx.currentTime+Math.max(0,delay);
+    osc.type=type;osc.frequency.setValueAtTime(Math.max(40,Number(freq||440)),t);
+    gain.gain.setValueAtTime(.0001,t);
+    gain.gain.exponentialRampToValueAtTime(Math.max(.001,volume),t+.008);
+    gain.gain.exponentialRampToValueAtTime(.0001,t+Math.max(.025,duration));
+    osc.connect(gain);gain.connect(ctx.destination);osc.start(t);osc.stop(t+Math.max(.03,duration)+.02);
+  }catch{}
+}
+function playGameSfx(kind){
+  const patterns={
+    select:[[520,0,.045,.018,'square'],[690,.045,.05,.016,'sine']],
+    move:[[330,0,.05,.024,'square'],[470,.045,.065,.02,'triangle']],
+    turn:[[620,0,.06,.022,'sine'],[820,.075,.08,.025,'sine']],
+    start:[[430,0,.05,.02,'triangle'],[620,.07,.06,.024,'triangle'],[840,.145,.09,.026,'sine']],
+    accept:[[560,0,.05,.02,'sine'],[760,.06,.08,.024,'sine']],
+    reject:[[350,0,.055,.018,'square'],[240,.055,.08,.018,'triangle']],
+    card:[[420,0,.04,.018,'triangle'],[540,.035,.045,.018,'triangle']],
+    stand:[[520,0,.045,.018,'sine'],[390,.055,.08,.018,'sine']],
+    correct:[[650,0,.05,.02,'sine'],[880,.055,.075,.025,'sine']],
+    wrong:[[250,0,.07,.022,'sawtooth'],[180,.07,.09,.018,'triangle']],
+    draw:[[440,0,.07,.018,'sine'],[440,.09,.07,.018,'sine']],
+    switch:[[360,0,.045,.02,'triangle'],[610,.055,.075,.022,'triangle']],
+    reelStop:[[300,0,.035,.025,'square'],[220,.035,.055,.018,'triangle']],
+    coins:[[880,0,.045,.024,'sine'],[1080,.05,.045,.025,'sine'],[1320,.10,.055,.027,'sine'],[1640,.16,.08,.03,'sine']],
+    debit:[[320,0,.05,.02,'square'],[230,.055,.075,.022,'triangle']],
+    jackpot:[[740,0,.05,.026,'sine'],[980,.06,.05,.028,'sine'],[1240,.12,.06,.03,'sine'],[1560,.19,.09,.032,'sine']],
+    purchase:[[520,0,.045,.02,'triangle'],[760,.055,.06,.024,'sine'],[1040,.12,.085,.028,'sine']]
+  };
+  if(kind==='victory'){playVictoryTone();return}
+  if(kind==='defeat'){playDefeatTone();return}
+  const fallback=()=>{(patterns[kind]||patterns.select).forEach(([f,d,du,v,t])=>gameSfxTone(f,d,du,v,t))};
+  tryCustomGameSound(kind,{volume:['coins','jackpot','purchase'].includes(kind)?.44:.34,fallback});
+}
+// Ajuda o áudio a ficar liberado no celular após a primeira interação.
+document.addEventListener('pointerdown',()=>{try{gameSfxContext()?.resume?.().catch(()=>{})}catch{}},{capture:true,passive:true});
+
+function startGeneratedSlotSpinSound(){
   let ctx=null,timer=null,step=0,stopped=false;
   try{
     const Ctx=window.AudioContext||window.webkitAudioContext;
@@ -464,15 +537,27 @@ function startSlotSpinSound(){
   }catch{}
   return()=>{if(stopped)return;stopped=true;if(timer)clearInterval(timer);try{ctx?.close?.()}catch{}};
 }
+function startSlotSpinSound(){
+  let stopped=false,fallbackStop=null,fallbackStarted=false,customAudio=null;
+  const startFallback=()=>{if(stopped||fallbackStarted)return;fallbackStarted=true;fallbackStop=startGeneratedSlotSpinSound()};
+  const src=customGameSoundPath('slotSpin');
+  if(!src){startFallback();return()=>{stopped=true;fallbackStop?.()}}
+  try{
+    customAudio=new Audio(src);customAudio.volume=.38;customAudio.loop=true;customAudio.preload='auto';
+    customAudio.addEventListener('error',startFallback,{once:true});
+    const p=customAudio.play();if(p?.catch)p.catch(startFallback);
+  }catch{startFallback()}
+  return()=>{if(stopped)return;stopped=true;try{customAudio?.pause?.();if(customAudio)customAudio.currentTime=0}catch{};fallbackStop?.()};
+}
 function playPokemonSound(kind){
   const map={
-    encounter:['pokemon-encounter',620],
-    hit:['pokemon-hit',180],
-    ball:['pokemon-ball',520],
-    capture:['pokemon-capture',920]
+    encounter:['pokemonEncounter','pokemon-encounter',620],
+    hit:['pokemonHit','pokemon-hit',180],
+    ball:['pokemonBall','pokemon-ball',520],
+    capture:['pokemonCapture','pokemon-capture',920]
   };
   const row=map[kind];if(!row)return;
-  playSiteSound(row[0],row[1]);
+  tryCustomGameSound(row[0],{fallback:()=>playSiteSound(row[1],row[2])});
 }
 function notificationStorageKey(suffix='seen'){
   return `gremory:notif:${suffix}:${state.user?.uid||'guest'}`
@@ -864,9 +949,9 @@ $('pokemonExploreBotBtn').onclick=async()=>{try{const r=await bridgeRequest('pok
 
 // Duelo Pokémon 6x6 via bridge do bot
 function renderDuelFriendSelect(){const sel=$('duelFriendSelect');if(!sel)return;const current=sel.value;sel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';sel.appendChild(o)});if(state.friends[current])sel.value=current;renderGameFriendSelects()}
-$('sendDuelChallengeBtn').addEventListener('click',async()=>{const targetUid=$('duelFriendSelect').value;if(!targetUid)return toast('Escolha um amigo.');if(state.charlottePublic?.status!=='linked')return toast('Vincule a Charlotte primeiro.');try{await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type:'duel_challenge',targetUid,createdAt:nowIso()});toast('Desafio 6x6 enviado.')}catch(e){toast(permissionMessage(e))}});
+$('sendDuelChallengeBtn').addEventListener('click',async()=>{const targetUid=$('duelFriendSelect').value;if(!targetUid)return toast('Escolha um amigo.');if(state.charlottePublic?.status!=='linked')return toast('Vincule a Charlotte primeiro.');playGameSfx('select');try{await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type:'duel_challenge',targetUid,createdAt:nowIso()});toast('Desafio 6x6 enviado.')}catch(e){toast(permissionMessage(e))}});
 function renderDuelInbox(obj){const box=$('duelInbox');box.innerHTML='';const rows=Object.entries(obj||{});if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhum desafio.</div>';return}rows.forEach(([id,c])=>{const r=document.createElement('div');r.className='duel-request';const cp=document.createElement('div');const st=document.createElement('strong');st.textContent=c.fromName||'Desafiante';const sm=document.createElement('small');sm.textContent='quer batalhar 6x6';cp.append(st,sm);const acts=document.createElement('div');acts.className='person-actions';const a=document.createElement('button');a.className='mini-btn primary';a.textContent='Aceitar';a.onclick=()=>duelJob('duel_accept',{challengeId:id});const d=document.createElement('button');d.className='mini-btn';d.textContent='Recusar';d.onclick=()=>duelJob('duel_decline',{challengeId:id});acts.append(a,d);r.append(cp,acts);box.appendChild(r)})}
-async function duelJob(type,data){try{await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type,...data,createdAt:nowIso()});if(type==='duel_move')playPokemonSound('hit');toast(type==='duel_move'?'Golpe enviado.':type==='duel_switch'?'Troca enviada.':'Processando...')}catch(e){toast(permissionMessage(e))}}
+async function duelJob(type,data){try{playGameSfx(type==='duel_switch'?'switch':'select');await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type,...data,createdAt:nowIso()});toast(type==='duel_move'?'Golpe enviado.':type==='duel_switch'?'Troca enviada.':'Processando...')}catch(e){toast(permissionMessage(e))}}
 function handleDuelIndex(obj){
   const entries=Object.entries(obj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0));
   const active=entries.find(x=>x.status==='active');
@@ -876,10 +961,21 @@ function handleDuelIndex(obj){
 }
 function subscribeDuel(id){if(state.duelUnsub){try{state.duelUnsub()}catch{}}state.duelUnsub=onValue(ref(db,`pokemonSiteDuels/${id}`),s=>setActiveDuel(s.exists()?{id,...s.val()}:null))}
 function setActiveDuel(duel){
+  const prev=state.duel;
+  if(duel?.status==='active'){
+    if(!prev||prev.id!==duel.id){playGameSfx('start');if(duel.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),190)}
+    else if(prev.status==='active'){
+      const prevMe=prev.players?.[state.user?.uid]||{},nextMe=duel.players?.[state.user?.uid]||{},prevEnemy=Object.values(prev.players||{}).find(x=>x.uid!==state.user?.uid)||{},nextEnemy=Object.values(duel.players||{}).find(x=>x.uid!==state.user?.uid)||{};
+      const prevMyMon=duelCurrent(prevMe),nextMyMon=duelCurrent(nextMe),prevEnemyMon=duelCurrent(prevEnemy),nextEnemyMon=duelCurrent(nextEnemy);
+      if(Number(nextMyMon.hp)<Number(prevMyMon.hp)||Number(nextEnemyMon.hp)<Number(prevEnemyMon.hp))playPokemonSound('hit');
+      else if(String(nextMyMon.uid)!==String(prevMyMon.uid)||String(nextEnemyMon.uid)!==String(prevEnemyMon.uid))playGameSfx('switch');
+      if(prev.turnUid!==duel.turnUid&&duel.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),100);
+    }
+  }
   state.duel=duel;const arena=$('duelArena');const lobby=$('duelLobby');
   if(!duel||duel.status!=='active'){
     arena.hidden=true;lobby.hidden=false;const won=!!duel&&duel.winnerUid===state.user?.uid;$('duelStatusPill').textContent=won?'Vitória':duel?'Encerrado':'Aguardando';
-    if(duel?.status==='finished'&&duel.id&&state.duelSeenActiveIds.has(duel.id)){state.duelSeenActiveIds.delete(duel.id);const reward=duel.reward||{};showGameResult({title:won?'Vitória Pokémon!':'Batalha encerrada',text:won?(reward.rupias?`Você ganhou ₹${reward.rupias}, ${reward.trainerXp||0} XP e ${reward.pokemonXp||0} XP Pokémon.`:'Você venceu a batalha.'):'A batalha foi encerrada.',win:won,icon:won?'⚡':'◉'})}
+    if(duel?.status==='finished'&&duel.id&&state.duelSeenActiveIds.has(duel.id)){state.duelSeenActiveIds.delete(duel.id);const reward=duel.reward||{};showGameResult({title:won?'Vitória Pokémon!':'Batalha encerrada',text:won?(reward.rupias?`Você ganhou ₹${reward.rupias}, ${reward.trainerXp||0} XP e ${reward.pokemonXp||0} XP Pokémon.`:'Você venceu a batalha.'):'A batalha foi encerrada.',win:won,icon:won?'⚡':'◉'});if(won&&Number(reward.rupias||0)>0)setTimeout(()=>playGameSfx('coins'),420)}
     return
   }
   state.duelSeenActiveIds.add(duel.id);arena.hidden=false;lobby.hidden=true;$('duelStatusPill').textContent=duel.turnUid===state.user?.uid?'Sua vez':'Vez do rival';renderDuel(duel)
@@ -1086,7 +1182,7 @@ function renderStore(){
   $$('[data-store-item]').forEach(card=>{const id=card.dataset.storeItem;const owned=ownedCustomization(id);const isEquipped=equipped.has(id);card.classList.toggle('owned',owned);card.classList.toggle('equipped',isEquipped);const b=card.querySelector('[data-buy-customization]');if(!b)return;b.textContent=isEquipped?'Equipado':owned?'Equipar':'Comprar';b.classList.toggle('primary',!owned||!isEquipped)});
   renderEquippedCustomizationSummary();applyStoreFilter(currentStoreFilter);
 }
-async function handleCustomizationButton(btn){const itemId=btn?.dataset?.buyCustomization;if(!itemId)return;try{btn.disabled=true;if(!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');if(ownedCustomization(itemId)){await bridgeRequest('equip_customization',{itemId});toast('Personalização equipada.')}else{const r=await bridgeRequest('buy_customization',{itemId},25000);toast(`${STORE_CATALOG[itemId]?.name||'Item'} comprado por ₹${formatNumber(r.price||0)}.`);await requestAccountSync().catch(()=>{})}}catch(e){toast(e.message)}finally{btn.disabled=false}}
+async function handleCustomizationButton(btn){const itemId=btn?.dataset?.buyCustomization;if(!itemId)return;try{btn.disabled=true;if(!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');if(ownedCustomization(itemId)){await bridgeRequest('equip_customization',{itemId});playGameSfx('select');toast('Personalização equipada.')}else{const r=await bridgeRequest('buy_customization',{itemId},25000);playGameSfx('purchase');setTimeout(()=>playGameSfx('coins'),170);toast(`${STORE_CATALOG[itemId]?.name||'Item'} comprado por ₹${formatNumber(r.price||0)}.`);await requestAccountSync().catch(()=>{})}}catch(e){toast(e.message)}finally{btn.disabled=false}}
 $$('[data-buy-customization]').forEach(btn=>btn.addEventListener('click',()=>handleCustomizationButton(btn)));
 
 
@@ -1145,7 +1241,7 @@ function renderSiteRaid(){
   const boss=normalizeMon(raid.boss||{}),max=Math.max(1,Number(raid.maxHp||boss.maxHp||1)),hp=Math.max(0,Number(raid.hp||0)),pct=Math.max(0,Math.min(100,hp/max*100));const mine=raid.participants?.[state.user?.uid]||{};
   box.innerHTML=`<div class="site-raid-boss"><img src="${escText(boss.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${boss.id}.png`)}" alt=""><div class="site-raid-copy"><strong>${escText(boss.name)}</strong><div class="pokemon-type-row">${typeBadgesHtml(boss.types)}</div><small>Lv.${boss.level} • termina em ${raidTimeLeft(raid)}</small><div class="hpbar raid-hp"><i style="width:${pct}%"></i></div><b>${formatNumber(hp)} / ${formatNumber(max)} HP</b><small>Seu dano: ${formatNumber(mine.damage||0)} • ${Object.keys(raid.participants||{}).length} participante(s)</small></div></div>`;
   const acts=document.createElement('div');acts.className='site-raid-actions';const team=(state.charlotteSync?.pokemon?.team||[]).map(normalizeMon),active=team.find(x=>x.hp>0&&!x.fainted)||team[0];const moves=active?.moves?.length?active.moves:[{name:'Ataque rápido',power:40,type:'normal'}];
-  if(!linkedCharlotte()){const b=document.createElement('button');b.className='btn primary';b.textContent='Vincular Charlotte para atacar';b.onclick=()=>navigate('charlotte');acts.appendChild(b)}else moves.slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn'+(i===0?' primary':'');b.innerHTML=`<b>${escText(m.nome||m.name||`Golpe ${i+1}`)}</b><small>${escText(typeLabel(m.type||m.tipo||'normal'))} • ${Number(m.power||m.poder||0)}</small>`;b.onclick=async()=>{try{b.disabled=true;const r=await bridgeRequest('site_raid_attack',{moveIndex:i},30000);if(r?.damage)toast(`Ataque: ${r.damage} de dano${r.effectText?' • '+r.effectText:''}`)}catch(e){toast(e.message)}finally{setTimeout(()=>b.disabled=false,1200)}};acts.appendChild(b)});
+  if(!linkedCharlotte()){const b=document.createElement('button');b.className='btn primary';b.textContent='Vincular Charlotte para atacar';b.onclick=()=>navigate('charlotte');acts.appendChild(b)}else moves.slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn'+(i===0?' primary':'');b.innerHTML=`<b>${escText(m.nome||m.name||`Golpe ${i+1}`)}</b><small>${escText(typeLabel(m.type||m.tipo||'normal'))} • ${Number(m.power||m.poder||0)}</small>`;b.onclick=async()=>{try{playGameSfx('select');b.disabled=true;const r=await bridgeRequest('site_raid_attack',{moveIndex:i},30000);if(r?.damage){playPokemonSound('hit');toast(`Ataque: ${r.damage} de dano${r.effectText?' • '+r.effectText:''}`)}}catch(e){toast(e.message)}finally{setTimeout(()=>b.disabled=false,1200)}};acts.appendChild(b)});
   box.appendChild(acts);
 }
 $('siteRaidStartBtn')?.addEventListener('click',async()=>{try{await bridgeRequest('site_raid_start',{},30000,false);toast('Raid iniciada.')}catch(e){toast(e.message)}});
@@ -1173,7 +1269,7 @@ function burstConfetti(){
   document.body.appendChild(root);setTimeout(()=>root.remove(),2600)
 }
 function showGameResult({title='Partida encerrada',text='',win=false,neutral=false,icon='★'}={}){
-  if($('gameResultTitle'))$('gameResultTitle').textContent=title;if($('gameResultText'))$('gameResultText').textContent=text;if($('gameResultIcon'))$('gameResultIcon').textContent=icon;openModal('gameResultModal');if(win){burstConfetti();playVictoryTone()}else if(!neutral){playDefeatTone()}
+  if($('gameResultTitle'))$('gameResultTitle').textContent=title;if($('gameResultText'))$('gameResultText').textContent=text;if($('gameResultIcon'))$('gameResultIcon').textContent=icon;openModal('gameResultModal');if(win){burstConfetti();playVictoryTone()}else if(neutral){playGameSfx('draw')}else{playDefeatTone()}
 }
 
 // Jogos PvP do site: convites, partidas e jogadas ficam no Firebase do próprio site.
@@ -1194,7 +1290,7 @@ async function sendSiteGameChallenge(type,targetUid){
   await set(challengeRef,{id:challengeRef.key,type,fromUid:state.user.uid,fromName:displayName(),createdAt:Date.now()});
   toast(`Convite de ${SITE_GAME_META[type].label} enviado pelo site.`);
 }
-async function rejectSiteGameChallenge(id){if(!state.user||!id)return;await remove(ref(db,`siteGameChallenges/${state.user.uid}/${id}`));toast('Convite recusado.')}
+async function rejectSiteGameChallenge(id){if(!state.user||!id)return;await remove(ref(db,`siteGameChallenges/${state.user.uid}/${id}`));playGameSfx('reject');toast('Convite recusado.')}
 function challengeRow(ch){
   const row=document.createElement('div');row.className='person-row game-invite-row';
   const copy=document.createElement('div');copy.className='person-copy';copy.innerHTML=`<strong>${escText(ch.fromName||'Amigo')}</strong><small>desafiou você para ${escText(SITE_GAME_META[ch.type]?.label||'uma partida')}</small>`;
@@ -1237,17 +1333,29 @@ async function createSiteGame(type,opponentUid){
   const idx={id:gameId,type,status:'active',createdAt,updatedAt:createdAt,createdBy:me,opponentUid:other};
   const updates={};updates[`${meta.games}/${gameId}`]=game;updates[`${meta.index}/${me}/${gameId}`]=idx;updates[`${meta.index}/${other}/${gameId}`]={...idx,opponentUid:me};await update(ref(db),updates);return gameId
 }
-async function acceptSiteGameChallenge(ch){if(!state.user||!ch?.id||!ch?.fromUid)throw new Error('Convite inválido.');await createSiteGame(ch.type,ch.fromUid);await remove(ref(db,`siteGameChallenges/${state.user.uid}/${ch.id}`));toast(`${SITE_GAME_META[ch.type]?.label||'Partida'} iniciada.`)}
+async function acceptSiteGameChallenge(ch){if(!state.user||!ch?.id||!ch?.fromUid)throw new Error('Convite inválido.');await createSiteGame(ch.type,ch.fromUid);await remove(ref(db,`siteGameChallenges/${state.user.uid}/${ch.id}`));playGameSfx('accept');toast(`${SITE_GAME_META[ch.type]?.label||'Partida'} iniciada.`)}
 async function finishIndexes(type,game){if(!game?.id)return;const meta=SITE_GAME_META[type];const updates={};for(const uid of Object.keys(game.players||{}))updates[`${meta.index}/${uid}/${game.id}/status`]=game.status||'finished',updates[`${meta.index}/${uid}/${game.id}/updatedAt`]=Number(game.updatedAt||Date.now());await update(ref(db),updates).catch(()=>{})}
 async function directGameExit(type,game){if(!state.user||!game?.id)return;const meta=SITE_GAME_META[type],uid=state.user.uid;let final=null;const tx=await runTransaction(ref(db,`${meta.games}/${game.id}`),g=>{if(!g||g.status!=='active'||!g.players?.[uid])return;const other=Object.keys(g.players).find(x=>x!==uid)||null;g.status='finished';g.winnerUid=other;g.finishedAt=Date.now();g.updatedAt=Date.now();g.finishReason='exit';appendGameLog(g,`${g.players[uid]?.name||'Jogador'} saiu da partida.`);return g});if(tx.committed&&tx.snapshot.exists()){final={id:game.id,...tx.snapshot.val()};await finishIndexes(type,final)}}
 
-$('tttCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('tttFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');try{await sendSiteGameChallenge('ttt',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
+$('tttCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('tttFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('ttt',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
 function handleTttIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.ttt.game?.id!==active.id)subscribeTtt(active.id);return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.ttt.game?.id!==finished.id)subscribeTtt(finished.id);else if(!finished)setTttGame(null)}
 function subscribeTtt(id){if(state.ttt.unsub){try{state.ttt.unsub()}catch{}}state.ttt.unsub=onValue(ref(db,`ticTacToeGames/${id}`),sn=>setTttGame(sn.exists()?{id,...sn.val()}:null))}
-function setTttGame(g){state.ttt.game=g;const panel=$('tttGamePanel');if(!g||g.status!=='active'){panel.hidden=true;const won=!!g&&g.winnerUid===state.user?.uid,draw=!!g&&!g.winnerUid;$('tttStatus').textContent=won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';if(g?.status==='finished'&&g.id&&state.ttt.seenActiveIds.has(g.id)){state.ttt.seenActiveIds.delete(g.id);state.ttt.lastResultId=g.id;if(state.user)localStorage.setItem(`gremory:tttSeen:${state.user.uid}`,g.id);showGameResult({title:draw?'Empate!':won?'Vitória!':'Partida encerrada',text:draw?'Ninguém venceu essa rodada.':won?'Você venceu esta rodada.':'Seu amigo venceu esta rodada.',win:won,neutral:draw,icon:draw?'＝':won?'✦':'✕'})}return}state.ttt.seenActiveIds.add(g.id);panel.hidden=false;$('tttStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderTtt(g)}
-function renderTtt(g){const me=g.players?.[state.user.uid],other=Object.values(g.players||{}).find(x=>x.uid!==state.user.uid);$('tttTitle').textContent=`${me?.name||'Você'} × ${other?.name||'Amigo'}`;$('tttTurnText').textContent=g.turnUid===state.user.uid?`Sua vez • você é ${me?.symbol||'X'}`:`Vez de ${other?.name||'amigo'}`;const board=$('tttBoard');board.innerHTML='';const cells=Array.isArray(g.board)?g.board:Array.from({length:9},(_,i)=>g.board?.[i]||'');cells.forEach((v,i)=>{const b=document.createElement('button');b.type='button';b.className='ttt-cell';b.textContent=v||'';b.disabled=!!v||g.turnUid!==state.user.uid||g.status!=='active';b.onclick=()=>directTttMove(g.id,i).catch(e=>toast(permissionMessage(e,e.message)));board.appendChild(b)});const log=$('tttLog');log.innerHTML=Object.values(g.log||{}).slice(-8).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
+function setTttGame(g){
+  const prev=state.ttt.game;
+  if(g?.status==='active'){
+    if(!prev||prev.id!==g.id){playGameSfx('start');if(g.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),180)}
+    else if(prev.status==='active'){
+      const before=Array.isArray(prev.board)?prev.board:Array.from({length:9},(_,i)=>prev.board?.[i]||'');
+      const after=Array.isArray(g.board)?g.board:Array.from({length:9},(_,i)=>g.board?.[i]||'');
+      if(after.some((v,i)=>v&&v!==before[i]))playGameSfx('move');
+      if(prev.turnUid!==g.turnUid&&g.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),90);
+    }
+  }
+  state.ttt.game=g;const panel=$('tttGamePanel');if(!g||g.status!=='active'){panel.hidden=true;const won=!!g&&g.winnerUid===state.user?.uid,draw=!!g&&!g.winnerUid;$('tttStatus').textContent=won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';if(g?.status==='finished'&&g.id&&state.ttt.seenActiveIds.has(g.id)){state.ttt.seenActiveIds.delete(g.id);state.ttt.lastResultId=g.id;if(state.user)localStorage.setItem(`gremory:tttSeen:${state.user.uid}`,g.id);showGameResult({title:draw?'Empate!':won?'Vitória!':'Partida encerrada',text:draw?'Ninguém venceu essa rodada.':won?'Você venceu esta rodada.':'Seu amigo venceu esta rodada.',win:won,neutral:draw,icon:draw?'＝':won?'✦':'✕'})}return}state.ttt.seenActiveIds.add(g.id);panel.hidden=false;$('tttStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderTtt(g)
+}
+function renderTtt(g){const me=g.players?.[state.user.uid],other=Object.values(g.players||{}).find(x=>x.uid!==state.user.uid);$('tttTitle').textContent=`${me?.name||'Você'} × ${other?.name||'Amigo'}`;$('tttTurnText').textContent=g.turnUid===state.user.uid?`Sua vez • você é ${me?.symbol||'X'}`:`Vez de ${other?.name||'amigo'}`;const board=$('tttBoard');board.innerHTML='';const cells=Array.isArray(g.board)?g.board:Array.from({length:9},(_,i)=>g.board?.[i]||'');cells.forEach((v,i)=>{const b=document.createElement('button');b.type='button';b.className='ttt-cell';b.textContent=v||'';b.disabled=!!v||g.turnUid!==state.user.uid||g.status!=='active';b.onclick=()=>{playGameSfx('select');directTttMove(g.id,i).catch(e=>toast(permissionMessage(e,e.message)))};board.appendChild(b)});const log=$('tttLog');log.innerHTML=Object.values(g.log||{}).slice(-8).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
 async function directTttMove(gameId,index){const uid=state.user?.uid;if(!uid)return;let reason='';const tx=await runTransaction(ref(db,`ticTacToeGames/${gameId}`),g=>{if(!g||g.status!=='active'){reason='Partida encerrada.';return}if(g.turnUid!==uid){reason='Aguarde sua vez.';return}const board=Array.isArray(g.board)?[...g.board]:Array.from({length:9},(_,i)=>g.board?.[i]||'');if(board[index]){reason='Essa casa já foi usada.';return}const me=g.players?.[uid],other=Object.keys(g.players||{}).find(x=>x!==uid);board[index]=me?.symbol||'X';g.board=board;g.updatedAt=Date.now();appendGameLog(g,`${me?.name||'Jogador'} marcou ${me?.symbol||'X'}.`);const win=tttWinner(board);if(win){g.status='finished';g.winnerUid=uid;g.finishedAt=Date.now()}else if(board.every(Boolean)){g.status='finished';g.winnerUid=null;g.finishedAt=Date.now()}else g.turnUid=other;return g});if(!tx.committed){if(reason)throw new Error(reason);return}const final={id:gameId,...tx.snapshot.val()};if(final.status==='finished')await finishIndexes('ttt',final)}
-$('tttExitBtn')?.addEventListener('click',async()=>{if(!state.ttt.game)return;try{await directGameExit('ttt',state.ttt.game)}catch(e){toast(permissionMessage(e,e.message))}});
+$('tttExitBtn')?.addEventListener('click',async()=>{if(!state.ttt.game)return;playGameSfx('reject');try{await directGameExit('ttt',state.ttt.game)}catch(e){toast(permissionMessage(e,e.message))}});
 
 // Watch Party independente do RPG
 $('watchCreateBtn')?.addEventListener('click',()=>openModal('watchCreateModal'));
@@ -2257,53 +2365,139 @@ $$('[data-studio-scroll]').forEach(btn=>btn.addEventListener('click',()=>$(btn.d
 function cardHtml(c){if(!c)return'';const red=c.s==='♥'||c.s==='♦';return `<i class="playing-card ${red?'red':''}"><b>${escText(c.r||'?')}</b><span>${escText(c.s||'')}</span></i>`}
 
 // 21 PvP
-$('blackjackCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('blackjackFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');try{await sendSiteGameChallenge('blackjack',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
+$('blackjackCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('blackjackFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('blackjack',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
 function handleBlackjackIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.blackjack.game?.id!==active.id)subscribeBlackjack(active.id);return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.blackjack.game?.id!==finished.id)subscribeBlackjack(finished.id);else if(!finished)setBlackjackGame(null)}
 function subscribeBlackjack(id){if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}}state.blackjack.unsub=onValue(ref(db,`blackjackGames/${id}`),sn=>setBlackjackGame(sn.exists()?{id,...sn.val()}:null))}
 function blackjackCardLabel(c={}){return `${c.r||'?'}${c.s||''}`}
 function blackjackHandLabel(p={}){const cards=Array.isArray(p.cards)?p.cards:[];return `${cards.map(blackjackCardLabel).join(' + ')||'—'} = ${Number(p.score||0)}`}
 function blackjackResultReason(g,me,other){const my=Number(me.score||0),op=Number(other.score||0);if(me.busted&&other.busted)return `As duas mãos estouraram (${my} × ${op}).`;if(me.busted)return `Sua mão estourou com ${my}; ${other.name||'o adversário'} venceu com ${op}.`;if(other.busted)return `${other.name||'O adversário'} estourou com ${op}; sua mão venceu com ${my}.`;if(my===21&&op!==21)return `Você fechou 21 exato contra ${op}.`;if(op===21&&my!==21)return `${other.name||'O adversário'} fechou 21 exato contra ${my}.`;if(my===op)return `As duas mãos terminaram com ${my} pontos.`;const high=Math.max(my,op),low=Math.min(my,op);return `${high} venceu ${low} por ficar mais perto de 21 sem estourar.`}
-function setBlackjackGame(g){state.blackjack.game=g;const panel=$('blackjackGamePanel'),lobby=$('blackjackLobby');if(!g||g.status!=='active'){if(panel)panel.hidden=true;if(lobby)lobby.hidden=false;const won=!!g&&g.winnerUid===state.user?.uid,draw=!!g&&!g.winnerUid;if($('blackjackStatus'))$('blackjackStatus').textContent=won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';if(g?.status==='finished'&&g.id&&state.blackjack.seenActiveIds.has(g.id)){state.blackjack.seenActiveIds.delete(g.id);const me=g.players?.[state.user?.uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==state.user?.uid)||{};const reason=blackjackResultReason(g,me,other);const winner=draw?'Nenhuma mão venceu':won?`Mão vencedora: ${blackjackHandLabel(me)}`:`Mão vencedora: ${blackjackHandLabel(other)}`;const detail=`Sua mão: ${blackjackHandLabel(me)} • ${other.name||'Adversário'}: ${blackjackHandLabel(other)} • ${winner} • ${reason}`;showGameResult({title:draw?'Empate no 21!':won?'Você venceu no 21!':`${other.name||'Adversário'} venceu no 21`,text:detail,win:won,neutral:draw,icon:draw?'＝':won?'21':'✕'})}return}state.blackjack.seenActiveIds.add(g.id);if(panel)panel.hidden=false;if(lobby)lobby.hidden=true;if($('blackjackStatus'))$('blackjackStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderBlackjackGame(g)}
+function setBlackjackGame(g){
+  const prev=state.blackjack.game;
+  if(g?.status==='active'){
+    if(!prev||prev.id!==g.id){playGameSfx('start');setTimeout(()=>playGameSfx('card'),80);if(g.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),220)}
+    else if(prev.status==='active'){
+      const prevPlayers=prev.players||{},nextPlayers=g.players||{},ids=new Set([...Object.keys(prevPlayers),...Object.keys(nextPlayers)]);let cardsAdded=0,stoodNow=false;
+      ids.forEach(uid=>{cardsAdded+=Math.max(0,(nextPlayers[uid]?.cards?.length||0)-(prevPlayers[uid]?.cards?.length||0));if(!prevPlayers[uid]?.stood&&nextPlayers[uid]?.stood)stoodNow=true});
+      if(cardsAdded)playGameSfx('card');else if(stoodNow)playGameSfx('stand');
+      if(prev.turnUid!==g.turnUid&&g.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),100);
+    }
+  }
+  state.blackjack.game=g;const panel=$('blackjackGamePanel'),lobby=$('blackjackLobby');if(!g||g.status!=='active'){if(panel)panel.hidden=true;if(lobby)lobby.hidden=false;const won=!!g&&g.winnerUid===state.user?.uid,draw=!!g&&!g.winnerUid;if($('blackjackStatus'))$('blackjackStatus').textContent=won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';if(g?.status==='finished'&&g.id&&state.blackjack.seenActiveIds.has(g.id)){state.blackjack.seenActiveIds.delete(g.id);const me=g.players?.[state.user?.uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==state.user?.uid)||{};const reason=blackjackResultReason(g,me,other);const winner=draw?'Nenhuma mão venceu':won?`Mão vencedora: ${blackjackHandLabel(me)}`:`Mão vencedora: ${blackjackHandLabel(other)}`;const detail=`Sua mão: ${blackjackHandLabel(me)} • ${other.name||'Adversário'}: ${blackjackHandLabel(other)} • ${winner} • ${reason}`;showGameResult({title:draw?'Empate no 21!':won?'Você venceu no 21!':`${other.name||'Adversário'} venceu no 21`,text:detail,win:won,neutral:draw,icon:draw?'＝':won?'21':'✕'})}return}state.blackjack.seenActiveIds.add(g.id);if(panel)panel.hidden=false;if(lobby)lobby.hidden=true;if($('blackjackStatus'))$('blackjackStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderBlackjackGame(g)
+}
 function renderBlackjackGame(g){const me=g.players?.[state.user?.uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==state.user?.uid)||{};if($('blackjackTitle'))$('blackjackTitle').textContent=`${me.name||'Você'} × ${other.name||'Amigo'}`;if($('blackjackTurnText'))$('blackjackTurnText').textContent=g.turnUid===state.user?.uid?'Sua vez de jogar':`Vez de ${other.name||'seu amigo'}`;if($('blackjackOpponentName'))$('blackjackOpponentName').textContent=other.name||'Adversário';if($('blackjackPlayer'))$('blackjackPlayer').innerHTML=(me.cards||[]).map(cardHtml).join('');if($('blackjackDealer'))$('blackjackDealer').innerHTML=(other.cards||[]).map(cardHtml).join('');if($('blackjackPlayerScore'))$('blackjackPlayerScore').textContent=String(me.score??0);if($('blackjackDealerScore'))$('blackjackDealerScore').textContent=String(other.score??0);if($('blackjackMyState'))$('blackjackMyState').textContent=me.busted?'Estourou':me.stood?'Parou':'Jogando';if($('blackjackOpponentState'))$('blackjackOpponentState').textContent=other.busted?'Estourou':other.stood?'Parou':'Jogando';const myTurn=g.turnUid===state.user?.uid&&g.status==='active'&&!me.stood&&!me.busted;if($('blackjackHitBtn'))$('blackjackHitBtn').disabled=!myTurn;if($('blackjackStandBtn'))$('blackjackStandBtn').disabled=!myTurn;const log=$('blackjackLog');if(log)log.innerHTML=Object.values(g.log||{}).slice(-10).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
 function blackjackWinner(g){const rows=Object.values(g.players||{}),alive=rows.filter(p=>!p.busted),best=alive.length?Math.max(...alive.map(p=>Number(p.score||0))):-1,winners=alive.filter(p=>Number(p.score||0)===best);return winners.length===1?winners[0].uid:null}
 async function directBlackjackMove(gameId,action){const uid=state.user?.uid;if(!uid)return;let reason='';const tx=await runTransaction(ref(db,`blackjackGames/${gameId}`),g=>{if(!g||g.status!=='active'){reason='Partida encerrada.';return}if(g.turnUid!==uid){reason='Aguarde sua vez.';return}const me=g.players?.[uid],otherUid=Object.keys(g.players||{}).find(x=>x!==uid),other=g.players?.[otherUid];if(!me||!other){reason='Partida inválida.';return}g.deck=Array.isArray(g.deck)?g.deck:[];if(action==='hit'){const card=g.deck.pop();if(!card){reason='O baralho acabou.';return}me.cards=[...(me.cards||[]),card];me.score=blackjackScore(me.cards);if(me.score>21)me.busted=true;if(me.score===21)me.stood=true;appendGameLog(g,`${me.name||'Jogador'} pediu uma carta.`)}else if(action==='stand'){me.stood=true;appendGameLog(g,`${me.name||'Jogador'} parou com ${me.score||0}.`)}else{reason='Jogada inválida.';return}g.updatedAt=Date.now();const meDone=me.stood||me.busted,otherDone=other.stood||other.busted;if(me.busted||(meDone&&otherDone)){g.status='finished';g.winnerUid=blackjackWinner(g);g.finishedAt=Date.now()}else if(!otherDone)g.turnUid=otherUid;else g.turnUid=uid;return g});if(!tx.committed){if(reason)throw new Error(reason);return}const final={id:gameId,...tx.snapshot.val()};if(final.status==='finished')await finishIndexes('blackjack',final)}
-$('blackjackHitBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;try{await directBlackjackMove(g.id,'hit')}catch(e){toast(permissionMessage(e,e.message))}});
-$('blackjackStandBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;try{await directBlackjackMove(g.id,'stand')}catch(e){toast(permissionMessage(e,e.message))}});
-$('blackjackExitBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;try{await directGameExit('blackjack',g)}catch(e){toast(permissionMessage(e,e.message))}});
+$('blackjackHitBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;playGameSfx('select');try{await directBlackjackMove(g.id,'hit')}catch(e){toast(permissionMessage(e,e.message))}});
+$('blackjackStandBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;playGameSfx('select');try{await directBlackjackMove(g.id,'stand')}catch(e){toast(permissionMessage(e,e.message))}});
+$('blackjackExitBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;playGameSfx('reject');try{await directGameExit('blackjack',g)}catch(e){toast(permissionMessage(e,e.message))}});
 
 // Forca PvP
-$('hangmanCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('hangmanFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');try{await sendSiteGameChallenge('hangman',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
+$('hangmanCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('hangmanFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('hangman',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
 function handleHangmanIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.hangman.game?.id!==active.id)subscribeHangman(active.id);return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.hangman.game?.id!==finished.id)subscribeHangman(finished.id);else if(!finished)setHangmanGame(null)}
 function subscribeHangman(id){if(state.hangman.unsub){try{state.hangman.unsub()}catch{}}state.hangman.unsub=onValue(ref(db,`hangmanGames/${id}`),sn=>setHangmanGame(sn.exists()?{id,...sn.val()}:null))}
-function setHangmanGame(g){state.hangman.game=g;const panel=$('hangmanGamePanel'),lobby=$('hangmanLobby');if(!g||g.status!=='active'){if(panel)panel.hidden=true;if(lobby)lobby.hidden=false;const won=!!g&&g.winnerUid===state.user?.uid,draw=!!g&&!g.winnerUid;if($('hangmanLives'))$('hangmanLives').textContent=won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';if(g?.status==='finished'&&g.id&&state.hangman.seenActiveIds.has(g.id)){state.hangman.seenActiveIds.delete(g.id);showGameResult({title:draw?'Empate na Forca!':won?'Você venceu a Forca!':'Você perdeu a Forca',text:`A palavra era ${g.answer||'a palavra secreta'}.`,win:won,neutral:draw,icon:draw?'＝':won?'A':'✕'})}return}state.hangman.seenActiveIds.add(g.id);if(panel)panel.hidden=false;if(lobby)lobby.hidden=true;renderHangmanGame(g)}
-function renderHangmanGame(g){const me=g.players?.[state.user?.uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==state.user?.uid)||{},misses=Array.isArray(g.misses)?g.misses:Object.values(g.misses||{}),max=Number(g.maxMisses||6),guessed=g.guessed||{};if($('hangmanTitle'))$('hangmanTitle').textContent=`${me.name||'Você'} × ${other.name||'Amigo'}`;if($('hangmanTurnText'))$('hangmanTurnText').textContent=g.turnUid===state.user?.uid?'Sua vez de escolher uma letra':`Vez de ${other.name||'seu amigo'}`;if($('hangmanLives'))$('hangmanLives').textContent=`${Math.max(0,max-misses.length)} erros restantes`;if($('hangmanWord'))$('hangmanWord').textContent=String(g.mask||'').split('').map(ch=>ch===' '?'  ':ch).join(' ');if($('hangmanMeName'))$('hangmanMeName').textContent=me.name||'Você';if($('hangmanOpponentName'))$('hangmanOpponentName').textContent=other.name||'Adversário';if($('hangmanMeScore'))$('hangmanMeScore').textContent=String(me.score||0);if($('hangmanOpponentScore'))$('hangmanOpponentScore').textContent=String(other.score||0);const kb=$('hangmanKeyboard');if(kb){kb.innerHTML='';'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(ch=>{const b=document.createElement('button');b.type='button';b.textContent=ch;const used=guessed[ch];if(used)b.classList.add(used==='hit'?'correct':'wrong');b.disabled=!!used||g.turnUid!==state.user?.uid||g.status!=='active';b.onclick=()=>directHangmanGuess(g.id,ch).catch(e=>toast(permissionMessage(e,e.message)));kb.appendChild(b)})}const log=$('hangmanLog');if(log)log.innerHTML=Object.values(g.log||{}).slice(-10).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
+function setHangmanGame(g){
+  const prev=state.hangman.game;
+  if(g?.status==='active'){
+    if(!prev||prev.id!==g.id){playGameSfx('start');if(g.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),180)}
+    else if(prev.status==='active'){
+      const before=prev.guessed||{},after=g.guessed||{},fresh=Object.keys(after).find(k=>!before[k]);
+      if(fresh)playGameSfx(after[fresh]==='hit'?'correct':'wrong');
+      if(prev.turnUid!==g.turnUid&&g.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),100);
+    }
+  }
+  state.hangman.game=g;const panel=$('hangmanGamePanel'),lobby=$('hangmanLobby');if(!g||g.status!=='active'){if(panel)panel.hidden=true;if(lobby)lobby.hidden=false;const won=!!g&&g.winnerUid===state.user?.uid,draw=!!g&&!g.winnerUid;if($('hangmanLives'))$('hangmanLives').textContent=won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';if(g?.status==='finished'&&g.id&&state.hangman.seenActiveIds.has(g.id)){state.hangman.seenActiveIds.delete(g.id);showGameResult({title:draw?'Empate na Forca!':won?'Você venceu a Forca!':'Você perdeu a Forca',text:`A palavra era ${g.answer||'a palavra secreta'}.`,win:won,neutral:draw,icon:draw?'＝':won?'A':'✕'})}return}state.hangman.seenActiveIds.add(g.id);if(panel)panel.hidden=false;if(lobby)lobby.hidden=true;renderHangmanGame(g)
+}
+function renderHangmanGame(g){const me=g.players?.[state.user?.uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==state.user?.uid)||{},misses=Array.isArray(g.misses)?g.misses:Object.values(g.misses||{}),max=Number(g.maxMisses||6),guessed=g.guessed||{};if($('hangmanTitle'))$('hangmanTitle').textContent=`${me.name||'Você'} × ${other.name||'Amigo'}`;if($('hangmanTurnText'))$('hangmanTurnText').textContent=g.turnUid===state.user?.uid?'Sua vez de escolher uma letra':`Vez de ${other.name||'seu amigo'}`;if($('hangmanLives'))$('hangmanLives').textContent=`${Math.max(0,max-misses.length)} erros restantes`;if($('hangmanWord'))$('hangmanWord').textContent=String(g.mask||'').split('').map(ch=>ch===' '?'  ':ch).join(' ');if($('hangmanMeName'))$('hangmanMeName').textContent=me.name||'Você';if($('hangmanOpponentName'))$('hangmanOpponentName').textContent=other.name||'Adversário';if($('hangmanMeScore'))$('hangmanMeScore').textContent=String(me.score||0);if($('hangmanOpponentScore'))$('hangmanOpponentScore').textContent=String(other.score||0);const kb=$('hangmanKeyboard');if(kb){kb.innerHTML='';'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(ch=>{const b=document.createElement('button');b.type='button';b.textContent=ch;const used=guessed[ch];if(used)b.classList.add(used==='hit'?'correct':'wrong');b.disabled=!!used||g.turnUid!==state.user?.uid||g.status!=='active';b.onclick=()=>{playGameSfx('select');directHangmanGuess(g.id,ch).catch(e=>toast(permissionMessage(e,e.message)))};kb.appendChild(b)})}const log=$('hangmanLog');if(log)log.innerHTML=Object.values(g.log||{}).slice(-10).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
 async function directHangmanGuess(gameId,letter){const uid=state.user?.uid;if(!uid)return;let reason='';const tx=await runTransaction(ref(db,`hangmanGames/${gameId}`),g=>{if(!g||g.status!=='active'){reason='Partida encerrada.';return}if(g.turnUid!==uid){reason='Aguarde sua vez.';return}letter=String(letter||'').toUpperCase().replace(/[^A-Z]/g,'').slice(0,1);if(!letter){reason='Letra inválida.';return}g.guessed=g.guessed||{};if(g.guessed[letter]){reason='Essa letra já foi usada.';return}const answer=String(g.answer||'').toUpperCase(),hits=[...answer].filter(ch=>ch===letter).length,me=g.players?.[uid],otherUid=Object.keys(g.players||{}).find(x=>x!==uid);g.guessed[letter]=hits?'hit':'miss';g.misses=Array.isArray(g.misses)?g.misses:[];if(hits){me.score=Number(me.score||0)+hits;appendGameLog(g,`${me.name||'Jogador'} acertou ${letter}.`)}else{g.misses=[...g.misses,letter];appendGameLog(g,`${me.name||'Jogador'} errou ${letter}.`)}g.mask=hangmanMask(answer,g.guessed);g.updatedAt=Date.now();const solved=!g.mask.includes('_'),over=g.misses.length>=Number(g.maxMisses||6);if(solved||over){g.status='finished';const ps=Object.values(g.players||{}),top=Math.max(...ps.map(p=>Number(p.score||0))),wins=ps.filter(p=>Number(p.score||0)===top);g.winnerUid=wins.length===1?wins[0].uid:null;g.finishedAt=Date.now()}else g.turnUid=otherUid;return g});if(!tx.committed){if(reason)throw new Error(reason);return}const final={id:gameId,...tx.snapshot.val()};if(final.status==='finished')await finishIndexes('hangman',final)}
-$('hangmanExitBtn')?.addEventListener('click',async()=>{const g=state.hangman.game;if(!g)return;try{await directGameExit('hangman',g)}catch(e){toast(permissionMessage(e,e.message))}});
+$('hangmanExitBtn')?.addEventListener('click',async()=>{const g=state.hangman.game;if(!g)return;playGameSfx('reject');try{await directGameExit('hangman',g)}catch(e){toast(permissionMessage(e,e.message))}});
 
-// Slots solo — o JOGO é do site. A Charlotte participa somente como carteira de Rupias.
-// Fluxo: a carteira reserva/debita a aposta -> o SITE sorteia -> a carteira credita o prêmio.
-const SLOT_SYMBOLS=['♛','✦','◆','♥','☾','⚡','7'];let slotBusy=false,slotSiteReady=null,slotPendingSettlement=null;
+// Slots solo — usa a carteira de Rupias já sincronizada com a Charlotte.
+// O site controla toda a experiência visual: aposta, giro, som e exibição do resultado.
+const SLOT_SYMBOLS=['♛','✦','◆','♥','☾','⚡','7'];let slotBusy=false;
 const slotWait=ms=>new Promise(r=>setTimeout(r,ms));
-async function ensureSlotSiteReady(){if(slotSiteReady===true)return true;const r=await fetch('/api/main?action=slots_spin_site',{method:'GET',cache:'no-store'});const data=await r.json().catch(()=>({}));if(!r.ok||!data.ready)throw new Error(data.erro||'Slots do site indisponível.');slotSiteReady=true;return true}
-async function requestSiteSlotOutcome(bet,spinId){const r=await fetch('/api/main?action=slots_spin_site',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({bet,spinId,uid:state.user?.uid||''}),cache:'no-store'});const data=await r.json().catch(()=>({}));if(!r.ok||!data.ok)throw new Error(data.erro||'Não foi possível sortear o giro no site.');return data}
-async function settleSiteSlot(outcome){return bridgeRequest('slots_spin',{stage:'settle',bet:outcome.bet,symbols:outcome.symbols,payout:outcome.payout,spinId:outcome.spinId,issuedAt:outcome.issuedAt,sig:outcome.sig},12000,true)}
-$$('[data-slot-bet]').forEach(btn=>btn.addEventListener('click',()=>{if($('slotsBetInput'))$('slotsBetInput').value=btn.dataset.slotBet||'50'}));
+$$('[data-slot-bet]').forEach(btn=>btn.addEventListener('click',()=>{playGameSfx('select');if($('slotsBetInput'))$('slotsBetInput').value=btn.dataset.slotBet||'50'}));
 $('slotsSpinBtn')?.addEventListener('click',async()=>{
-  if(slotBusy)return;const bet=Math.floor(Number($('slotsBetInput')?.value||0));if(!Number.isFinite(bet)||bet<10||bet>5000)return toast('A aposta deve ficar entre ₹10 e ₹5.000.');if(!linkedCharlotte())return toast('Vincule a Charlotte para usar suas Rupias nos Slots.');
-  slotBusy=true;const btn=$('slotsSpinBtn'),els=[$('slotReel1'),$('slotReel2'),$('slotReel3')];if(btn)btn.disabled=true;
+  if(slotBusy)return;
+  const bet=Math.floor(Number($('slotsBetInput')?.value||0));
+  if(!Number.isFinite(bet)||bet<10||bet>5000)return toast('A aposta deve ficar entre ₹10 e ₹5.000.');
+  if(!linkedCharlotte())return toast('Vincule a Charlotte para usar suas Rupias nos Slots.');
+  const mirroredBalance=Number(accountSnapshot().balance||0);
+  if(mirroredBalance<bet)return toast(`Saldo insuficiente. Você possui ₹${formatNumber(mirroredBalance)}.`);
+
+  slotBusy=true;
+  playGameSfx('start');
+  const btn=$('slotsSpinBtn'),els=[$('slotReel1'),$('slotReel2'),$('slotReel3')];
+  if(btn)btn.disabled=true;
+  els.forEach(e=>e?.classList.add('spinning'));
+  if($('slotsStatus'))$('slotsStatus').textContent='Girando...';
+  if($('slotsLastWin'))$('slotsLastWin').textContent=`Apostando ₹${formatNumber(bet)}...`;
+
+  const started=Date.now();
+  const stopSpinSound=startSlotSpinSound();
+  let timer=setInterval(()=>els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]}),78);
+  let visualStopped=false;
+  const stopVisual=()=>{
+    if(visualStopped)return;
+    visualStopped=true;
+    if(timer){clearInterval(timer);timer=null}
+    try{stopSpinSound()}catch{}
+    els.forEach(e=>e?.classList.remove('spinning'));
+  };
+  // Mesmo se a conexão ficar lenta, a animação nunca fica girando para sempre.
+  const visualSafety=setTimeout(()=>{
+    stopVisual();
+    if($('slotsStatus'))$('slotsStatus').textContent='Sincronizando Rupias...';
+    if($('slotsLastWin'))$('slotsLastWin').textContent='O giro terminou. Confirmando a carteira...';
+  },3800);
+
   try{
-    // Se uma liquidação anterior ficou pendente por queda de conexão, conclui antes de cobrar outra aposta.
-    if(slotPendingSettlement){if($('slotsStatus'))$('slotsStatus').textContent='Sincronizando giro anterior...';const recovered=await settleSiteSlot(slotPendingSettlement);slotPendingSettlement=null;if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(Number(recovered.balance||0))}`;toast('Giro anterior sincronizado.');}
-    await ensureSlotSiteReady();const mirroredBalance=Number(accountSnapshot().balance||0);if(mirroredBalance<bet)throw new Error(`Saldo insuficiente. Você possui ₹${formatNumber(mirroredBalance)}.`);
-    els.forEach(e=>e?.classList.add('spinning'));if($('slotsStatus'))$('slotsStatus').textContent='Girando...';if($('slotsLastWin'))$('slotsLastWin').textContent=`Apostando ₹${formatNumber(bet)}...`;const started=Date.now(),stopSpinSound=startSlotSpinSound();const timer=setInterval(()=>els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]}),78);
-    try{
-      // Charlotte apenas reserva/debita Rupias e cria o identificador financeiro da rodada.
-      const reservation=await bridgeRequest('slots_spin',{stage:'reserve',bet},12000,true);
-      const outcome=await requestSiteSlotOutcome(bet,reservation.spinId);
-      await slotWait(Math.max(0,1650-(Date.now()-started)));clearInterval(timer);stopSpinSound();for(let i=0;i<7;i++){els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]});await slotWait(55+i*13)}const symbols=Array.isArray(outcome.symbols)?outcome.symbols:['✦','✦','✦'];symbols.forEach((v,i)=>{if(els[i])els[i].textContent=v});els.forEach(e=>e?.classList.remove('spinning'));const payout=Number(outcome.payout||0),jackpot=!!outcome.jackpot;if($('slotsStatus'))$('slotsStatus').textContent='Sincronizando Rupias...';if($('slotsLastWin'))$('slotsLastWin').textContent=payout>0?`Resultado do site: prêmio ₹${formatNumber(payout)}. Confirmando carteira...`:'Resultado do site: sem prêmio. Confirmando carteira...';
-      slotPendingSettlement=outcome;let wallet;try{wallet=await settleSiteSlot(outcome)}catch(first){await slotWait(650);wallet=await settleSiteSlot(outcome)}slotPendingSettlement=null;const balance=Number(wallet.balance??accountSnapshot().balance??0);if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(balance)}`;if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':payout>0?'Você ganhou!':'Sem prêmio';if($('slotsLastWin'))$('slotsLastWin').textContent=payout>0?`Prêmio: ₹${formatNumber(payout)} • saldo ₹${formatNumber(balance)}`:`Não foi dessa vez • saldo ₹${formatNumber(balance)}`;if(jackpot)showGameResult({title:'JACKPOT!',text:`${symbols.join(' ')} • prêmio ₹${formatNumber(payout)} • saldo ₹${formatNumber(balance)}`,win:true,icon:'7'});else if(payout>0)playVictoryTone();else playDefeatTone();
-    }catch(e){clearInterval(timer);stopSpinSound();els.forEach(x=>x?.classList.remove('spinning'));throw e}
-  }catch(e){if($('slotsStatus'))$('slotsStatus').textContent=slotPendingSettlement?'Sincronização pendente':'Giro cancelado';if($('slotsLastWin'))$('slotsLastWin').textContent=slotPendingSettlement?'O resultado foi salvo nesta sessão. Toque em Girar novamente para sincronizar antes de uma nova aposta.':'A rodada não foi concluída.';toast(e.message,6500)}finally{slotBusy=false;if(btn)btn.disabled=false}
+    // Um único job: usa a economia que já existe (saldo, débito e crédito).
+    const r=await bridgeRequest('slots_spin',{bet},12000,true);
+    await slotWait(Math.max(0,1550-(Date.now()-started)));
+    clearTimeout(visualSafety);
+    stopVisual();
+
+    for(let i=0;i<6;i++){
+      els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]});
+      await slotWait(48+i*14);
+    }
+
+    const symbols=Array.isArray(r.symbols)&&r.symbols.length===3?r.symbols:['✦','✦','✦'];
+    for(let i=0;i<symbols.length;i++){
+      if(els[i])els[i].textContent=symbols[i];
+      playGameSfx('reelStop');
+      if(i<symbols.length-1)await slotWait(105);
+    }
+    const payout=Number(r.payout||0),balance=Number(r.balance??accountSnapshot().balance??0),jackpot=!!r.jackpot;
+    if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(balance)}`;
+    if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':payout>0?'Você ganhou!':'Sem prêmio';
+    if($('slotsLastWin'))$('slotsLastWin').textContent=payout>0
+      ? `${symbols.join(' ')} • prêmio ₹${formatNumber(payout)} • saldo ₹${formatNumber(balance)}`
+      : `${symbols.join(' ')} • perdeu ₹${formatNumber(bet)} • saldo ₹${formatNumber(balance)}`;
+
+    if(jackpot){
+      playGameSfx('jackpot');
+      setTimeout(()=>playGameSfx('coins'),240);
+      showGameResult({title:'JACKPOT!',text:`${symbols.join(' ')} • você ganhou ₹${formatNumber(payout)}. Saldo: ₹${formatNumber(balance)}.`,win:true,icon:'7'});
+    }else if(payout>0){
+      playVictoryTone();
+      setTimeout(()=>playGameSfx('coins'),220);
+    }else{
+      playGameSfx('debit');
+      setTimeout(()=>playDefeatTone(),180);
+    }
+    requestAccountSync().catch(()=>{});
+  }catch(e){
+    clearTimeout(visualSafety);
+    stopVisual();
+    if($('slotsStatus'))$('slotsStatus').textContent='Não concluído';
+    if($('slotsLastWin'))$('slotsLastWin').textContent='Não foi possível confirmar a aposta. Atualizando seu saldo...';
+    requestAccountSync().catch(()=>{});
+    toast(e.message||'Não foi possível concluir o giro.',5500);
+  }finally{
+    slotBusy=false;
+    if(btn)btn.disabled=false;
+  }
 });
 
 const initialRoute=(location.hash||'#home').slice(1);navigate(routeMeta[initialRoute]?initialRoute:'home');
