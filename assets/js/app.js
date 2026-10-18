@@ -446,6 +446,24 @@ function playSiteSound(name,fallbackFreq=720){
 function playNotificationTone(){playSiteSound('notification',720)}
 function playVictoryTone(){playSiteSound('victory',920)}
 function playDefeatTone(){playSiteSound('defeat',190)}
+function startSlotSpinSound(){
+  let ctx=null,timer=null,step=0,stopped=false;
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    if(!Ctx)return()=>{};
+    ctx=new Ctx();
+    const tick=()=>{
+      if(stopped||!ctx)return;
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      const t=ctx.currentTime;
+      osc.type='square';osc.frequency.value=190+(step%6)*34;
+      gain.gain.setValueAtTime(.0001,t);gain.gain.exponentialRampToValueAtTime(.022,t+.006);gain.gain.exponentialRampToValueAtTime(.0001,t+.055);
+      osc.connect(gain);gain.connect(ctx.destination);osc.start(t);osc.stop(t+.06);step++;
+    };
+    tick();timer=setInterval(tick,82);
+  }catch{}
+  return()=>{if(stopped)return;stopped=true;if(timer)clearInterval(timer);try{ctx?.close?.()}catch{}};
+}
 function playPokemonSound(kind){
   const map={
     encounter:['pokemon-encounter',620],
@@ -1155,14 +1173,7 @@ function burstConfetti(){
   document.body.appendChild(root);setTimeout(()=>root.remove(),2600)
 }
 function showGameResult({title='Partida encerrada',text='',win=false,neutral=false,icon='★'}={}){
-  if($('gameResultTitle'))$('gameResultTitle').textContent=title;
-  if($('gameResultText')){
-    $('gameResultText').textContent=text;
-    $('gameResultText').style.whiteSpace='pre-line';
-  }
-  if($('gameResultIcon'))$('gameResultIcon').textContent=icon;
-  openModal('gameResultModal');
-  if(win){burstConfetti();playVictoryTone()}else if(!neutral){playDefeatTone()}
+  if($('gameResultTitle'))$('gameResultTitle').textContent=title;if($('gameResultText'))$('gameResultText').textContent=text;if($('gameResultIcon'))$('gameResultIcon').textContent=icon;openModal('gameResultModal');if(win){burstConfetti();playVictoryTone()}else if(!neutral){playDefeatTone()}
 }
 
 // Jogos PvP do site: convites, partidas e jogadas ficam no Firebase do próprio site.
@@ -2249,27 +2260,10 @@ function cardHtml(c){if(!c)return'';const red=c.s==='♥'||c.s==='♦';return `<
 $('blackjackCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('blackjackFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');try{await sendSiteGameChallenge('blackjack',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
 function handleBlackjackIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.blackjack.game?.id!==active.id)subscribeBlackjack(active.id);return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.blackjack.game?.id!==finished.id)subscribeBlackjack(finished.id);else if(!finished)setBlackjackGame(null)}
 function subscribeBlackjack(id){if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}}state.blackjack.unsub=onValue(ref(db,`blackjackGames/${id}`),sn=>setBlackjackGame(sn.exists()?{id,...sn.val()}:null))}
-function blackjackCardsText(cards=[]){return(cards||[]).map(c=>`${c?.r||'?'}${c?.s||''}`).join(' + ')||'Sem cartas'}
-function blackjackResultReason(g,me,other,won,draw){
-  const myScore=Number(me?.score??blackjackScore(me?.cards||[])),otherScore=Number(other?.score??blackjackScore(other?.cards||[]));
-  if(draw){
-    if(me?.busted&&other?.busted)return `Os dois estouraram (${myScore} × ${otherScore}).`;
-    return `As duas mãos terminaram empatadas em ${myScore}.`;
-  }
-  const winner=won?me:other,loser=won?other:me,winnerScore=Number(winner?.score??0),loserScore=Number(loser?.score??0);
-  if(loser?.busted)return `${loser?.name||'O perdedor'} estourou com ${loserScore}.`;
-  if(winnerScore===21&&Array.isArray(winner?.cards)&&winner.cards.length===2)return `${winner?.name||'O vencedor'} fez Blackjack natural com 21.`;
-  if(winnerScore===21)return `${winner?.name||'O vencedor'} chegou exatamente a 21.`;
-  return `${winnerScore} venceu ${loserScore} por ficar mais perto de 21.`;
-}
-function blackjackResultText(g){
-  const me=g?.players?.[state.user?.uid]||{},other=Object.values(g?.players||{}).find(x=>x.uid!==state.user?.uid)||{};
-  const won=!!g&&g.winnerUid===state.user?.uid,draw=!!g&&!g.winnerUid;
-  const myScore=Number(me.score??blackjackScore(me.cards||[])),otherScore=Number(other.score??blackjackScore(other.cards||[]));
-  const winner=draw?null:(won?me:other),winnerScore=draw?null:Number(winner?.score??blackjackScore(winner?.cards||[]));
-  return `Sua mão: ${blackjackCardsText(me.cards)} = ${myScore}\nMão de ${other.name||'seu adversário'}: ${blackjackCardsText(other.cards)} = ${otherScore}\n\n${draw?'Resultado: EMPATE':`Mão vencedora: ${blackjackCardsText(winner?.cards)} = ${winnerScore}`}\nMotivo: ${blackjackResultReason(g,me,other,won,draw)}`;
-}
-function setBlackjackGame(g){state.blackjack.game=g;const panel=$('blackjackGamePanel'),lobby=$('blackjackLobby');if(!g||g.status!=='active'){if(panel)panel.hidden=true;if(lobby)lobby.hidden=false;const won=!!g&&g.winnerUid===state.user?.uid,draw=!!g&&!g.winnerUid;if($('blackjackStatus'))$('blackjackStatus').textContent=won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';if(g?.status==='finished'&&g.id&&state.blackjack.seenActiveIds.has(g.id)){state.blackjack.seenActiveIds.delete(g.id);showGameResult({title:draw?'Empate no 21!':won?'Você venceu no 21!':'Você perdeu no 21',text:blackjackResultText(g),win:won,neutral:draw,icon:draw?'＝':won?'21':'✕'})}return}state.blackjack.seenActiveIds.add(g.id);if(panel)panel.hidden=false;if(lobby)lobby.hidden=true;if($('blackjackStatus'))$('blackjackStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderBlackjackGame(g)}
+function blackjackCardLabel(c={}){return `${c.r||'?'}${c.s||''}`}
+function blackjackHandLabel(p={}){const cards=Array.isArray(p.cards)?p.cards:[];return `${cards.map(blackjackCardLabel).join(' + ')||'—'} = ${Number(p.score||0)}`}
+function blackjackResultReason(g,me,other){const my=Number(me.score||0),op=Number(other.score||0);if(me.busted&&other.busted)return `As duas mãos estouraram (${my} × ${op}).`;if(me.busted)return `Sua mão estourou com ${my}; ${other.name||'o adversário'} venceu com ${op}.`;if(other.busted)return `${other.name||'O adversário'} estourou com ${op}; sua mão venceu com ${my}.`;if(my===21&&op!==21)return `Você fechou 21 exato contra ${op}.`;if(op===21&&my!==21)return `${other.name||'O adversário'} fechou 21 exato contra ${my}.`;if(my===op)return `As duas mãos terminaram com ${my} pontos.`;const high=Math.max(my,op),low=Math.min(my,op);return `${high} venceu ${low} por ficar mais perto de 21 sem estourar.`}
+function setBlackjackGame(g){state.blackjack.game=g;const panel=$('blackjackGamePanel'),lobby=$('blackjackLobby');if(!g||g.status!=='active'){if(panel)panel.hidden=true;if(lobby)lobby.hidden=false;const won=!!g&&g.winnerUid===state.user?.uid,draw=!!g&&!g.winnerUid;if($('blackjackStatus'))$('blackjackStatus').textContent=won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';if(g?.status==='finished'&&g.id&&state.blackjack.seenActiveIds.has(g.id)){state.blackjack.seenActiveIds.delete(g.id);const me=g.players?.[state.user?.uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==state.user?.uid)||{};const reason=blackjackResultReason(g,me,other);const winner=draw?'Nenhuma mão venceu':won?`Mão vencedora: ${blackjackHandLabel(me)}`:`Mão vencedora: ${blackjackHandLabel(other)}`;const detail=`Sua mão: ${blackjackHandLabel(me)} • ${other.name||'Adversário'}: ${blackjackHandLabel(other)} • ${winner} • ${reason}`;showGameResult({title:draw?'Empate no 21!':won?'Você venceu no 21!':`${other.name||'Adversário'} venceu no 21`,text:detail,win:won,neutral:draw,icon:draw?'＝':won?'21':'✕'})}return}state.blackjack.seenActiveIds.add(g.id);if(panel)panel.hidden=false;if(lobby)lobby.hidden=true;if($('blackjackStatus'))$('blackjackStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderBlackjackGame(g)}
 function renderBlackjackGame(g){const me=g.players?.[state.user?.uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==state.user?.uid)||{};if($('blackjackTitle'))$('blackjackTitle').textContent=`${me.name||'Você'} × ${other.name||'Amigo'}`;if($('blackjackTurnText'))$('blackjackTurnText').textContent=g.turnUid===state.user?.uid?'Sua vez de jogar':`Vez de ${other.name||'seu amigo'}`;if($('blackjackOpponentName'))$('blackjackOpponentName').textContent=other.name||'Adversário';if($('blackjackPlayer'))$('blackjackPlayer').innerHTML=(me.cards||[]).map(cardHtml).join('');if($('blackjackDealer'))$('blackjackDealer').innerHTML=(other.cards||[]).map(cardHtml).join('');if($('blackjackPlayerScore'))$('blackjackPlayerScore').textContent=String(me.score??0);if($('blackjackDealerScore'))$('blackjackDealerScore').textContent=String(other.score??0);if($('blackjackMyState'))$('blackjackMyState').textContent=me.busted?'Estourou':me.stood?'Parou':'Jogando';if($('blackjackOpponentState'))$('blackjackOpponentState').textContent=other.busted?'Estourou':other.stood?'Parou':'Jogando';const myTurn=g.turnUid===state.user?.uid&&g.status==='active'&&!me.stood&&!me.busted;if($('blackjackHitBtn'))$('blackjackHitBtn').disabled=!myTurn;if($('blackjackStandBtn'))$('blackjackStandBtn').disabled=!myTurn;const log=$('blackjackLog');if(log)log.innerHTML=Object.values(g.log||{}).slice(-10).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
 function blackjackWinner(g){const rows=Object.values(g.players||{}),alive=rows.filter(p=>!p.busted),best=alive.length?Math.max(...alive.map(p=>Number(p.score||0))):-1,winners=alive.filter(p=>Number(p.score||0)===best);return winners.length===1?winners[0].uid:null}
 async function directBlackjackMove(gameId,action){const uid=state.user?.uid;if(!uid)return;let reason='';const tx=await runTransaction(ref(db,`blackjackGames/${gameId}`),g=>{if(!g||g.status!=='active'){reason='Partida encerrada.';return}if(g.turnUid!==uid){reason='Aguarde sua vez.';return}const me=g.players?.[uid],otherUid=Object.keys(g.players||{}).find(x=>x!==uid),other=g.players?.[otherUid];if(!me||!other){reason='Partida inválida.';return}g.deck=Array.isArray(g.deck)?g.deck:[];if(action==='hit'){const card=g.deck.pop();if(!card){reason='O baralho acabou.';return}me.cards=[...(me.cards||[]),card];me.score=blackjackScore(me.cards);if(me.score>21)me.busted=true;if(me.score===21)me.stood=true;appendGameLog(g,`${me.name||'Jogador'} pediu uma carta.`)}else if(action==='stand'){me.stood=true;appendGameLog(g,`${me.name||'Jogador'} parou com ${me.score||0}.`)}else{reason='Jogada inválida.';return}g.updatedAt=Date.now();const meDone=me.stood||me.busted,otherDone=other.stood||other.busted;if(me.busted||(meDone&&otherDone)){g.status='finished';g.winnerUid=blackjackWinner(g);g.finishedAt=Date.now()}else if(!otherDone)g.turnUid=otherUid;else g.turnUid=uid;return g});if(!tx.committed){if(reason)throw new Error(reason);return}const final={id:gameId,...tx.snapshot.val()};if(final.status==='finished')await finishIndexes('blackjack',final)}
@@ -2286,66 +2280,30 @@ function renderHangmanGame(g){const me=g.players?.[state.user?.uid]||{},other=Ob
 async function directHangmanGuess(gameId,letter){const uid=state.user?.uid;if(!uid)return;let reason='';const tx=await runTransaction(ref(db,`hangmanGames/${gameId}`),g=>{if(!g||g.status!=='active'){reason='Partida encerrada.';return}if(g.turnUid!==uid){reason='Aguarde sua vez.';return}letter=String(letter||'').toUpperCase().replace(/[^A-Z]/g,'').slice(0,1);if(!letter){reason='Letra inválida.';return}g.guessed=g.guessed||{};if(g.guessed[letter]){reason='Essa letra já foi usada.';return}const answer=String(g.answer||'').toUpperCase(),hits=[...answer].filter(ch=>ch===letter).length,me=g.players?.[uid],otherUid=Object.keys(g.players||{}).find(x=>x!==uid);g.guessed[letter]=hits?'hit':'miss';g.misses=Array.isArray(g.misses)?g.misses:[];if(hits){me.score=Number(me.score||0)+hits;appendGameLog(g,`${me.name||'Jogador'} acertou ${letter}.`)}else{g.misses=[...g.misses,letter];appendGameLog(g,`${me.name||'Jogador'} errou ${letter}.`)}g.mask=hangmanMask(answer,g.guessed);g.updatedAt=Date.now();const solved=!g.mask.includes('_'),over=g.misses.length>=Number(g.maxMisses||6);if(solved||over){g.status='finished';const ps=Object.values(g.players||{}),top=Math.max(...ps.map(p=>Number(p.score||0))),wins=ps.filter(p=>Number(p.score||0)===top);g.winnerUid=wins.length===1?wins[0].uid:null;g.finishedAt=Date.now()}else g.turnUid=otherUid;return g});if(!tx.committed){if(reason)throw new Error(reason);return}const final={id:gameId,...tx.snapshot.val()};if(final.status==='finished')await finishIndexes('hangman',final)}
 $('hangmanExitBtn')?.addEventListener('click',async()=>{const g=state.hangman.game;if(!g)return;try{await directGameExit('hangman',g)}catch(e){toast(permissionMessage(e,e.message))}});
 
-// Slots solo — o resultado e o saldo são definidos pelo bridge, nunca pelo navegador.
-const SLOT_SYMBOLS=['♛','✦','◆','♥','☾','⚡','7'];let slotBusy=false;
-function startSlotSpinSound(){
-  let stopped=false,ctx=null,osc=null,gain=null,tick=null;
-  try{
-    const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return()=>{};
-    ctx=new Ctx();osc=ctx.createOscillator();gain=ctx.createGain();osc.type='square';osc.frequency.value=145;gain.gain.value=.018;osc.connect(gain);gain.connect(ctx.destination);osc.start();
-    tick=setInterval(()=>{if(!stopped&&osc&&ctx)osc.frequency.setValueAtTime(125+Math.random()*95,ctx.currentTime)},95);
-  }catch{return()=>{}}
-  return()=>{if(stopped)return;stopped=true;if(tick)clearInterval(tick);try{osc?.stop()}catch{}try{ctx?.close()}catch{}};
-}
+// Slots solo — o JOGO é do site. A Charlotte participa somente como carteira de Rupias.
+// Fluxo: a carteira reserva/debita a aposta -> o SITE sorteia -> a carteira credita o prêmio.
+const SLOT_SYMBOLS=['♛','✦','◆','♥','☾','⚡','7'];let slotBusy=false,slotSiteReady=null,slotPendingSettlement=null;
+const slotWait=ms=>new Promise(r=>setTimeout(r,ms));
+async function ensureSlotSiteReady(){if(slotSiteReady===true)return true;const r=await fetch('/api/main?action=slots_spin_site',{method:'GET',cache:'no-store'});const data=await r.json().catch(()=>({}));if(!r.ok||!data.ready)throw new Error(data.erro||'Slots do site indisponível.');slotSiteReady=true;return true}
+async function requestSiteSlotOutcome(bet,spinId){const r=await fetch('/api/main?action=slots_spin_site',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({bet,spinId,uid:state.user?.uid||''}),cache:'no-store'});const data=await r.json().catch(()=>({}));if(!r.ok||!data.ok)throw new Error(data.erro||'Não foi possível sortear o giro no site.');return data}
+async function settleSiteSlot(outcome){return bridgeRequest('slots_spin',{stage:'settle',bet:outcome.bet,symbols:outcome.symbols,payout:outcome.payout,spinId:outcome.spinId,issuedAt:outcome.issuedAt,sig:outcome.sig},12000,true)}
 $$('[data-slot-bet]').forEach(btn=>btn.addEventListener('click',()=>{if($('slotsBetInput'))$('slotsBetInput').value=btn.dataset.slotBet||'50'}));
 $('slotsSpinBtn')?.addEventListener('click',async()=>{
-  if(slotBusy)return;
-  const bet=Math.floor(Number($('slotsBetInput')?.value||0));
-  if(!Number.isFinite(bet)||bet<10||bet>5000)return toast('A aposta deve ficar entre ₹10 e ₹5.000.');
-  if(!linkedCharlotte())return toast('Vincule a Charlotte para usar suas Rupias nos Slots.');
-
-  slotBusy=true;
-  const btn=$('slotsSpinBtn'),els=[$('slotReel1'),$('slotReel2'),$('slotReel3')];
-  if(btn)btn.disabled=true;
-  els.forEach(e=>e?.classList.add('spinning'));
-  if($('slotsStatus'))$('slotsStatus').textContent='Girando...';
-  if($('slotsLastWin'))$('slotsLastWin').textContent=`Apostando ₹${formatNumber(bet)}...`;
-
-  const stopSpinSound=startSlotSpinSound();
-  let visualStopped=false;
-  const timer=setInterval(()=>els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]}),80);
-  const stopVisual=()=>{
-    if(visualStopped)return;visualStopped=true;clearInterval(timer);stopSpinSound();els.forEach(e=>e?.classList.remove('spinning'));
-  };
-  const visualCap=setTimeout(()=>{
-    stopVisual();
-    if($('slotsStatus'))$('slotsStatus').textContent='Confirmando Rupias...';
-    if($('slotsLastWin'))$('slotsLastWin').textContent='O giro terminou. Confirmando a aposta com sua carteira...';
-  },4200);
-
+  if(slotBusy)return;const bet=Math.floor(Number($('slotsBetInput')?.value||0));if(!Number.isFinite(bet)||bet<10||bet>5000)return toast('A aposta deve ficar entre ₹10 e ₹5.000.');if(!linkedCharlotte())return toast('Vincule a Charlotte para usar suas Rupias nos Slots.');
+  slotBusy=true;const btn=$('slotsSpinBtn'),els=[$('slotReel1'),$('slotReel2'),$('slotReel3')];if(btn)btn.disabled=true;
   try{
-    const r=await bridgeRequest('slots_spin',{bet},25000,true);
-    clearTimeout(visualCap);
-    stopVisual();
-    for(let i=0;i<6;i++){els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]});await new Promise(res=>setTimeout(res,55+i*16))}
-    const symbols=Array.isArray(r.symbols)?r.symbols:['✦','✦','✦'];
-    symbols.forEach((v,i)=>{if(els[i])els[i].textContent=v});
-    const payout=Number(r.payout||0),balance=Number(r.balance||0),jackpot=!!r.jackpot;
-    if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(balance)}`;
-    if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':payout>0?'Você ganhou!':'Sem prêmio';
-    if($('slotsLastWin'))$('slotsLastWin').textContent=payout>0?`Prêmio: ₹${formatNumber(payout)} • saldo ₹${formatNumber(balance)}`:`Não foi dessa vez • saldo ₹${formatNumber(balance)}`;
-    if(jackpot){showGameResult({title:'JACKPOT!',text:`Você ganhou ₹${formatNumber(payout)} nos Slots.`,win:true,icon:'7'})}else if(payout>0){playVictoryTone()}else playDefeatTone();
-    requestAccountSync().catch(()=>{});
-  }catch(e){
-    clearTimeout(visualCap);stopVisual();
-    const bridgeTimeout=/Charlotte demorou para responder/i.test(String(e?.message||''));
-    const msg=bridgeTimeout?'Não foi possível confirmar a aposta com a carteira de Rupias. O giro foi encerrado e a tela foi liberada.':'Não foi possível concluir o giro: '+String(e?.message||'erro desconhecido');
-    if($('slotsStatus'))$('slotsStatus').textContent='Giro não confirmado';
-    if($('slotsLastWin'))$('slotsLastWin').textContent=msg;
-    toast(msg,6000);
-  }finally{
-    clearTimeout(visualCap);stopVisual();slotBusy=false;if(btn)btn.disabled=false;
-  }
+    // Se uma liquidação anterior ficou pendente por queda de conexão, conclui antes de cobrar outra aposta.
+    if(slotPendingSettlement){if($('slotsStatus'))$('slotsStatus').textContent='Sincronizando giro anterior...';const recovered=await settleSiteSlot(slotPendingSettlement);slotPendingSettlement=null;if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(Number(recovered.balance||0))}`;toast('Giro anterior sincronizado.');}
+    await ensureSlotSiteReady();const mirroredBalance=Number(accountSnapshot().balance||0);if(mirroredBalance<bet)throw new Error(`Saldo insuficiente. Você possui ₹${formatNumber(mirroredBalance)}.`);
+    els.forEach(e=>e?.classList.add('spinning'));if($('slotsStatus'))$('slotsStatus').textContent='Girando...';if($('slotsLastWin'))$('slotsLastWin').textContent=`Apostando ₹${formatNumber(bet)}...`;const started=Date.now(),stopSpinSound=startSlotSpinSound();const timer=setInterval(()=>els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]}),78);
+    try{
+      // Charlotte apenas reserva/debita Rupias e cria o identificador financeiro da rodada.
+      const reservation=await bridgeRequest('slots_spin',{stage:'reserve',bet},12000,true);
+      const outcome=await requestSiteSlotOutcome(bet,reservation.spinId);
+      await slotWait(Math.max(0,1650-(Date.now()-started)));clearInterval(timer);stopSpinSound();for(let i=0;i<7;i++){els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]});await slotWait(55+i*13)}const symbols=Array.isArray(outcome.symbols)?outcome.symbols:['✦','✦','✦'];symbols.forEach((v,i)=>{if(els[i])els[i].textContent=v});els.forEach(e=>e?.classList.remove('spinning'));const payout=Number(outcome.payout||0),jackpot=!!outcome.jackpot;if($('slotsStatus'))$('slotsStatus').textContent='Sincronizando Rupias...';if($('slotsLastWin'))$('slotsLastWin').textContent=payout>0?`Resultado do site: prêmio ₹${formatNumber(payout)}. Confirmando carteira...`:'Resultado do site: sem prêmio. Confirmando carteira...';
+      slotPendingSettlement=outcome;let wallet;try{wallet=await settleSiteSlot(outcome)}catch(first){await slotWait(650);wallet=await settleSiteSlot(outcome)}slotPendingSettlement=null;const balance=Number(wallet.balance??accountSnapshot().balance??0);if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(balance)}`;if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':payout>0?'Você ganhou!':'Sem prêmio';if($('slotsLastWin'))$('slotsLastWin').textContent=payout>0?`Prêmio: ₹${formatNumber(payout)} • saldo ₹${formatNumber(balance)}`:`Não foi dessa vez • saldo ₹${formatNumber(balance)}`;if(jackpot)showGameResult({title:'JACKPOT!',text:`${symbols.join(' ')} • prêmio ₹${formatNumber(payout)} • saldo ₹${formatNumber(balance)}`,win:true,icon:'7'});else if(payout>0)playVictoryTone();else playDefeatTone();
+    }catch(e){clearInterval(timer);stopSpinSound();els.forEach(x=>x?.classList.remove('spinning'));throw e}
+  }catch(e){if($('slotsStatus'))$('slotsStatus').textContent=slotPendingSettlement?'Sincronização pendente':'Giro cancelado';if($('slotsLastWin'))$('slotsLastWin').textContent=slotPendingSettlement?'O resultado foi salvo nesta sessão. Toque em Girar novamente para sincronizar antes de uma nova aposta.':'A rodada não foi concluída.';toast(e.message,6500)}finally{slotBusy=false;if(btn)btn.disabled=false}
 });
 
 const initialRoute=(location.hash||'#home').slice(1);navigate(routeMeta[initialRoute]?initialRoute:'home');

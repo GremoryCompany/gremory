@@ -18,6 +18,12 @@ function timingSafeEqualString(a, b){
   }catch{ return false; }
 }
 
+const SITE_SLOT_ITEMS=[{symbol:'✦',weight:28,mult:3},{symbol:'♥',weight:22,mult:4},{symbol:'☾',weight:18,mult:5},{symbol:'◆',weight:14,mult:6},{symbol:'⚡',weight:9,mult:8},{symbol:'♛',weight:6,mult:12},{symbol:'7',weight:3,mult:25}];
+function siteSlotSymbolFromRoll(roll){const total=SITE_SLOT_ITEMS.reduce((n,x)=>n+x.weight,0),target=(Number(roll)>>>0)%total+1;let acc=0;for(const item of SITE_SLOT_ITEMS){acc+=item.weight;if(target<=acc)return item}return SITE_SLOT_ITEMS[0]}
+function siteSlotItemsFor(secret,spinId,uid,bet){const digest=crypto.createHmac('sha256',secret).update(JSON.stringify([String(spinId),String(uid),Number(bet)])).digest();return[0,4,8].map(off=>siteSlotSymbolFromRoll(digest.readUInt32BE(off)))}
+function siteSlotPayout(items,bet){const syms=items.map(x=>x.symbol);if(syms[0]===syms[1]&&syms[1]===syms[2])return{payout:Math.floor(bet*items[0].mult),jackpot:syms[0]==='7',label:`Trinca ${syms[0]}`};if(new Set(syms).size===2)return{payout:Math.floor(bet*1.2),jackpot:false,label:'Dupla'};return{payout:0,jackpot:false,label:'Sem prêmio'}}
+function slotSettlementCanonical({spinId,uid,bet,symbols,payout,issuedAt}){return JSON.stringify([String(spinId||''),String(uid||''),Number(bet||0),Array.isArray(symbols)?symbols:[],Number(payout||0),Number(issuedAt||0)])}
+
 function sendJson(res, status, obj){
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -1276,6 +1282,15 @@ module.exports = async (req, res) => {
     }
     if(req.method!=='GET')return sendJson(res,405,{erro:'Método inválido'});const uid=String(qp(req,'uid')||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,160);if(!uid)return sendJson(res,400,{erro:'uid obrigatório'});
     try{const got=await blobSdk.get(`backups/accounts/${uid}/latest.json`,{access:'private'});if(!got?.stream)return sendJson(res,404,{erro:'backup não encontrado'});const txt=await new Response(got.stream).text();return sendJson(res,200,{ok:true,snapshot:JSON.parse(txt)})}catch(e){return sendJson(res,404,{erro:'backup não encontrado',detalhe:e.message})}
+  }
+
+  if (action === 'slots_spin_site') {
+    const secret=String(process.env.GREMORY_BACKUP_SECRET||'').trim();
+    if(req.method==='GET')return secret?sendJson(res,200,{ok:true,ready:true}):sendJson(res,503,{erro:'GREMORY_BACKUP_SECRET não configurado no site.',ready:false});
+    if(req.method!=='POST')return sendJson(res,405,{erro:'Método inválido'});
+    if(!secret)return sendJson(res,503,{erro:'GREMORY_BACKUP_SECRET não configurado no site.'});
+    const body=await readJsonBody(req),uid=String(body.uid||'').trim().slice(0,180),spinId=String(body.spinId||'').trim().slice(0,180),bet=Math.floor(Number(body.bet||0));if(!uid||!spinId)return sendJson(res,400,{erro:'Rodada inválida.'});if(!Number.isFinite(bet)||bet<10||bet>5000)return sendJson(res,400,{erro:'A aposta deve ficar entre ₹10 e ₹5.000.'});
+    const items=siteSlotItemsFor(secret,spinId,uid,bet),result=siteSlotPayout(items,bet),payload={spinId,uid,bet,symbols:items.map(x=>x.symbol),payout:result.payout,jackpot:result.jackpot,label:result.label,issuedAt:Date.now()};payload.sig=crypto.createHmac('sha256',secret).update(slotSettlementCanonical(payload)).digest('hex');res.setHeader('Cache-Control','no-store');return sendJson(res,200,{ok:true,...payload});
   }
 
   if (action === 'rtc_config') {

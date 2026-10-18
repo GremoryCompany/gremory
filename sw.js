@@ -1,9 +1,9 @@
-const CACHE='gremory-v12-4-blackjack-slots-patch-20261018';
+const CACHE='gremory-v12-5-site-slots-20261018';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261018-v12-3-realtime-invites',
-  '/assets/js/app.js?v=20261018-v12-3-realtime-invites',
+  '/assets/css/app.css?v=20261018-v12-5-site-slots',
+  '/assets/js/app.js?v=20261018-v12-5-site-slots',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
   '/manifest.webmanifest'
