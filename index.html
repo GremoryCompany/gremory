@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261017-v11-5-auth">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261018-v12-launch">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -23,7 +23,7 @@
       <img id="authGif" src="/assets/video/login.gif" data-src="/assets/video/login.gif" alt="">
       <div class="auth-media-shade"></div>
       <div class="auth-media-brand">
-        <div class="brand-seal">G</div>
+        <div class="brand-seal brand-seal-logo"><img src="/assets/img/gremory-logo.png" alt=""></div>
         <div>
           <strong>Gremory</strong>
         </div>
@@ -31,7 +31,7 @@
     </div>
     <div class="auth-panel">
       <div class="auth-panel-inner">
-        <div class="auth-mobile-brand"><span>G</span><strong>Gremory</strong></div>
+        <div class="auth-mobile-brand"><span class="auth-mobile-logo"><img src="/assets/img/gremory-logo.png" alt=""></span><strong>Gremory</strong></div>
         <div class="auth-heading">
           <span class="eyebrow">CONTA GREMORY</span>
           <h1 id="authHeading">Bem-vindo</h1>
@@ -65,7 +65,7 @@
   <div class="app-shell" id="appShell" aria-hidden="true">
     <aside class="sidebar" aria-label="Navegação principal">
       <button class="brand" data-route="home" aria-label="Gremory">
-        <span class="brand-mark">G</span>
+        <span class="brand-mark brand-mark-logo"><img src="/assets/img/gremory-logo.png" alt=""></span>
         <span class="brand-copy"><strong>Gremory</strong><small>Company</small></span>
       </button>
 
@@ -144,7 +144,7 @@
             </div>
             <div class="home-emblem" aria-hidden="true">
               <div class="home-emblem-ring"></div>
-              <div class="home-emblem-core">G</div>
+              <div class="home-emblem-core home-emblem-logo"><img src="/assets/img/gremory-logo.png" alt=""></div>
             </div>
           </div>
 
@@ -280,6 +280,20 @@
             <div class="wild-stage" id="wildStage"><div class="empty-state small">Explore para encontrar um Pokémon selvagem.</div></div>
           </article>
 
+          <article class="panel pokemon-inventory-panel">
+            <div class="panel-head"><div><span class="tag">MOCHILA</span><h3>Itens de batalha</h3></div><span class="pill" id="pokemonPotionCount">0 poções</span></div>
+            <div class="pokemon-inventory-grid">
+              <div><span>🔴 Pokébola</span><strong id="pokemonBallCount">0</strong></div>
+              <div><span>🔵 Great Ball</span><strong id="pokemonGreatBallCount">0</strong></div>
+              <div><span>🟡 Ultra Ball</span><strong id="pokemonUltraBallCount">0</strong></div>
+              <div class="premier-item"><span>⚪ Premier Ball</span><strong id="pokemonPremierBallCount">0</strong><small>Recompensa de raids</small></div>
+            </div>
+            <div class="pokemon-item-shop">
+              <div><strong>🧪 Poção</strong><small>Recupera 35% do HP máximo sem precisar sair da coleção.</small></div>
+              <div class="pokemon-item-shop-actions"><span>₹80</span><button class="btn" id="pokemonBuyPotionBtn" type="button">Comprar Poção</button></div>
+            </div>
+          </article>
+
           <article class="panel collection-panel" id="pokemonCollectionPanel">
             <div class="panel-head"><div><span class="tag">COLEÇÃO</span><h3>PC Pokémon</h3></div><span class="pill" id="collectionCount">0</span></div>
             <div class="collection-grid" id="pokemonCollection"><div class="empty-state small">Sincronize a Charlotte para carregar sua coleção.</div></div>
@@ -287,7 +301,7 @@
 
           <article class="panel hospital-panel">
             <div class="panel-head"><div><span class="tag">CENTRO</span><h3>Hospital Pokémon</h3></div><span class="pill">₹100 • 5 min • Premium 2 min</span></div>
-            <p class="panel-help">Pokémon desmaiados não entram em batalha. A recuperação é processada pelo bot e continua mesmo se você fechar o site.</p>
+            <p class="panel-help">Envie um Pokémon machucado ao Centro para recuperar todo o HP. Para ferimentos leves, use uma Poção diretamente na coleção.</p>
             <div id="pokemonHealingList" class="healing-list"><div class="empty-state small">Nenhum Pokémon em recuperação.</div></div>
           </article>
 
@@ -809,8 +823,13 @@
           <div class="section-head"><div><span class="tag">SUPORTE</span><h2>Gremory oficial</h2></div></div>
           <div class="support-grid">
             <article class="panel support-card"><div class="support-icon">?</div><div><h3>Grupo de suporte</h3><p>Ajuda com Charlotte, site, vínculo e sistemas.</p></div><a class="btn primary" href="https://chat.whatsapp.com/CVD1yQCsQbNHmIeazbsS7e" target="_blank" rel="noopener noreferrer">Entrar no grupo</a></article>
-            <article class="panel support-card"><div class="support-icon">G</div><div><h3>Comunidade oficial</h3><p>Novidades, avisos e espaços oficiais da Gremory.</p></div><a class="btn" href="https://chat.whatsapp.com/DiQrPvCDN2hCrIw4LCb0lQ" target="_blank" rel="noopener noreferrer">Abrir comunidade</a></article>
+            <article class="panel support-card"><div class="support-icon"><img src="/assets/img/gremory-logo.png" alt=""></div><div><h3>Comunidade oficial</h3><p>Novidades, avisos e espaços oficiais da Gremory.</p></div><a class="btn" href="https://chat.whatsapp.com/DiQrPvCDN2hCrIw4LCb0lQ" target="_blank" rel="noopener noreferrer">Abrir comunidade</a></article>
           </div>
+          <article class="panel support-chat-panel">
+            <div class="panel-head"><div><span class="tag">ATENDIMENTO</span><h3>Chat com a equipe</h3></div><span class="pill" id="supportChatStatus">Online</span></div>
+            <div class="support-chat-list" id="supportChatList"><div class="empty-state small">Envie uma mensagem para iniciar o atendimento.</div></div>
+            <form id="supportChatForm" class="support-chat-form"><input id="supportChatInput" maxlength="500" autocomplete="off" placeholder="Escreva sua mensagem"><button class="btn primary" type="submit">Enviar</button></form>
+          </article>
         </section>
 
         <section class="view" data-view="admin">
@@ -853,6 +872,51 @@
               </form>
               <div id="adminUserResult" class="admin-user-result"></div>
             </article>
+
+            <article class="panel admin-panel">
+              <div class="panel-head"><div><span class="tag">ECONOMIA</span><h3>Rúpias e Premium</h3></div></div>
+              <p class="muted">Use o usuário localizado no painel de contas.</p>
+              <div class="admin-economy-grid">
+                <label>Rúpias<input id="adminCurrencyAmount" type="number" min="1" max="10000000" value="1000"></label>
+                <div class="admin-row-actions"><button class="btn primary" id="adminGiveCurrencyBtn" type="button">Adicionar</button><button class="btn danger-ghost" id="adminRemoveCurrencyBtn" type="button">Remover</button></div>
+                <label>Dias Premium<input id="adminPremiumDays" type="number" min="1" max="3650" value="30"></label>
+                <button class="btn primary" id="adminGivePremiumBtn" type="button">Dar Premium</button>
+              </div>
+            </article>
+
+            <article class="panel admin-panel">
+              <div class="panel-head"><div><span class="tag">NOTIFICAÇÕES</span><h3>Enviar aviso</h3></div></div>
+              <form id="adminNotificationForm" class="stack-form compact">
+                <label>Destino<select id="adminNotificationTarget"><option value="all">Todos os usuários</option><option value="selected">Usuário localizado</option></select></label>
+                <label>Título<input id="adminNotificationTitle" maxlength="80" value="Aviso da Gremory"></label>
+                <label>Mensagem<textarea id="adminNotificationText" rows="4" maxlength="800" required></textarea></label>
+                <label>Link opcional<input id="adminNotificationLink" maxlength="300" placeholder="#updates"></label>
+                <button class="btn primary full" type="submit">Enviar notificação</button>
+              </form>
+            </article>
+
+            <article class="panel admin-panel">
+              <div class="panel-head"><div><span class="tag">LOJA</span><h3>Adicionar personalização</h3></div></div>
+              <form id="adminStoreForm" class="stack-form compact">
+                <label>ID do item<input id="adminStoreId" maxlength="40" placeholder="gif_dragon_red" required></label>
+                <label>Nome<input id="adminStoreName" maxlength="60" placeholder="Asas Carmesim" required></label>
+                <label>Preço em rúpias<input id="adminStorePrice" type="number" min="0" max="10000000" value="3000" required></label>
+                <label>Tipo<select id="adminStoreSlot"><option value="cover">GIF de fundo</option><option value="decor">Sprite / decoração</option></select></label>
+                <label>URL do GIF / sprite<input id="adminStoreMediaUrl" type="url" placeholder="https://..." required></label>
+                <div class="admin-row-actions"><button class="btn primary" type="submit">Salvar na loja</button><button class="btn danger-ghost" id="adminStoreDeleteBtn" type="button">Excluir item</button></div>
+              </form>
+            </article>
+
+            <article class="panel admin-panel admin-support-panel">
+              <div class="panel-head"><div><span class="tag">ATENDIMENTO</span><h3>Chat de suporte</h3></div><button class="mini-btn" id="adminSupportRefreshBtn" type="button">Atualizar</button></div>
+              <div class="admin-support-layout"><div id="adminSupportConversations" class="admin-support-conversations"><div class="empty-state small">Nenhuma conversa.</div></div><div><div id="adminSupportChat" class="support-chat-list admin-support-chat"><div class="empty-state small">Escolha uma conversa.</div></div><form id="adminSupportReplyForm" class="support-chat-form"><input id="adminSupportReplyInput" maxlength="500" placeholder="Responder" disabled><button class="btn primary" type="submit" disabled>Enviar</button></form></div></div>
+            </article>
+
+            <article class="panel admin-panel">
+              <div class="panel-head"><div><span class="tag">BACKUP</span><h3>Dados da Charlotte</h3></div><span class="pill" id="adminBackupStatus">Aguardando</span></div>
+              <p class="muted" id="adminBackupMeta">Aguardando a primeira cópia de segurança da Charlotte.</p>
+              <button class="btn" id="adminBackupNowBtn" type="button">Criar backup agora</button>
+            </article>
           </div>
         </section>
 
@@ -891,8 +955,9 @@
 
   <div class="drawer" id="accountDrawer" aria-hidden="true">
     <button class="drawer-backdrop" id="accountDrawerBackdrop" aria-label="Fechar"></button>
-    <aside class="drawer-card">
+    <aside class="drawer-card" id="accountDrawerCard">
       <div class="drawer-head"><div><span class="tag">CONTA</span><h2>Meu perfil</h2></div><button class="modal-close static" id="accountDrawerClose">×</button></div>
+      <div class="profile-own-cover" id="profileOwnCover"><div class="profile-own-media" id="profileOwnMedia" aria-hidden="true"></div><img src="/assets/img/gremory-logo.png" alt=""></div>
       <div class="profile-summary"><img id="profileAvatarPreview" src="/assets/img/profile.jpg" alt=""><div><strong id="profileNameView">Usuário</strong><span id="profileUsernameView">@usuario</span><span id="profilePlanView">Padrão</span></div></div>
       <form id="profileForm" class="profile-form">
         <label>Nome<input id="profileName" maxlength="40"></label><label>Nome de usuário<input id="profileUsername" maxlength="20" autocomplete="username" placeholder="usuario"><small class="field-hint" id="profileUsernameHint">Pode ser alterado uma vez a cada 7 dias.</small></label>
@@ -956,6 +1021,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261017-v11-5-auth"></script>
+  <script type="module" src="/assets/js/app.js?v=20261018-v12-launch"></script>
 </body>
 </html>

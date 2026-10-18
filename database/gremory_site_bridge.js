@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 
 function cleanJid(jid='') { return String(jid || '').replace(/:\d+@/, '@').trim(); }
 function maskJid(jid='') {
@@ -128,7 +129,17 @@ function publicPokemonUser(user={}){
   const activeUid=user.activeUid||activeFromIndex?.uid||null;
   if(!team.length&&activeUid){const active=byUid.get(String(activeUid));if(active)team=[active,...collection.filter(m=>String(m.uid)!==String(activeUid)).slice(0,5)];}
   if(!team.length)team=collection.slice(0,6);
-  return{collection,team:team.slice(0,6),activeUid:activeUid||team[0]?.uid||null};
+  const rawItems=(user.items&&typeof user.items==='object'?user.items:(user.itens&&typeof user.itens==='object'?user.itens:{}))||{};
+  const itemNumber=(...keys)=>{for(const key of keys){const n=Number(rawItems[key]);if(Number.isFinite(n)&&n>0)return Math.floor(n)}return 0};
+  const items={
+    pokebola:itemNumber('pokebola','pokeball','pokeBall'),
+    greatball:itemNumber('greatball','greatBall'),
+    ultraball:itemNumber('ultraball','ultraBall'),
+    premierball:itemNumber('premierball','premierBall'),
+    potion:itemNumber('potion','pocao','poção','potions'),
+    berry:itemNumber('berry','fruta','berries')
+  };
+  return{collection,team:team.slice(0,6),activeUid:activeUid||team[0]?.uid||null,items};
 }
 
 const CUSTOMIZATION_CATALOG={
@@ -185,6 +196,7 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   const healingPath=path.join(__dirname,'pokemon','site_healing_jobs.json');
   const tttRewardPath=path.join(__dirname,'tictactoe','site_rewards.json');
   const tinderPath=path.join(__dirname,'tinder.json');
+  const pokemonModePath=path.join(__dirname,'pokemon','pokemon_mode.json');
   const rootDir=path.join(__dirname,'..');
   const downloadDir=path.join(rootDir,'Gremory','downloads');
   const siteOrigin=String(process.env.GREMORY_SITE_ORIGIN||'https://gremory2.vercel.app').replace(/\/+$/,'').replace(/#.*$/,'');
@@ -195,14 +207,14 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   const HEAL_MS_PREMIUM=2*60*1000;
   const watchedUsers=new Set(),watchedRefs=new Map(),userQueues=new Map();
   const bridgeInstanceId=`bridge_${process.pid}_${crypto.randomBytes(6).toString('hex')}`;
-  let rootWatcher=null,healingTimer=null,syncTimer=null,raidTimer=null,syncingLinked=false;
+  let rootWatcher=null,healingTimer=null,syncTimer=null,raidTimer=null,backupTimer=null,syncingLinked=false,backupRunning=false;
 
   function savePokemonDb(db){if(typeof saveGremonDB!=='function')throw new Error('saveGremonDB não está disponível no bot.');saveGremonDB(db);}
   function ensureMon(mon){if(!mon)return null;if(garantirHp){try{garantirHp(mon)}catch{}}if(!mon.uid)mon.uid=id('pk');if(!mon.maxHp)mon.maxHp=Math.max(1,Number(mon.hp||100));if(mon.hpAtual==null)mon.hpAtual=mon.maxHp;if(Number(mon.hpAtual)<=0){mon.hpAtual=0;mon.fainted=true;}return mon;}
   function pokemonState(jid){const db=getGremonDB(),user=getGremonUser(db,cleanJid(jid));if(!user)throw new Error('Treinador Pokémon não encontrado no bot.');user.monsters=Array.isArray(user.monsters)?user.monsters:[];user.monsters.forEach(ensureMon);return{db,user};}
   function findMon(user,uid){return(user.monsters||[]).find(m=>String(m.uid||m.id)===String(uid||''))||null;}
   function orderedTeamRaw(user){const mons=user.monsters||[],by=new Map(mons.map(m=>[String(m.uid),m]));const out=[];if(Array.isArray(user.party))for(const item of user.party){const m=by.get(String(item?.uid||item||''));if(m&&!out.includes(m))out.push(m)}if(!out.length){const active=mons[Math.max(0,Number(user.active||0))];if(active)out.push(active);for(const m of mons)if(!out.includes(m)&&out.length<6)out.push(m)}return out.slice(0,6);}
-  function firstHealthy(user){return orderedTeamRaw(user).find(m=>{ensureMon(m);return !m.fainted&&Number(m.hpAtual||0)>0})||null;}
+  function firstHealthy(user){return orderedTeamRaw(user).find(m=>{ensureMon(m);return !m.fainted&&Number(m.hpAtual||0)>0&&Number(m.healingUntil||0)<=Date.now()})||null;}
   function faintRaw(mon,reason='batalha'){ensureMon(mon);mon.hpAtual=0;mon.fainted=true;mon.faintedAt=Date.now();mon.faintedReason=reason;}
   function healRaw(mon){ensureMon(mon);if(curarTotal){try{curarTotal(mon);return}catch{}}mon.hpAtual=mon.maxHp;mon.fainted=false;mon.faintedAt=null;mon.faintedReason=null;mon.healingUntil=null;}
 
@@ -228,6 +240,18 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   function readAchievements(jid){try{if(!achievements.getConquistasDB||!achievements.getUserConquista)return{unlockedCount:0,total:Object.keys(achievements.CONQUISTAS||{}).length,unlocked:[],badge:''};const db=achievements.getConquistasDB(),user=achievements.getUserConquista(db,jid),defs=achievements.CONQUISTAS||{},unlocked=(user.unlocked||[]).map(k=>({id:k,emoji:defs[k]?.emoji||'🏆',name:defs[k]?.nome||k,description:defs[k]?.desc||'',badge:defs[k]?.badge||''}));let badge='';if(user.badgeAtual&&defs[user.badgeAtual])badge=`${defs[user.badgeAtual].emoji||''} ${defs[user.badgeAtual].badge||defs[user.badgeAtual].nome}`.trim();return{unlockedCount:unlocked.length,total:Object.keys(defs).length,unlocked,badge,stats:user.stats||{}};}catch{return{unlockedCount:0,total:0,unlocked:[],badge:''};}}
   function balanceFor(jid){try{return Number(typeof economy.MoneyOfSender==='function'?economy.MoneyOfSender(jid):0)||0}catch{return 0}}
   function registeredFor(jid){try{return typeof economy.checkOfReg==='function'?!!economy.checkOfReg(jid):true}catch{return true}}
+
+  async function resolveCustomizationItem(itemId){
+    const clean=String(itemId||'').trim().toLowerCase();
+    if(!clean)return null;
+    if(CUSTOMIZATION_CATALOG[clean])return{id:clean,...CUSTOMIZATION_CATALOG[clean],source:'static'};
+    const sn=await rtdb.ref(`siteStoreCatalog/${clean}`).once('value').catch(()=>null),raw=sn?.val?.();
+    if(!raw||typeof raw!=='object'||raw.active===false)return null;
+    const slot=['cover','decor','frame','effect','name','aura','badge','theme'].includes(String(raw.slot||''))?String(raw.slot):'';
+    const price=Math.max(0,Math.floor(Number(raw.price||0)));
+    if(!slot||!String(raw.name||'').trim())return null;
+    return{id:clean,name:String(raw.name).trim().slice(0,60),price,slot,mediaUrl:String(raw.mediaUrl||'').trim().slice(0,1200),mediaKind:String(raw.mediaKind||'').trim().slice(0,20),source:'remote'};
+  }
 
   async function notifySite(uid,{type='info',title='Gremory',text='',link='',sound=true,imageUrl=''}={}){
     if(!uid)return null;
@@ -386,7 +410,7 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     await processDueHealingJobs().catch(()=>{});
     if(!registeredFor(jid))throw new Error('Use /reg na Charlotte antes do hospital.');
     const{db,user}=pokemonState(jid),mon=findMon(user,monUid);if(!mon)throw new Error('Pokémon não encontrado.');
-    ensureMon(mon);if(!mon.fainted&&Number(mon.hpAtual)>0)throw new Error('Esse Pokémon não está desmaiado.');
+    ensureMon(mon);if(Number(mon.hpAtual||0)>=Number(mon.maxHp||1))throw new Error('Esse Pokémon já está com o HP completo.');
     const jobs=readJson(healingPath,{});jobs[jid]=jobs[jid]||{};const existing=jobs[jid][mon.uid];
     if(existing&&Number(existing.readyAt)>Date.now())return{alreadyHealing:true,cost:Number(existing.cost||HEAL_COST),readyAt:existing.readyAt,name:mon.nome||mon.name||'Pokémon',premium:!!existing.premium};
     const balance=balanceFor(jid);if(balance<HEAL_COST)throw new Error(`Você precisa de ₹${HEAL_COST}. Saldo: ₹${balance}.`);
@@ -401,6 +425,29 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     return{alreadyHealing:false,cost:HEAL_COST,readyAt,name:job.name,premium,durationMs};
   }
   async function processHealStart(uid,jid,data){return startHealing(uid,jid,String(data.monUid||''));}
+  async function processPokemonUsePotion(uid,jid,data){
+    const monUid=String(data.monUid||'').trim();if(!monUid)throw new Error('Pokémon inválido.');
+    const{db,user}=pokemonState(jid),mon=findMon(user,monUid);if(!mon)throw new Error('Pokémon não encontrado.');ensureMon(mon);
+    if(Number(mon.healingUntil||0)>Date.now())throw new Error('Esse Pokémon está no Hospital.');
+    if(mon.fainted||Number(mon.hpAtual||0)<=0)throw new Error('Pokémon desmaiado precisa do Hospital.');
+    if(Number(mon.hpAtual||0)>=Number(mon.maxHp||1))throw new Error('Esse Pokémon já está com o HP completo.');
+    user.items=user.items&&typeof user.items==='object'?user.items:{};
+    const qty=Math.max(0,Number(user.items.potion||user.items.pocao||0));if(qty<1)throw new Error('Você não possui Poções.');
+    if(user.items.potion==null&&user.items.pocao!=null)user.items.potion=Number(user.items.pocao||0);
+    user.items.potion=Math.max(0,Number(user.items.potion||0)-1);if(user.items.pocao!=null)user.items.pocao=user.items.potion;
+    const before=Number(mon.hpAtual||0),heal=Math.max(30,Math.floor(Number(mon.maxHp||1)*0.35));mon.hpAtual=Math.min(Number(mon.maxHp||1),before+heal);mon.fainted=false;
+    savePokemonDb(db);await syncAccount(uid,jid).catch(()=>{});
+    return{name:mon.nome||mon.name||'Pokémon',healed:Math.max(0,Number(mon.hpAtual)-before),hp:Number(mon.hpAtual),maxHp:Number(mon.maxHp),potions:Number(user.items.potion||0)};
+  }
+  async function processPokemonBuyPotion(uid,jid,data){
+    if(!registeredFor(jid))throw new Error('Use /reg na Charlotte antes de comprar itens.');
+    const qty=Math.max(1,Math.min(25,Math.floor(Number(data.quantity||1)))),unitPrice=80,total=qty*unitPrice,balance=balanceFor(jid);
+    if(balance<total)throw new Error(`Saldo insuficiente. ${qty} Poção${qty===1?'':'ões'} custa ₹${total}.`);
+    if(typeof economy.delkoin!=='function')throw new Error('Sistema de rúpias não disponível.');await economy.delkoin(jid,total);
+    const{db,user}=pokemonState(jid);user.items=user.items&&typeof user.items==='object'?user.items:{};user.items.potion=Math.max(0,Number(user.items.potion||user.items.pocao||0))+qty;if(user.items.pocao!=null)user.items.pocao=user.items.potion;savePokemonDb(db);
+    try{await achievements.registrarEventoConquista?.({sender:jid,evento:'dinheiro_gasto',qtd:total})}catch{}
+    await syncAccount(uid,jid).catch(()=>{});return{quantity:qty,unitPrice,total,potions:Number(user.items.potion||0),balance:balanceFor(jid)};
+  }
   async function processSetTeam(uid,jid,data){const ids=[...new Set((Array.isArray(data.teamUids)?data.teamUids:[]).map(String).filter(Boolean))].slice(0,6);if(!ids.length)throw new Error('Escolha pelo menos um Pokémon.');const{db,user}=pokemonState(jid),all=new Map(user.monsters.map(m=>[String(m.uid),m]));for(const x of ids)if(!all.has(x))throw new Error('Um Pokémon da equipe não existe mais.');user.party=ids;user.activeUid=ids[0];user.active=Math.max(0,user.monsters.findIndex(m=>String(m.uid)===ids[0]));savePokemonDb(db);return{pokemon:await syncPokemon(uid,jid),teamUids:ids};}
 
   async function processExplore(uid,jid){await processDueHealingJobs().catch(()=>{});const old=await rtdb.ref(`pokemonSiteEncounter/${uid}`).once('value');if(old.exists()&&Number(old.val()?.expiresAt||0)>Date.now()&&old.val()?.status!=='finished')return{encounter:old.val(),reused:true};const meta=await rtdb.ref(`pokemonSiteMeta/${uid}/lastExplore`).once('value');const exploreCooldown=readPremium(jid).active?8000:15000;if(Date.now()-Number(meta.val()||0)<exploreCooldown)throw new Error('Aguarde alguns segundos para explorar de novo.');const{user}=pokemonState(jid),mine=firstHealthy(user);if(!mine)throw new Error('Sua equipe está toda desmaiada. Use o Hospital Pokémon.');if(!sortearSelvagem)throw new Error('Sistema de exploração Pokémon não disponível.');const raw=await sortearSelvagem(true),wild=publicMon(raw||{});if(!wild.uid)wild.uid=id('wild');wild.hp=wild.maxHp;wild.fainted=false;const encounter={id:id('enc'),status:'battle',mon:wild,player:publicMon(mine),createdAt:now(),expiresAt:Date.now()+10*60*1000,log:{}};await Promise.all([rtdb.ref(`pokemonSiteEncounter/${uid}`).set(encounter),rtdb.ref(`pokemonSiteMeta/${uid}/lastExplore`).set(Date.now())]);return{encounter};}
@@ -408,7 +455,7 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   function calcDamageDetailed(attacker,defender,move,opts={}){return damageDetail(attacker,defender,move,opts);}
   async function processWildMove(uid,jid,data){const er=rtdb.ref(`pokemonSiteEncounter/${uid}`),sn=await er.once('value');if(!sn.exists())throw new Error('Explore primeiro.');const e=sn.val();if(e.status!=='battle'||Number(e.expiresAt||0)<Date.now())throw new Error('Esse encontro terminou.');const{db,user}=pokemonState(jid);let mine=findMon(user,e.player?.uid);if(!mine||mine.fainted||Number(mine.hpAtual)<=0)mine=firstHealthy(user);if(!mine)throw new Error('Sua equipe está desmaiada.');let minePub=publicMon(mine),wild={...e.mon};const moves=minePub.moves.length?minePub.moves:[{name:'Ataque rápido',power:40},{name:'Investida',power:45}],move=moves[clamp(data.moveIndex,0,moves.length-1)]||moves[0],hit=calcDamageDetailed(minePub,wild,move),damage=hit.dano;wild.hp=Math.max(0,Number(wild.hp||wild.maxHp)-damage);let text=`${minePub.name} usou ${move.name} (${typeName(move.type)}) e causou ${damage} de dano${hit.effectText?` • ${hit.effectText}`:''}.`;let reward=0;if(wild.hp<=0){wild.fainted=true;reward=crypto.randomInt(45,121);if(readPremium(jid).active)reward=Math.floor(reward*1.25);if(typeof economy.addkoin==='function')await economy.addkoin(jid,reward);const xpReward=crypto.randomInt(20,46);addPokemonXpRaw(mine,xpReward);e.reward={rupias:reward,pokemonXp:xpReward,premium:readPremium(jid).active};e.status='finished';e.result='victory';e.finishedAt=now();text+=` ${wild.name} desmaiou. +₹${reward}.`;e.expiresAt=Date.now()+60000;}else{const wildMoves=wild.moves?.length?wild.moves:[{name:'Investida',power:40}],wm=wildMoves[crypto.randomInt(0,wildMoves.length)],counterHit=calcDamageDetailed(wild,minePub,wm),counter=counterHit.dano;mine.hpAtual=Math.max(0,Number(mine.hpAtual||mine.maxHp)-counter);if(mine.hpAtual<=0){faintRaw(mine,'selvagem');text+=` ${wild.name} usou ${wm.name} (${typeName(wm.type)}) e causou ${counter}${counterHit.effectText?` • ${counterHit.effectText}`:''}. ${minePub.name} desmaiou.`;const next=firstHealthy(user);if(next){mine=next;minePub=publicMon(next);text+=` Você enviou ${minePub.name}.`;await setBotActive(jid,next.uid)}else{e.status='finished';e.result='defeat';e.finishedAt=now();e.expiresAt=Date.now()+60000;text+=' Sua equipe inteira desmaiou.'}}else{text+=` ${wild.name} usou ${wm.name} (${typeName(wm.type)}) e causou ${counter}${counterHit.effectText?` • ${counterHit.effectText}`:''}.`;}}savePokemonDb(db);e.mon=wild;e.player=publicMon(mine);e.updatedAt=now();e.log=e.log||{};e.log[id('log')]={text,at:now()};await er.set(e);await syncAccount(uid,jid).catch(()=>{});return{encounter:e,reward};}
   async function processWildExit(uid){const er=rtdb.ref(`pokemonSiteEncounter/${uid}`),sn=await er.once('value');if(!sn.exists())return{left:true};const e=sn.val()||{};e.status='finished';e.result='escaped';e.finishedAt=now();e.expiresAt=Date.now()+15000;e.updatedAt=now();e.log=e.log||{};e.log[id('log')]={text:'Você fugiu do encontro selvagem.',at:now()};await er.set(e);return{left:true};}
-  async function processCapture(uid,jid,data){const er=rtdb.ref(`pokemonSiteEncounter/${uid}`),sn=await er.once('value');if(!sn.exists())throw new Error('Explore primeiro.');const e=sn.val();if(Number(e.expiresAt||0)<Date.now()||e.status==='finished')throw new Error('Esse encontro terminou.');const ball=String(data.ball||'pokebola').toLowerCase(),allowed=new Set(['pokebola','greatball','ultraball']);if(!allowed.has(ball))throw new Error('Pokébola inválida.');const{db,user}=pokemonState(jid);user.items=user.items||{};if(Number(user.items[ball]||0)<=0)throw new Error(`Você não possui ${ball}.`);user.items[ball]=Number(user.items[ball])-1;const wild=e.mon||{},hpRate=Number(wild.hp||wild.maxHp)/Math.max(1,Number(wild.maxHp||1)),base=32+Math.round((1-hpRate)*38),bonus=ball==='greatball'?15:ball==='ultraball'?30:0,chance=Math.max(5,Math.min(92,base+bonus)),captured=crypto.randomInt(1,101)<=chance;if(captured){const mon={uid:id('pk'),dex:wild.dex,nome:wild.name,level:wild.level,shiny:!!wild.shiny,maxHp:wild.maxHp,hpAtual:wild.maxHp,fainted:false,attack:wild.attack,defense:wild.defense,sprite:wild.sprite,types:wild.types,moves:wild.moves};user.monsters.push(mon);if(!Array.isArray(user.party)||user.party.length<6){user.party=Array.isArray(user.party)?user.party:[];user.party.push(mon.uid)}await er.remove();}else{e.updatedAt=now();e.log=e.log||{};e.log[id('log')]={text:`A ${ball} falhou. ${wild.name} escapou.`,at:now()};await er.set(e)}savePokemonDb(db);await syncAccount(uid,jid).catch(()=>{});return{captured,chance,pokemon:captured?wild:null};}
+  async function processCapture(uid,jid,data){const er=rtdb.ref(`pokemonSiteEncounter/${uid}`),sn=await er.once('value');if(!sn.exists())throw new Error('Explore primeiro.');const e=sn.val();if(Number(e.expiresAt||0)<Date.now()||e.status==='finished')throw new Error('Esse encontro terminou.');const ball=String(data.ball||'pokebola').toLowerCase(),allowed=new Set(['pokebola','greatball','ultraball','premierball']);if(!allowed.has(ball))throw new Error('Pokébola inválida.');const{db,user}=pokemonState(jid);user.items=user.items||{};if(Number(user.items[ball]||0)<=0)throw new Error(`Você não possui ${ball}.`);user.items[ball]=Number(user.items[ball])-1;const wild=e.mon||{},hpRate=Number(wild.hp||wild.maxHp)/Math.max(1,Number(wild.maxHp||1)),base=32+Math.round((1-hpRate)*38),bonus=ball==='greatball'?15:ball==='ultraball'?30:ball==='premierball'?38:0,chance=Math.max(5,Math.min(92,base+bonus)),captured=crypto.randomInt(1,101)<=chance;if(captured){const mon={uid:id('pk'),dex:wild.dex,nome:wild.name,level:wild.level,shiny:!!wild.shiny,maxHp:wild.maxHp,hpAtual:wild.maxHp,fainted:false,attack:wild.attack,defense:wild.defense,sprite:wild.sprite,types:wild.types,moves:wild.moves};user.monsters.push(mon);if(!Array.isArray(user.party)||user.party.length<6){user.party=Array.isArray(user.party)?user.party:[];user.party.push(mon.uid)}await er.remove();}else{e.updatedAt=now();e.log=e.log||{};e.log[id('log')]={text:`A ${ball} falhou. ${wild.name} escapou.`,at:now()};await er.set(e)}savePokemonDb(db);await syncAccount(uid,jid).catch(()=>{});return{captured,chance,pokemon:captured?wild:null};}
 
   function teamForJid(jid){const{user}=pokemonState(jid);return orderedTeamRaw(user).map(publicMon);}
   function currentDuelMon(player){const team=Array.isArray(player.team)?player.team:[];return team.find(m=>String(m.uid)===String(player.currentUid))||team[Math.max(0,Number(player.activeIndex||0))]||team[0]||null;}
@@ -444,21 +491,21 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
 
   async function processDaily(uid,jid){if(!registeredFor(jid))throw new Error('Use /reg na Charlotte antes de coletar o Daily pelo site.');if(typeof mining.checkDayli!=='function'||typeof mining.addDayli!=='function')throw new Error('Sistema Daily não disponível no bot.');if(mining.checkDayli(jid)){const release=Number(mining.timeDayli?.(jid)||Date.now());return{claimed:false,cooldownMs:Math.max(0,release-Date.now()),message:'Você já coletou o Daily. Volte quando o cooldown terminar.'};}await mining.addDayli(jid,24*60*60*1000);const sorte=Math.random()*100;let rupias,rewardName;if(sorte<3){rupias=crypto.randomInt(700,1001);rewardName='JACKPOT DIÁRIO';}else if(sorte<15){rupias=crypto.randomInt(400,601);rewardName='Recompensa de Ouro';}else if(sorte<45){rupias=crypto.randomInt(300,451);rewardName='Recompensa de Prata';}else{rupias=crypto.randomInt(200,301);rewardName='Recompensa Diária';}const xp=crypto.randomInt(20,61);await economy.addkoin(jid,rupias);await economy.addXp(jid,xp);try{await achievements.registrarEventoConquista?.({sender:jid,evento:'daily',qtd:1});await achievements.registrarEventoConquista?.({sender:jid,evento:'dinheiro_ganho',qtd:rupias});}catch{}const balance=balanceFor(jid);await syncAccount(uid,jid).catch(()=>{});return{claimed:true,rewardName,rupias,xp,balance};}
   async function processBuyCustomization(uid,jid,data){
-    const itemId=String(data.itemId||''),item=CUSTOMIZATION_CATALOG[itemId];if(!item)throw new Error('Personalização inválida.');
+    const itemId=String(data.itemId||'').trim().toLowerCase(),item=await resolveCustomizationItem(itemId);if(!item)throw new Error('Personalização inválida.');
     if(!registeredFor(jid))throw new Error('Use /reg na Charlotte antes de usar rúpias no site.');
     const invRef=rtdb.ref(`siteInventory/${uid}/items/${itemId}`),owned=await invRef.once('value');
     if(!owned.exists()){
       const balance=balanceFor(jid);if(balance<item.price)throw new Error(`Saldo insuficiente. Você possui ₹${balance}.`);
       if(typeof economy.delkoin!=='function')throw new Error('Sistema de rúpias não disponível.');
       await economy.delkoin(jid,item.price);try{await achievements.registrarEventoConquista?.({sender:jid,evento:'dinheiro_gasto',qtd:item.price});}catch{}
-      await invRef.set({id:itemId,name:item.name,price:item.price,slot:item.slot,purchasedAt:now()});
+      await invRef.set({id:itemId,name:item.name,price:item.price,slot:item.slot,mediaUrl:item.mediaUrl||'',mediaKind:item.mediaKind||'',purchasedAt:now()});
     }
     await rtdb.ref(`siteCustomization/${uid}`).update({[`equipped/${item.slot}`]:itemId,active:itemId,updatedAt:now()});
     await syncAccount(uid,jid).catch(()=>{});
     return{itemId,slot:item.slot,price:item.price,balance:balanceFor(jid),alreadyOwned:owned.exists()};
   }
   async function processEquipCustomization(uid,data){
-    const itemId=String(data.itemId||''),item=CUSTOMIZATION_CATALOG[itemId];if(!item)throw new Error('Personalização inválida.');
+    const itemId=String(data.itemId||'').trim().toLowerCase(),item=await resolveCustomizationItem(itemId);if(!item)throw new Error('Personalização inválida.');
     const owned=await rtdb.ref(`siteInventory/${uid}/items/${itemId}`).once('value');if(!owned.exists())throw new Error('Você ainda não possui essa personalização.');
     await rtdb.ref(`siteCustomization/${uid}`).update({[`equipped/${item.slot}`]:itemId,active:itemId,updatedAt:now()});
     return{itemId,slot:item.slot};
@@ -816,6 +863,48 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   }
 
 
+  function sanitizeStoreItem(raw={}){
+    const idValue=String(raw.id||'').trim().toLowerCase();if(!/^[a-z0-9][a-z0-9_-]{2,39}$/.test(idValue))throw new Error('ID inválido. Use letras, números, _ ou -.');
+    const name=String(raw.name||'').trim().slice(0,60);if(!name)throw new Error('Informe o nome do item.');
+    const price=Math.max(0,Math.min(10000000,Math.floor(Number(raw.price||0))));
+    const slot=String(raw.slot||'').trim().toLowerCase();if(!['cover','decor','frame','effect','name','aura','badge','theme'].includes(slot))throw new Error('Tipo de personalização inválido.');
+    const mediaUrl=String(raw.mediaUrl||'').trim().slice(0,1200);if(['cover','decor'].includes(slot)&&!/^https:\/\//i.test(mediaUrl))throw new Error('Use uma URL HTTPS para o GIF ou sprite.');
+    const mediaKind=String(raw.mediaKind||(['decor'].includes(slot)?'sprite':'gif')).trim().toLowerCase().slice(0,20);
+    return{id:idValue,name,price,slot,mediaUrl,mediaKind,active:true,updatedAt:Date.now()};
+  }
+  async function processAdminStoreUpsert(uid,data){if(!await siteAdmin(uid))throw new Error('Apenas o host pode editar a loja.');const item=sanitizeStoreItem(data.item||{});if(CUSTOMIZATION_CATALOG[item.id])throw new Error('Esse ID já pertence a um item fixo da loja.');await rtdb.ref(`siteStoreCatalog/${item.id}`).set(item);return{item};}
+  async function processAdminStoreDelete(uid,data){if(!await siteAdmin(uid))throw new Error('Apenas o host pode editar a loja.');const itemId=String(data.itemId||'').trim().toLowerCase();if(!/^[a-z0-9][a-z0-9_-]{2,39}$/.test(itemId))throw new Error('Item inválido.');await rtdb.ref(`siteStoreCatalog/${itemId}`).remove();return{itemId};}
+  async function processAdminGrantCurrency(uid,data){
+    if(!await siteAdmin(uid))throw new Error('Apenas o host pode alterar rúpias.');const targetUid=String(data.targetUid||'').trim(),amount=Math.trunc(Number(data.amount||0));if(!targetUid||!amount||Math.abs(amount)>10000000)throw new Error('Valor inválido.');const jid=await linkedJidByUid(targetUid);if(!jid)throw new Error('Esse usuário ainda não vinculou a Charlotte.');
+    if(amount>0){if(typeof economy.addkoin!=='function')throw new Error('Sistema de rúpias indisponível.');await economy.addkoin(jid,amount)}else{if(typeof economy.delkoin!=='function')throw new Error('Sistema de rúpias indisponível.');await economy.delkoin(jid,Math.min(Math.abs(amount),balanceFor(jid)))}
+    const balance=balanceFor(jid);await syncAccount(targetUid,jid).catch(()=>{});await notifySite(targetUid,{type:'admin_economy',title:'Saldo atualizado',text:`Seu saldo na Gremory foi atualizado para ₹${balance}.`,link:'#home'}).catch(()=>{});return{targetUid,balance};
+  }
+  async function processAdminGrantPremium(uid,data){
+    if(!await siteAdmin(uid))throw new Error('Apenas o host pode conceder Premium.');const targetUid=String(data.targetUid||'').trim(),days=Math.max(1,Math.min(3650,Math.floor(Number(data.days||0))));if(!targetUid)throw new Error('Usuário inválido.');const jid=await linkedJidByUid(targetUid);if(!jid)throw new Error('Esse usuário ainda não vinculou a Charlotte.');if(typeof premiumLib.addPremiumUser!=='function')throw new Error('Sistema Premium indisponível.');
+    const db=readJson(premiumPath,[]);premiumLib.addPremiumUser(jid,`${days}d`,db);writeJson(premiumPath,db);await syncAccount(targetUid,jid).catch(()=>{});await notifySite(targetUid,{type:'premium',title:'Premium ativado',text:`Seu Premium foi ativado por ${days} dia${days===1?'':'s'}.`,link:'#premium'}).catch(()=>{});await sendWhats(jid,`💎 Seu Premium Gremory foi ativado por ${days} dia${days===1?'':'s'}.`).catch(()=>{});return{targetUid,days,active:true};
+  }
+
+  function backupFileKey(rel){return crypto.createHash('sha256').update(String(rel).replace(/\\/g,'/')).digest('hex').slice(0,32)}
+  function collectOperationalJsonFiles(){
+    const roots=['database','db/json','settings/Grupo/Json','Games/Json'],files=[];const seen=new Set();
+    for(const root of roots){const abs=path.join(rootDir,root);if(!fs.existsSync(abs))continue;const walk=(dir)=>{let entries=[];try{entries=fs.readdirSync(dir,{withFileTypes:true})}catch{return}for(const e of entries){if(e.name==='node_modules'||e.name==='session'||e.name==='tmp')continue;const full=path.join(dir,e.name);if(e.isDirectory()){walk(full);continue}if(!(e.isFile()||e.isSymbolicLink())||!e.name.toLowerCase().endsWith('.json'))continue;try{if(!fs.statSync(full).isFile())continue}catch{continue}const rel=path.relative(rootDir,full).replace(/\\/g,'/');if(seen.has(rel))continue;seen.add(rel);files.push({full,rel})}};walk(abs)}
+    return files.sort((a,b)=>a.rel.localeCompare(b.rel));
+  }
+  async function backupOperationalJsons(force=false){
+    if(backupRunning)return{busy:true};backupRunning=true;const startedAt=Date.now();let files=0,changed=0,skipped=0,totalBytes=0;
+    try{
+      const previous=(await rtdb.ref('botJsonBackups/hashes').once('value').catch(()=>null))?.val?.()||{},hashPatch={},manifest={};
+      for(const f of collectOperationalJsonFiles()){
+        try{
+          const stat=fs.statSync(f.full);if(stat.size>2*1024*1024){skipped++;continue}const raw=fs.readFileSync(f.full);const hash=crypto.createHash('sha256').update(raw).digest('hex'),key=backupFileKey(f.rel);files++;totalBytes+=raw.length;manifest[key]={path:f.rel,size:raw.length,hash,updatedAt:stat.mtimeMs||Date.now()};hashPatch[key]=hash;
+          if(force||previous[key]!==hash){const gz=zlib.gzipSync(raw,{level:6}).toString('base64');await rtdb.ref(`botJsonBackups/files/${key}`).set({path:f.rel,hash,size:raw.length,encoding:'gzip-base64',data:gz,updatedAt:Date.now()});changed++}
+        }catch(e){skipped++;logger.log('[FIREBASE BACKUP] arquivo:',f.rel,e.message)}
+      }
+      await rtdb.ref('botJsonBackups/hashes').set(hashPatch);await rtdb.ref('botJsonBackups/manifest').set(manifest);const status={lastSuccessAt:Date.now(),startedAt,files,changed,skipped,totalBytes};await rtdb.ref('botBackupStatus').set(status);logger.log(`✅ FIREBASE JSON BACKUP: ${files} arquivo(s), ${changed} alterado(s), ${skipped} ignorado(s)`);return status;
+    }catch(e){await rtdb.ref('botBackupStatus').update({lastErrorAt:Date.now(),lastError:String(e.message||e).slice(0,400)}).catch(()=>{});throw e}finally{backupRunning=false}
+  }
+  async function processAdminBackupNow(uid){if(!await siteAdmin(uid))throw new Error('Apenas o host pode iniciar o backup.');return backupOperationalJsons(true)}
+
   async function siteAdmin(uid){
     const sn=await rtdb.ref(`profiles/${uid}`).once('value').catch(()=>null);
     return String(sn?.val?.()?.email||'').trim().toLowerCase()==='losermodder@gmail.com';
@@ -825,8 +914,18 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     const tier=crypto.randomInt(1,6),level=20+tier*10+crypto.randomInt(0,8),maxHp={1:1600,2:2400,3:3300,4:4400,5:5800}[tier];
     return{tier,boss:{uid:`raid_${base.dex}`,dex:base.dex,name:base.name,level,types:base.types,maxHp,hp:maxHp,attack:80+level*2,defense:65+level*1.7,sprite:`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${base.dex}.png`,moves:[{name:'Investida',power:55,type:base.types[0]}]},maxHp};
   }
+  function pokemonModeGroups(){
+    const raw=readJson(pokemonModePath,{groups:{}}),groups=(raw&&raw.groups&&typeof raw.groups==='object')?raw.groups:raw;if(!groups||typeof groups!=='object')return[];
+    return Object.entries(groups).filter(([jid,cfg])=>String(jid).endsWith('@g.us')&&(cfg===true||cfg?.ativo===true||cfg?.active===true||cfg?.enabled===true)).map(([jid])=>jid);
+  }
+  async function notifyRaidPokemonGroups(raid){
+    const groups=pokemonModeGroups();if(!groups.length)return{sent:0};let sent=0;
+    const caption=`⚔️ *RAID GLOBAL GREMORY*\n\n${raid.boss.name} • Tier ${raid.tier}\n${raid.boss.types.map(typeName).join(' / ')}\n❤️ ${raid.maxHp} HP\n⏳ 30 minutos\n\nEntre no site para lutar com a comunidade:\n${siteOrigin}/#pokemon`;
+    for(const jid of groups){try{await sock.groupMetadata(jid).catch(()=>null);if(raid.boss.sprite)await sock.sendMessage(jid,{image:{url:raid.boss.sprite},caption});else await sock.sendMessage(jid,{text:caption});sent++}catch(e){logger.log('[SITE RAID] grupo:',jid,e.message)}await new Promise(r=>setTimeout(r,220))}return{sent};
+  }
   async function notifyRaidStarted(raid){
     await notifyAllSiteUsers({title:'⚔️ Raid Pokémon iniciada!',text:`${raid.boss.name} apareceu. Entre no Centro Pokémon para lutar com todos.`,type:'pokemon_raid',link:'#pokemon'}).catch(()=>{});
+    notifyRaidPokemonGroups(raid).catch(e=>logger.log('[SITE RAID] anúncio nos grupos:',e.message));
     const ps=await rtdb.ref('profiles').once('value').catch(()=>null);const profiles=ps?.val?.()||{};
     for(const[uid,p]of Object.entries(profiles)){
       if(!p?.raidWhatsappNotify)continue;const jid=await linkedJidByUid(uid).catch(()=>null);if(jid)await sendWhats(jid,`⚔️ *RAID GLOBAL GREMORY*\n${raid.boss.name} (${raid.boss.types.map(typeName).join(' / ')}) apareceu no site!\n\nEntre em ${siteOrigin}/#pokemon para atacar.`);await new Promise(r=>setTimeout(r,80));
@@ -842,7 +941,8 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     const rr=rtdb.ref('pokemonSiteRaid/current');let claimed=null;
     const tx=await rr.transaction(cur=>{if(!cur||cur.id!==raidId||cur.status!=='defeated'||cur.rewardsClaimed)return;cur.status='finished';cur.finishedAt=Date.now();cur.rewardsClaimed=true;return cur},undefined,false);
     if(!tx?.committed)return;claimed=tx.snapshot.val();const rows=Object.entries(claimed.participants||{}).sort((a,b)=>Number(b[1].damage||0)-Number(a[1].damage||0));
-    for(let i=0;i<rows.length;i++){const[uid,row]=rows[i],jid=await linkedJidByUid(uid).catch(()=>null);if(!jid)continue;const reward=150+(i===0?150:i===1?80:i===2?40:0);if(typeof economy.addkoin==='function')await economy.addkoin(jid,reward);await syncAccount(uid,jid).catch(()=>{});await notifySite(uid,{type:'pokemon_raid',title:i===0?'🏆 Raid vencida • maior dano':'🏆 Raid vencida',text:`${claimed.boss.name} foi derrotado. Você causou ${row.damage||0} de dano e recebeu ₹${reward}.`,link:'#pokemon'}).catch(()=>{});}
+    const teamBonus=Math.min(5,Math.floor(rows.length/2));
+    for(let i=0;i<rows.length;i++){const[uid,row]=rows[i],jid=await linkedJidByUid(uid).catch(()=>null);if(!jid)continue;const reward=150+(i===0?150:i===1?80:i===2?40:0),premier=3+Number(claimed.tier||1)+teamBonus+(i===0?2:i===1?1:0);if(typeof economy.addkoin==='function')await economy.addkoin(jid,reward);try{const{db,user}=pokemonState(jid);user.items=user.items&&typeof user.items==='object'?user.items:{};user.items.premierball=Math.max(0,Number(user.items.premierball||user.items.premierBall||0))+premier;if(user.items.premierBall!=null)user.items.premierBall=user.items.premierball;savePokemonDb(db)}catch(e){logger.log('[SITE RAID] Premier Ball:',e.message)}await syncAccount(uid,jid).catch(()=>{});await notifySite(uid,{type:'pokemon_raid',title:i===0?'🏆 Raid vencida • maior dano':'🏆 Raid vencida',text:`${claimed.boss.name} foi derrotado. Você causou ${row.damage||0} de dano, recebeu ₹${reward} e ${premier} Premier Ball${premier===1?'':'s'}${teamBonus?` • bônus de equipe +${teamBonus}`:''}.`,link:'#pokemon'}).catch(()=>{});}
     await notifyAllSiteUsers({title:'🏆 Raid concluída!',text:`${claimed.boss.name} foi derrotado por ${rows.length} treinador(es).`,type:'pokemon_raid',link:'#pokemon'}).catch(()=>{});
   }
   async function processSiteRaidAttack(uid,jid,data){
@@ -887,7 +987,7 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     const type=String(data?.type||'');
     try{
       if(!data||typeof data!=='object')return;
-      let payload={};const jid=await linkedJidByUid(uid);const noLink=new Set(['ttt_create','ttt_move','ttt_exit','site_raid_start','site_raid_auto']);if(!jid&&!noLink.has(type))throw new Error('Conta não vinculada.');
+      let payload={};const jid=await linkedJidByUid(uid);const noLink=new Set(['ttt_create','ttt_move','ttt_exit','site_raid_start','site_raid_auto','admin_grant_currency','admin_grant_premium','admin_store_upsert','admin_store_delete','admin_backup_now']);if(!jid&&!noLink.has(type))throw new Error('Conta não vinculada.');
       if(type==='sync_pokemon')payload={pokemon:await syncPokemon(uid,jid)};
       else if(type==='sync_account')payload=await syncAccount(uid,jid);
       else if(type==='daily_claim')payload=await processDaily(uid,jid);
@@ -902,6 +1002,8 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
       else if(type==='pokemon_wild_exit')payload=await processWildExit(uid);
       else if(type==='pokemon_capture')payload=await processCapture(uid,jid,data);
       else if(type==='pokemon_heal_start')payload=await processHealStart(uid,jid,data);
+      else if(type==='pokemon_use_potion')payload=await processPokemonUsePotion(uid,jid,data);
+      else if(type==='pokemon_buy_potion')payload=await processPokemonBuyPotion(uid,jid,data);
       else if(type==='duel_challenge')payload=await processChallenge(uid,data);
       else if(type==='duel_accept')payload=await processAccept(uid,data);
       else if(type==='duel_decline')payload=await processDecline(uid,data);
@@ -911,6 +1013,11 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
       else if(type==='site_raid_start')payload=await processSiteRaidStart(uid);
       else if(type==='site_raid_auto')payload=await processSiteRaidAuto(uid,data);
       else if(type==='site_raid_attack')payload=await processSiteRaidAttack(uid,jid,data);
+      else if(type==='admin_grant_currency')payload=await processAdminGrantCurrency(uid,data);
+      else if(type==='admin_grant_premium')payload=await processAdminGrantPremium(uid,data);
+      else if(type==='admin_store_upsert')payload=await processAdminStoreUpsert(uid,data);
+      else if(type==='admin_store_delete')payload=await processAdminStoreDelete(uid,data);
+      else if(type==='admin_backup_now')payload=await processAdminBackupNow(uid);
       else if(type==='ttt_create')payload=await processTttCreate(uid,data);
       else if(type==='ttt_move')payload=await processTttMove(uid,data);
       else if(type==='ttt_exit')payload=await processTttExit(uid,data);
@@ -929,8 +1036,8 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   }
   function processJob(uid,jobId,data){const prev=userQueues.get(uid)||Promise.resolve(),next=prev.catch(()=>{}).then(()=>processJobNow(uid,jobId,data));userQueues.set(uid,next);next.finally(()=>{if(userQueues.get(uid)===next)userQueues.delete(uid)});return next;}
   function watchUserJobs(uid){if(watchedUsers.has(uid))return;watchedUsers.add(uid);const userRef=rtdb.ref(`siteBridgeJobs/${uid}`),handler=sn=>processJob(uid,sn.key,sn.val());userRef.on('child_added',handler);watchedRefs.set(uid,{userRef,handler});}
-  function start(){if(rootWatcher)return;rootWatcher=rtdb.ref('siteBridgeJobs');rootWatcher.on('child_added',sn=>watchUserJobs(sn.key));processDueHealingJobs().catch(()=>{});healingTimer=setInterval(()=>processDueHealingJobs().catch(()=>{}),30000);healingTimer.unref?.();setTimeout(()=>syncLinkedAccounts().catch(()=>{}),5000).unref?.();setTimeout(()=>restoreTinderFromFirebase().catch(()=>{}),7000).unref?.();setTimeout(()=>maybeAutoSiteRaid().catch(()=>{}),9000).unref?.();syncTimer=setInterval(()=>syncLinkedAccounts().catch(()=>{}),180000);syncTimer.unref?.();raidTimer=setInterval(()=>maybeAutoSiteRaid().catch(()=>{}),60000);raidTimer.unref?.();logger.log('✅ GREMORY SITE BRIDGE ATIVO');}
-  function stop(){try{if(rootWatcher)rootWatcher.off()}catch{}for(const{userRef,handler}of watchedRefs.values()){try{userRef.off('child_added',handler)}catch{}}watchedRefs.clear();watchedUsers.clear();rootWatcher=null;if(healingTimer){clearInterval(healingTimer);healingTimer=null;}if(syncTimer){clearInterval(syncTimer);syncTimer=null;}if(raidTimer){clearInterval(raidTimer);raidTimer=null;}syncingLinked=false;}
+  function start(){if(rootWatcher)return;rootWatcher=rtdb.ref('siteBridgeJobs');rootWatcher.on('child_added',sn=>watchUserJobs(sn.key));processDueHealingJobs().catch(()=>{});healingTimer=setInterval(()=>processDueHealingJobs().catch(()=>{}),30000);healingTimer.unref?.();setTimeout(()=>syncLinkedAccounts().catch(()=>{}),5000).unref?.();setTimeout(()=>restoreTinderFromFirebase().catch(()=>{}),7000).unref?.();setTimeout(()=>maybeAutoSiteRaid().catch(()=>{}),9000).unref?.();setTimeout(()=>backupOperationalJsons(false).catch(e=>logger.log('[FIREBASE BACKUP] inicial:',e.message)),12000).unref?.();syncTimer=setInterval(()=>syncLinkedAccounts().catch(()=>{}),180000);syncTimer.unref?.();raidTimer=setInterval(()=>maybeAutoSiteRaid().catch(()=>{}),60000);raidTimer.unref?.();backupTimer=setInterval(()=>backupOperationalJsons(false).catch(e=>logger.log('[FIREBASE BACKUP] ciclo:',e.message)),10*60*1000);backupTimer.unref?.();logger.log('✅ GREMORY SITE BRIDGE ATIVO');}
+  function stop(){try{if(rootWatcher)rootWatcher.off()}catch{}for(const{userRef,handler}of watchedRefs.values()){try{userRef.off('child_added',handler)}catch{}}watchedRefs.clear();watchedUsers.clear();rootWatcher=null;if(healingTimer){clearInterval(healingTimer);healingTimer=null;}if(syncTimer){clearInterval(syncTimer);syncTimer=null;}if(raidTimer){clearInterval(raidTimer);raidTimer=null;}if(backupTimer){clearInterval(backupTimer);backupTimer=null;}syncingLinked=false;}
   function rawIncomingText(info){
     return String(
       info?.message?.conversation||
