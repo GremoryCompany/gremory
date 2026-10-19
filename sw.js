@@ -1,9 +1,9 @@
-const CACHE='gremory-v12-16-slots-audio-auth-20261018';
+const CACHE='gremory-v12-17-vinculo-audio-slots-20261019';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261018-v12-16-slots-audio-auth',
-  '/assets/js/app.js?v=20261018-v12-16-slots-audio-auth',
+  '/assets/css/app.css?v=20261019-v12-17-vinculo-audio-slots',
+  '/assets/js/app.js?v=20261019-v12-17-vinculo-audio-slots',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
   '/manifest.webmanifest'

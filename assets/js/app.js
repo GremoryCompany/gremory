@@ -39,7 +39,7 @@ const state = {
   roomCode:null, room:null, roomUnsubs:[],
   userUnsubs:[], duel:null, duelUnsub:null,
   bridgeResults:{}, siteInventory:{}, siteCustomization:{}, storeCatalog:{},
-  teamDraft:[], pokemonEncounter:null, pokemonHealing:{}, pokemonAudio:{encounterId:''}, siteRaid:null, siteRaidConfig:{},
+  teamDraft:[], pokemonEncounter:null, pokemonHealing:{}, pokemonAudio:{encounterId:'',resultId:''}, siteRaid:null, siteRaidConfig:{},
   ttt:{game:null,unsub:null,index:{},lastResultId:'',seenActiveIds:new Set()},
   blackjack:{game:null,unsub:null,index:{},seenActiveIds:new Set()},
   hangman:{game:null,unsub:null,index:{},seenActiveIds:new Set()},
@@ -378,7 +378,7 @@ $('profileForm').addEventListener('submit',async ev=>{
   }
 });
 
-function clearUserSubscriptions(){try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.notificationDismissed={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null}
+function clearUserSubscriptions(){try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonAudio={encounterId:'',resultId:''};state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.notificationDismissed={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null}
 function startUserSubscriptions(){
   clearUserSubscriptions();const uid=state.user.uid;
   state.userUnsubs.push(onValue(ref(db,`friends/${uid}`),s=>{state.friends=s.exists()?s.val():{};renderFriends();renderDuelFriendSelect();$('homeFriendsText').textContent=`${Object.keys(state.friends).length} amigo${Object.keys(state.friends).length===1?'':'s'}`}));
@@ -472,33 +472,25 @@ function playSiteSound(name,fallbackFreq=720){
   try{const audio=new Audio(`/assets/audio/${name}.mp3`);audio.volume=.35;audio.play().catch(()=>generatedTone(fallbackFreq))}catch{generatedTone(fallbackFreq)}
 }
 
-// Sons personalizados: basta colocar os MP3 com estes nomes em
-// /assets/audio/custom/. Se um arquivo não existir, o site usa o som padrão.
+// Sons personalizados: os MP3 em /assets/audio/custom/ são carregados uma vez
+// e ficam prontos no AudioContext depois da primeira interação. Isso evita o bloqueio
+// de autoplay do mobile em sons disparados depois de Firebase/bridge (turno, Pokémon etc.).
+const GAME_AUDIO_VERSION='20261019-v12-17-audio';
 const CUSTOM_GAME_SOUND_FILES=Object.freeze({
-  notification:'notification',victory:'victory',defeat:'defeat',select:'select',move:'move',turn:'turn',start:'start',
-  accept:'accept',reject:'reject',card:'card',stand:'stand',correct:'correct',wrong:'wrong',draw:'draw',switch:'switch',
-  reelStop:'reel-stop',coins:'money-win',debit:'money-lose',jackpot:'jackpot',purchase:'purchase-customization',
-  slotSpin:'slot-spin',pokemonEncounter:'pokemon-encounter',pokemonHit:'pokemon-hit',pokemonBall:'pokemon-ball',pokemonCapture:'pokemon-capture'
+  notification:['notification.mp3'],victory:['victory.mp3'],defeat:['defeat.mp3'],select:['select.mp3'],move:['move.mp3'],turn:['turn.mp3'],start:['start.mp3'],
+  accept:['accept.mp3'],reject:['reject.mp3'],card:['card.mp3'],stand:['stand.mp3'],correct:['correct.mp3'],wrong:['wrong.mp3'],draw:['draw.mp3'],switch:['switch.mp3'],
+  reelStop:['reel-stop.mp3'],coins:['money-win.mp3'],debit:['money-lose.mp3'],jackpot:['jackpot.mp3'],purchase:['purchase-customization.mp3'],
+  slotSpin:['slot-spin.mp3'],pokemonEncounter:['pokemon-encounter (2).mp3','pokemon-encounter.mp3'],pokemonHit:['pokemon-hit.mp3'],pokemonBall:['pokemon-ball.mp3'],pokemonCapture:['pokemon-capture.mp3']
 });
-function customGameSoundPath(kind){const file=CUSTOM_GAME_SOUND_FILES[kind];return file?`/assets/audio/custom/${file}.mp3?v=20261018-v12-16-audio`:''}
-function tryCustomGameSound(kind,{volume=.38,loop=false,fallback=null}={}){
-  const src=customGameSoundPath(kind);if(!src){if(typeof fallback==='function')fallback();return null}
-  let audio=null,failed=false;
-  const useFallback=()=>{if(failed)return;failed=true;if(typeof fallback==='function')fallback()};
-  try{
-    audio=new Audio(src);audio.volume=Math.max(0,Math.min(1,Number(volume)||.38));audio.loop=!!loop;audio.preload='auto';
-    audio.addEventListener('error',useFallback,{once:true});
-    const promise=audio.play();if(promise?.catch)promise.catch(useFallback);
-    return audio;
-  }catch{useFallback();return null}
+function customGameSoundUrls(kind){
+  const files=CUSTOM_GAME_SOUND_FILES[kind]||[];
+  return files.map(file=>`/assets/audio/custom/${encodeURIComponent(file)}?v=${GAME_AUDIO_VERSION}`);
 }
-function playNotificationTone(){tryCustomGameSound('notification',{fallback:()=>playSiteSound('notification',720)})}
-function playVictoryTone(){tryCustomGameSound('victory',{volume:.45,fallback:()=>playSiteSound('victory',920)})}
-function playDefeatTone(){tryCustomGameSound('defeat',{volume:.45,fallback:()=>playSiteSound('defeat',190)})}
+function customGameSoundPath(kind){return customGameSoundUrls(kind)[0]||''}
 
-// Sons leves dos jogos: primeiro tenta o MP3 personalizado; se ele não existir,
-// usa Web Audio como fallback para não obrigar o projeto a carregar vários arquivos.
 let gameSfxCtx=null;
+const customGameSoundBuffers=new Map();
+const customGameSoundLoads=new Map();
 function gameSfxContext(){
   try{
     const Ctx=window.AudioContext||window.webkitAudioContext;
@@ -508,6 +500,62 @@ function gameSfxContext(){
     return gameSfxCtx;
   }catch{return null}
 }
+async function preloadCustomGameSound(kind){
+  if(customGameSoundBuffers.has(kind))return customGameSoundBuffers.get(kind);
+  if(customGameSoundLoads.has(kind))return customGameSoundLoads.get(kind);
+  const task=(async()=>{
+    const ctx=gameSfxContext();if(!ctx)return null;
+    for(const src of customGameSoundUrls(kind)){
+      try{
+        const response=await fetch(src,{cache:'no-store'});
+        if(!response.ok)continue;
+        const bytes=await response.arrayBuffer();
+        const buffer=await ctx.decodeAudioData(bytes.slice(0));
+        if(buffer){customGameSoundBuffers.set(kind,buffer);return buffer}
+      }catch{}
+    }
+    return null;
+  })().finally(()=>customGameSoundLoads.delete(kind));
+  customGameSoundLoads.set(kind,task);return task;
+}
+function playDecodedGameSound(buffer,{volume=.38,loop=false}={}){
+  try{
+    const ctx=gameSfxContext();if(!ctx||!buffer)return null;
+    const source=ctx.createBufferSource(),gain=ctx.createGain();
+    source.buffer=buffer;source.loop=!!loop;gain.gain.value=Math.max(0,Math.min(1,Number(volume)||.38));
+    source.connect(gain);gain.connect(ctx.destination);source.start(0);
+    let stopped=false;
+    return{stop(){if(stopped)return;stopped=true;try{source.stop()}catch{}},pause(){this.stop()}};
+  }catch{return null}
+}
+function tryCustomGameSound(kind,{volume=.38,loop=false,fallback=null}={}){
+  let failed=false,controller=null,audio=null,stopped=false;
+  const useFallback=()=>{if(failed||stopped)return;failed=true;if(typeof fallback==='function')fallback()};
+  const cached=customGameSoundBuffers.get(kind);
+  if(cached){controller=playDecodedGameSound(cached,{volume,loop});if(controller)return controller}
+
+  // Prepara o buffer para sons assíncronos futuros e tenta tocar imediatamente em cliques diretos.
+  preloadCustomGameSound(kind).catch(()=>{});
+  const src=customGameSoundPath(kind);if(!src){useFallback();return null}
+  try{
+    audio=new Audio(src);audio.volume=Math.max(0,Math.min(1,Number(volume)||.38));audio.loop=!!loop;audio.preload='auto';
+    audio.addEventListener('error',useFallback,{once:true});
+    const promise=audio.play();
+    if(promise?.catch)promise.catch(()=>{
+      const ready=customGameSoundBuffers.get(kind);
+      if(ready&&!stopped){controller=playDecodedGameSound(ready,{volume,loop});if(controller)return}
+      useFallback();
+    });
+    return{
+      pause(){stopped=true;try{audio?.pause?.()}catch{};try{controller?.stop?.()}catch{}},
+      stop(){this.pause()}
+    };
+  }catch{useFallback();return null}
+}
+function playNotificationTone(){tryCustomGameSound('notification',{fallback:()=>playSiteSound('notification',720)})}
+function playVictoryTone(){tryCustomGameSound('victory',{volume:.45,fallback:()=>playSiteSound('victory',920)})}
+function playDefeatTone(){tryCustomGameSound('defeat',{volume:.45,fallback:()=>playSiteSound('defeat',190)})}
+
 function gameSfxTone(freq,delay=0,duration=.07,volume=.028,type='sine'){
   try{
     const ctx=gameSfxContext();if(!ctx)return;
@@ -544,38 +592,39 @@ function playGameSfx(kind){
   const fallback=()=>{(patterns[kind]||patterns.select).forEach(([f,d,du,v,t])=>gameSfxTone(f,d,du,v,t))};
   tryCustomGameSound(kind,{volume:['coins','jackpot','purchase'].includes(kind)?.44:.34,fallback});
 }
-// Ajuda o áudio a ficar liberado no celular após a primeira interação.
-document.addEventListener('pointerdown',()=>{try{gameSfxContext()?.resume?.().catch(()=>{})}catch{}},{capture:true,passive:true});
+
+let gameAudioPrimed=false;
+function primeGameAudio(){
+  try{gameSfxContext()?.resume?.().catch(()=>{})}catch{}
+  if(gameAudioPrimed)return;gameAudioPrimed=true;
+  // Estes são os MP3 que já existem na pasta custom enviada pelo usuário.
+  ['select','move','turn','start','accept','reject','correct','wrong','draw','coins','purchase','slotSpin','pokemonEncounter','pokemonHit','defeat'].forEach(kind=>preloadCustomGameSound(kind).catch(()=>{}));
+}
+document.addEventListener('pointerdown',primeGameAudio,{capture:true,passive:true,once:true});
+document.addEventListener('touchstart',primeGameAudio,{capture:true,passive:true,once:true});
+document.addEventListener('keydown',primeGameAudio,{capture:true,once:true});
 
 function startGeneratedSlotSpinSound(){
-  let ctx=null,timer=null,step=0,stopped=false;
-  try{
-    const Ctx=window.AudioContext||window.webkitAudioContext;
-    if(!Ctx)return()=>{};
-    ctx=new Ctx();
-    const tick=()=>{
-      if(stopped||!ctx)return;
-      const osc=ctx.createOscillator(),gain=ctx.createGain();
-      const t=ctx.currentTime;
+  let timer=null,step=0,stopped=false;
+  const ctx=gameSfxContext();if(!ctx)return()=>{};
+  const tick=()=>{
+    if(stopped)return;
+    try{
+      const osc=ctx.createOscillator(),gain=ctx.createGain(),t=ctx.currentTime;
       osc.type='square';osc.frequency.value=190+(step%6)*34;
       gain.gain.setValueAtTime(.0001,t);gain.gain.exponentialRampToValueAtTime(.022,t+.006);gain.gain.exponentialRampToValueAtTime(.0001,t+.055);
       osc.connect(gain);gain.connect(ctx.destination);osc.start(t);osc.stop(t+.06);step++;
-    };
-    tick();timer=setInterval(tick,82);
-  }catch{}
-  return()=>{if(stopped)return;stopped=true;if(timer)clearInterval(timer);try{ctx?.close?.()}catch{}};
+    }catch{}
+  };
+  tick();timer=setInterval(tick,82);
+  return()=>{if(stopped)return;stopped=true;if(timer)clearInterval(timer)};
 }
 function startSlotSpinSound(){
-  let stopped=false,fallbackStop=null,fallbackStarted=false,customAudio=null;
+  let stopped=false,fallbackStop=null,fallbackStarted=false;
   const startFallback=()=>{if(stopped||fallbackStarted)return;fallbackStarted=true;fallbackStop=startGeneratedSlotSpinSound()};
-  const src=customGameSoundPath('slotSpin');
-  if(!src){startFallback();return()=>{stopped=true;fallbackStop?.()}}
-  try{
-    customAudio=new Audio(src);customAudio.volume=.38;customAudio.loop=true;customAudio.preload='auto';
-    customAudio.addEventListener('error',startFallback,{once:true});
-    const p=customAudio.play();if(p?.catch)p.catch(startFallback);
-  }catch{startFallback()}
-  return()=>{if(stopped)return;stopped=true;try{customAudio?.pause?.();if(customAudio)customAudio.currentTime=0}catch{};fallbackStop?.()};
+  const custom=tryCustomGameSound('slotSpin',{volume:.38,loop:true,fallback:startFallback});
+  if(!custom)startFallback();
+  return()=>{if(stopped)return;stopped=true;try{custom?.pause?.()}catch{};fallbackStop?.()};
 }
 function playPokemonSound(kind){
   const map={
@@ -1201,6 +1250,7 @@ async function handleSiteAction(action){
         toast('Seu Daily ainda está em cooldown.');return;
       }
       if(box)box.innerHTML=`<div class="site-result-grid"><div><span>Recompensa</span><strong>${escText(r.rewardName||'Daily')}</strong></div><div><span>Rúpias</span><strong>+₹${formatNumber(r.rupias||0)}</strong></div><div><span>XP</span><strong>+${formatNumber(r.xp||0)}</strong></div><div><span>Saldo</span><strong>₹${formatNumber(r.balance||0)}</strong></div></div>`;
+      if(Number(r.rupias||0)>0)playGameSfx('coins');
       toast('Daily coletado.');
     }
   }catch(e){toast(e.message||'Não foi possível concluir.');const box=resultBox();if(box)box.innerHTML=`<div class="empty-state small">${escText(e.message||'Erro')}</div>`}
@@ -1371,6 +1421,15 @@ function renderWildEncounter(){
   const logs=Object.values(e.log||{}).sort((a,b)=>Number(a.at||0)-Number(b.at||0));
   const lastLog=logs.at(-1)?.text||'';
   if(e.status==='finished'){
+    const resultSoundId=String(e.id||`${e.mon?.uid||e.mon?.id||'wild'}:${e.finishedAt||e.updatedAt||''}:${e.result||''}`);
+    if(resultSoundId&&state.pokemonAudio.resultId!==resultSoundId){
+      state.pokemonAudio.resultId=resultSoundId;
+      if(e.result==='victory'){
+        playVictoryTone();
+        if(Number(e.reward?.rupias||0)>0)setTimeout(()=>playGameSfx('coins'),220);
+      }else if(e.result==='defeat')playDefeatTone();
+      else playGameSfx('reject');
+    }
     const labels={victory:'Vitória',defeat:'Derrota',escaped:'Você fugiu'};
     $('wildStatusPill').textContent=labels[e.result]||'Encerrado';
     box.innerHTML='';
@@ -1382,7 +1441,7 @@ function renderWildEncounter(){
   }
   const wild=normalizeMon(e.mon||{}),mine=normalizeMon(e.player||{});
   const encounterSoundId=String(e.id||`${wild.uid||wild.id}:${e.createdAt||''}`);
-  if(encounterSoundId&&state.pokemonAudio.encounterId!==encounterSoundId){state.pokemonAudio.encounterId=encounterSoundId;playPokemonSound('encounter')}
+  if(encounterSoundId&&state.pokemonAudio.encounterId!==encounterSoundId){state.pokemonAudio.encounterId=encounterSoundId;state.pokemonAudio.resultId='';playPokemonSound('encounter')}
   $('wildStatusPill').textContent='Batalha';box.innerHTML='';
   const stage=document.createElement('div');stage.className='wild-battle-stage';stage.innerHTML=`<div class="wild-mon"><img src="${escText(wild.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${wild.id}.png`)}" alt=""><strong>${escText(wild.name)}</strong><div class="pokemon-type-row">${typeBadgesHtml(wild.types)}</div><small>Lv.${wild.level} • HP ${Math.max(0,wild.hp)}/${wild.maxHp}</small></div><div class="wild-vs">VS</div><div class="wild-mon mine"><img src="${escText(mine.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${mine.id}.png`)}" alt=""><strong>${escText(mine.name||'Sua equipe')}</strong><div class="pokemon-type-row">${typeBadgesHtml(mine.types)}</div><small>${mine.uid?`HP ${Math.max(0,mine.hp)}/${mine.maxHp}`:'Escolha uma equipe saudável'}</small></div>`;
   const acts=document.createElement('div');acts.className='wild-actions';
