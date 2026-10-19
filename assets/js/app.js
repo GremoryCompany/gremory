@@ -164,10 +164,37 @@ $$('[data-auth-tab]').forEach(b=>{
     if(ev.pointerType==='touch')authTab(b.dataset.authTab)
   });
 });
-function authError(err){const map={'auth/email-already-in-use':'Esse e-mail já está em uso.','auth/invalid-email':'E-mail inválido.','auth/weak-password':'Use uma senha com pelo menos 6 caracteres.','auth/invalid-credential':'E-mail ou senha incorretos.','auth/too-many-requests':'Muitas tentativas. Tente novamente mais tarde.'};return map[err?.code]||'Não foi possível concluir.'}
+function authError(err){
+  const code=String(err?.code||err?.message||'');
+  const map={
+    'auth/email-already-in-use':'Esse e-mail já está em uso.',
+    'auth/invalid-email':'E-mail inválido.',
+    'auth/weak-password':'Use uma senha com pelo menos 6 caracteres.',
+    'auth/invalid-credential':'E-mail ou senha incorretos.',
+    'auth/too-many-requests':'Muitas tentativas. Tente novamente mais tarde.',
+    'auth/network-request-failed':'Falha de conexão com o Firebase. Verifique sua internet e tente novamente.',
+    'auth/unauthorized-domain':'Este endereço do site ainda não está autorizado no Firebase Authentication.',
+    'auth/operation-not-allowed':'O cadastro por e-mail/senha está desativado no Firebase Authentication.',
+    'auth/web-storage-unsupported':'O navegador bloqueou o armazenamento local. O cadastro continuará sem manter a sessão salva.',
+    'auth/configuration-not-found':'A configuração de autenticação do Firebase não foi encontrada.'
+  };
+  if(map[code])return map[code];
+  console.warn('[GREMORY AUTH]',code,err);
+  return code&&code.startsWith('auth/')?`Não foi possível concluir agora. (${code})`:'Não foi possível concluir agora.';
+}
 async function configurePersistence(remember){
-  await withTimeout(setPersistence(auth,remember?browserLocalPersistence:inMemoryPersistence),8000,'PERSISTENCE_TIMEOUT');
-  if(remember)localStorage.setItem('gremory:remember','1');else localStorage.removeItem('gremory:remember');
+  // Persistência do navegador é conveniência, não pode impedir login/cadastro.
+  // Alguns WebViews/iOS/abas privadas bloqueiam IndexedDB/localStorage.
+  try{
+    await withTimeout(setPersistence(auth,remember?browserLocalPersistence:inMemoryPersistence),8000,'PERSISTENCE_TIMEOUT');
+    try{if(remember)localStorage.setItem('gremory:remember','1');else localStorage.removeItem('gremory:remember')}catch{}
+    return true;
+  }catch(e){
+    console.warn('[GREMORY AUTH] Persistência indisponível; continuando com sessão temporária.',e);
+    try{await setPersistence(auth,inMemoryPersistence)}catch{}
+    try{localStorage.removeItem('gremory:remember')}catch{}
+    return false;
+  }
 }
 async function initialAuthPolicy(){
   const remember=localStorage.getItem('gremory:remember')==='1';
@@ -453,7 +480,7 @@ const CUSTOM_GAME_SOUND_FILES=Object.freeze({
   reelStop:'reel-stop',coins:'money-win',debit:'money-lose',jackpot:'jackpot',purchase:'purchase-customization',
   slotSpin:'slot-spin',pokemonEncounter:'pokemon-encounter',pokemonHit:'pokemon-hit',pokemonBall:'pokemon-ball',pokemonCapture:'pokemon-capture'
 });
-function customGameSoundPath(kind){const file=CUSTOM_GAME_SOUND_FILES[kind];return file?`/assets/audio/custom/${file}.mp3`:''}
+function customGameSoundPath(kind){const file=CUSTOM_GAME_SOUND_FILES[kind];return file?`/assets/audio/custom/${file}.mp3?v=20261018-v12-16-audio`:''}
 function tryCustomGameSound(kind,{volume=.38,loop=false,fallback=null}={}){
   const src=customGameSoundPath(kind);if(!src){if(typeof fallback==='function')fallback();return null}
   let audio=null,failed=false;
@@ -560,6 +587,109 @@ function playPokemonSound(kind){
   const row=map[kind];if(!row)return;
   tryCustomGameSound(row[0],{fallback:()=>playSiteSound(row[1],row[2])});
 }
+
+// ======================================================
+// SLOTS — inicialização antecipada e independente do status visual de vínculo.
+// A carteira continua sendo a mesma Rupia da Charlotte via siteBridgeJobs.
+// ======================================================
+const SLOT_SYMBOLS=['♛','✦','◆','♥','☾','⚡','7'];
+let slotBusy=false;
+const slotWait=ms=>new Promise(r=>setTimeout(r,ms));
+async function runSlotsSpin(){
+  if(slotBusy)return;
+  const bet=Math.floor(Number($('slotsBetInput')?.value||0));
+  if(!Number.isFinite(bet)||bet<10||bet>5000)return toast('A aposta deve ficar entre ₹10 e ₹5.000.');
+
+  // Se já temos saldo sincronizado, validamos antes. Se o espelho ainda não carregou,
+  // deixamos a Charlotte validar a carteira real em vez de bloquear o botão.
+  const hasWalletSnapshot=!!state.charlotteSync?.account;
+  const mirroredBalance=Number(accountSnapshot().balance||0);
+  if(hasWalletSnapshot&&mirroredBalance<bet)return toast(`Saldo insuficiente. Você possui ₹${formatNumber(mirroredBalance)}.`);
+
+  slotBusy=true;
+  playGameSfx('start');
+  const btn=$('slotsSpinBtn'),els=[$('slotReel1'),$('slotReel2'),$('slotReel3')];
+  if(btn)btn.disabled=true;
+  els.forEach(e=>e?.classList.add('spinning'));
+  if($('slotsStatus'))$('slotsStatus').textContent='Girando...';
+  if($('slotsLastWin'))$('slotsLastWin').textContent=`Apostando ₹${formatNumber(bet)}...`;
+
+  const started=Date.now();
+  const stopSpinSound=startSlotSpinSound();
+  let timer=setInterval(()=>els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]}),78);
+  let visualStopped=false;
+  const stopVisual=()=>{
+    if(visualStopped)return;
+    visualStopped=true;
+    if(timer){clearInterval(timer);timer=null}
+    try{stopSpinSound()}catch{}
+    els.forEach(e=>e?.classList.remove('spinning'));
+  };
+  const visualSafety=setTimeout(()=>{
+    stopVisual();
+    if($('slotsStatus'))$('slotsStatus').textContent='Sincronizando Rupias...';
+    if($('slotsLastWin'))$('slotsLastWin').textContent='O giro terminou. Confirmando a carteira...';
+  },4200);
+
+  try{
+    // requireLink=false evita bloquear por um charlottePublic atrasado. O bridge é quem
+    // valida o UID/JID real e usa delkoin/addkoin na carteira oficial.
+    const r=await bridgeRequest('slots_spin',{bet},18000,false);
+    await slotWait(Math.max(0,1550-(Date.now()-started)));
+    clearTimeout(visualSafety);
+    stopVisual();
+
+    for(let i=0;i<6;i++){
+      els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]});
+      await slotWait(48+i*14);
+    }
+    const symbols=Array.isArray(r.symbols)&&r.symbols.length===3?r.symbols:['✦','✦','✦'];
+    for(let i=0;i<symbols.length;i++){
+      if(els[i])els[i].textContent=symbols[i];
+      playGameSfx('reelStop');
+      if(i<symbols.length-1)await slotWait(105);
+    }
+
+    const payout=Number(r.payout||0),balance=Number(r.balance??accountSnapshot().balance??0),jackpot=!!r.jackpot;
+    if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(balance)}`;
+    if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':payout>0?'Você ganhou!':'Sem prêmio';
+    if($('slotsLastWin'))$('slotsLastWin').textContent=payout>0
+      ? `${symbols.join(' ')} • prêmio ₹${formatNumber(payout)} • saldo ₹${formatNumber(balance)}`
+      : `${symbols.join(' ')} • perdeu ₹${formatNumber(bet)} • saldo ₹${formatNumber(balance)}`;
+
+    if(jackpot){
+      playGameSfx('jackpot');
+      setTimeout(()=>playGameSfx('coins'),240);
+      showGameResult({title:'JACKPOT!',text:`${symbols.join(' ')} • você ganhou ₹${formatNumber(payout)}. Saldo: ₹${formatNumber(balance)}.`,win:true,icon:'7'});
+    }else if(payout>0){
+      playVictoryTone();
+      setTimeout(()=>playGameSfx('coins'),220);
+    }else{
+      playGameSfx('debit');
+      setTimeout(()=>playDefeatTone(),180);
+    }
+    bridgeRequest('sync_account',{},25000,false).catch(()=>{});
+  }catch(e){
+    clearTimeout(visualSafety);
+    stopVisual();
+    if($('slotsStatus'))$('slotsStatus').textContent='Não concluído';
+    if($('slotsLastWin'))$('slotsLastWin').textContent=String(e?.message||'Não foi possível confirmar a aposta.');
+    bridgeRequest('sync_account',{},25000,false).catch(()=>{});
+    toast(e?.message||'Não foi possível concluir o giro.',5500);
+  }finally{
+    slotBusy=false;
+    if(btn)btn.disabled=false;
+  }
+}
+// Delegação é instalada cedo. Mesmo se outro módulo secundário falhar mais abaixo,
+// o botão do Slots e os presets continuam respondendo no mobile.
+document.addEventListener('click',ev=>{
+  const target=ev.target instanceof Element?ev.target:null;if(!target)return;
+  const betBtn=target.closest('[data-slot-bet]');
+  if(betBtn){playGameSfx('select');if($('slotsBetInput'))$('slotsBetInput').value=betBtn.dataset.slotBet||'50';return}
+  if(target.closest('#slotsSpinBtn')){ev.preventDefault();runSlotsSpin().catch(e=>toast(e?.message||'Erro no Slots.'))}
+},{passive:false});
+
 function notificationStorageKey(suffix='seen'){
   return `gremory:notif:${suffix}:${state.user?.uid||'guest'}`
 }
@@ -2487,91 +2617,5 @@ $('hangmanExitBtn')?.addEventListener('click',async()=>{const g=state.hangman.ga
 
 // Slots solo — usa a carteira de Rupias já sincronizada com a Charlotte.
 // O site controla toda a experiência visual: aposta, giro, som e exibição do resultado.
-const SLOT_SYMBOLS=['♛','✦','◆','♥','☾','⚡','7'];let slotBusy=false;
-const slotWait=ms=>new Promise(r=>setTimeout(r,ms));
-$$('[data-slot-bet]').forEach(btn=>btn.addEventListener('click',()=>{playGameSfx('select');if($('slotsBetInput'))$('slotsBetInput').value=btn.dataset.slotBet||'50'}));
-$('slotsSpinBtn')?.addEventListener('click',async()=>{
-  if(slotBusy)return;
-  const bet=Math.floor(Number($('slotsBetInput')?.value||0));
-  if(!Number.isFinite(bet)||bet<10||bet>5000)return toast('A aposta deve ficar entre ₹10 e ₹5.000.');
-  if(!linkedCharlotte())return toast('Vincule a Charlotte para usar suas Rupias nos Slots.');
-  const mirroredBalance=Number(accountSnapshot().balance||0);
-  if(mirroredBalance<bet)return toast(`Saldo insuficiente. Você possui ₹${formatNumber(mirroredBalance)}.`);
-
-  slotBusy=true;
-  playGameSfx('start');
-  const btn=$('slotsSpinBtn'),els=[$('slotReel1'),$('slotReel2'),$('slotReel3')];
-  if(btn)btn.disabled=true;
-  els.forEach(e=>e?.classList.add('spinning'));
-  if($('slotsStatus'))$('slotsStatus').textContent='Girando...';
-  if($('slotsLastWin'))$('slotsLastWin').textContent=`Apostando ₹${formatNumber(bet)}...`;
-
-  const started=Date.now();
-  const stopSpinSound=startSlotSpinSound();
-  let timer=setInterval(()=>els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]}),78);
-  let visualStopped=false;
-  const stopVisual=()=>{
-    if(visualStopped)return;
-    visualStopped=true;
-    if(timer){clearInterval(timer);timer=null}
-    try{stopSpinSound()}catch{}
-    els.forEach(e=>e?.classList.remove('spinning'));
-  };
-  // Mesmo se a conexão ficar lenta, a animação nunca fica girando para sempre.
-  const visualSafety=setTimeout(()=>{
-    stopVisual();
-    if($('slotsStatus'))$('slotsStatus').textContent='Sincronizando Rupias...';
-    if($('slotsLastWin'))$('slotsLastWin').textContent='O giro terminou. Confirmando a carteira...';
-  },3800);
-
-  try{
-    // Um único job: usa a economia que já existe (saldo, débito e crédito).
-    const r=await bridgeRequest('slots_spin',{bet},12000,true);
-    await slotWait(Math.max(0,1550-(Date.now()-started)));
-    clearTimeout(visualSafety);
-    stopVisual();
-
-    for(let i=0;i<6;i++){
-      els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]});
-      await slotWait(48+i*14);
-    }
-
-    const symbols=Array.isArray(r.symbols)&&r.symbols.length===3?r.symbols:['✦','✦','✦'];
-    for(let i=0;i<symbols.length;i++){
-      if(els[i])els[i].textContent=symbols[i];
-      playGameSfx('reelStop');
-      if(i<symbols.length-1)await slotWait(105);
-    }
-    const payout=Number(r.payout||0),balance=Number(r.balance??accountSnapshot().balance??0),jackpot=!!r.jackpot;
-    if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(balance)}`;
-    if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':payout>0?'Você ganhou!':'Sem prêmio';
-    if($('slotsLastWin'))$('slotsLastWin').textContent=payout>0
-      ? `${symbols.join(' ')} • prêmio ₹${formatNumber(payout)} • saldo ₹${formatNumber(balance)}`
-      : `${symbols.join(' ')} • perdeu ₹${formatNumber(bet)} • saldo ₹${formatNumber(balance)}`;
-
-    if(jackpot){
-      playGameSfx('jackpot');
-      setTimeout(()=>playGameSfx('coins'),240);
-      showGameResult({title:'JACKPOT!',text:`${symbols.join(' ')} • você ganhou ₹${formatNumber(payout)}. Saldo: ₹${formatNumber(balance)}.`,win:true,icon:'7'});
-    }else if(payout>0){
-      playVictoryTone();
-      setTimeout(()=>playGameSfx('coins'),220);
-    }else{
-      playGameSfx('debit');
-      setTimeout(()=>playDefeatTone(),180);
-    }
-    requestAccountSync().catch(()=>{});
-  }catch(e){
-    clearTimeout(visualSafety);
-    stopVisual();
-    if($('slotsStatus'))$('slotsStatus').textContent='Não concluído';
-    if($('slotsLastWin'))$('slotsLastWin').textContent='Não foi possível confirmar a aposta. Atualizando seu saldo...';
-    requestAccountSync().catch(()=>{});
-    toast(e.message||'Não foi possível concluir o giro.',5500);
-  }finally{
-    slotBusy=false;
-    if(btn)btn.disabled=false;
-  }
-});
 
 const initialRoute=(location.hash||'#home').slice(1);navigate(routeMeta[initialRoute]?initialRoute:'home');
