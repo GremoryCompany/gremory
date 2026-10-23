@@ -1,9 +1,9 @@
-const CACHE='gremory-v13-watch-social-20261022';
+const CACHE='gremory-v13-1-watch-local-drive-20261022';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261022-v13-watch-social',
-  '/assets/js/app.js?v=20261022-v13-watch-social',
+  '/assets/css/app.css?v=20261022-v13-watch-local-drive',
+  '/assets/js/app.js?v=20261022-v13-watch-local-drive',
   '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',

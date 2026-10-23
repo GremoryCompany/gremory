@@ -1120,3 +1120,7 @@ body.watch-performance::after{display:none}
 @media(prefers-reduced-motion:reduce){body::after,.ambient-layer span{animation:none!important}}
 #publicProfileCard.fx-scale-dragon .public-profile-cover,#accountDrawerCard.fx-scale-dragon .profile-own-cover{background-image:radial-gradient(ellipse at 50% 0,transparent 58%,rgba(231,114,136,.45) 60%,transparent 65%);background-size:32px 26px}
 #watchMediaStage:has(.drive-help){height:auto;display:block}.drive-help{width:100%;font-size:14px}.drive-help p{margin:0 0 8px}
+
+/* V13.1 — Watch Party: filme local P2P + Drive direto */
+.watch-local-source{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:9px}.watch-local-source small{color:var(--muted);font-size:11px;line-height:1.35}.watch-local-file-video{background:#000}.watch-local-source .btn{min-height:42px}
+@media(max-width:560px){.watch-local-source{display:grid;grid-template-columns:1fr}.watch-local-source .btn{width:100%}}

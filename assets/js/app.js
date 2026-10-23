@@ -51,7 +51,7 @@ const state = {
   admin:{reports:{},updates:{},directory:{},bans:{},selectedUid:'',supportChats:{},supportSelectedUid:'',supportUnsub:null,backupStatus:{}},
   tinder:{current:null,seen:[]},updates:{},notifications:{},notificationDismissed:{},ban:null,supportChat:{messages:{}},
   watchCode:null,watchRoom:null,watchUnsubs:[],watchApplying:false,
-  watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false},
+  watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,screenSource:'',localFileVideo:null,localFileUrl:'',localFileName:'',peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false},
   watchYoutube:{lastTime:0,lastState:-1,lastPublishAt:0},
   watchMusic:{currentId:'',volume:Number(localStorage.getItem('gremory:watchMusicVolume')||65),muted:localStorage.getItem('gremory:watchMusicMuted')==='1',engineReady:false,lastAdvanceId:'',adding:false,currentTime:0,lastClockSync:0,endedId:''},
   rtc:{joined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true},premiumPoll:null
@@ -1606,6 +1606,8 @@ $('watchCopyBtn')?.addEventListener('click',()=>{const code=state.watchCode||'';
 $('watchMediaForm')?.addEventListener('submit',setWatchMedia);
 $('watchPlayBtn')?.addEventListener('click',toggleWatchPlayback);
 $('watchSyncBtn')?.addEventListener('click',syncWatchPlayer);
+$('watchLocalFileBtn')?.addEventListener('click',()=>{if(!isWatchHost())return toast('Somente o host pode transmitir um arquivo.');$('watchLocalFileInput')?.click()});
+$('watchLocalFileInput')?.addEventListener('change',async ev=>{const file=ev.target.files?.[0];ev.target.value='';if(file)await startWatchLocalFile(file)});
 async function uniqueWatchCode(){for(let i=0;i<8;i++){const c=randomCode();const sn=await get(ref(db,`watchRooms/${c}`));if(!sn.exists())return c}throw new Error('Não foi possível gerar código.')}
 async function createWatchRoom(ev){ev.preventDefault();if(!state.user)return;try{const code=await uniqueWatchCode(),createdAt=nowIso(),name=$('watchNameInput').value.trim()||'Watch Party';const room={meta:{code,name,ownerUid:state.user.uid,createdAt},members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Host',joinedAt:createdAt}},media:{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}};await set(ref(db,`watchRooms/${code}`),room);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name,role:'Host',joinedAt:createdAt});closeModal('watchCreateModal');$('watchCreateForm').reset();await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível criar a sala.'),6000)}}
 async function loadWatchRooms(){if(!state.user)return;const box=$('watchRoomsList');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await get(ref(db,`watchUserRooms/${state.user.uid}`));box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];$('homeWatchRecent').textContent=rows.length?`${rows.length} sala${rows.length===1?'':'s'}`:'Assistir e conversar';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala.</div>';return}rows.forEach(r=>{const item=document.createElement('div');item.className='room-item';const c=document.createElement('div');c.innerHTML=`<strong>${escText(r.name||r.code)}</strong><small>${escText(r.code)} • ${escText(r.role||'Participante')}</small>`;const acts=document.createElement('div');acts.className='room-item-actions';const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=()=>openWatchRoom(r.code);acts.appendChild(b);if(r.role==='Host'){const del=document.createElement('button');del.className='btn danger-ghost';del.textContent='Apagar';del.onclick=()=>deleteWatchRoom(r.code,r.name);acts.appendChild(del)}item.append(c,acts);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
@@ -1615,7 +1617,7 @@ function isWatchHost(){return !!state.user&&state.watchRoom?.meta?.ownerUid===st
 function renderWatchRoom(){
   const r=state.watchRoom||{},m=r.meta||{};$('watchRoomName').textContent=m.name||'Watch Party';$('watchCode').textContent=state.watchCode||'------';$('watchHostPill').textContent=isWatchHost()?'Host':'Participante';$('watchMemberCount').textContent=String(Object.keys(r.members||{}).length);
   const list=$('watchMemberList');list.innerHTML='';Object.values(r.members||{}).forEach(x=>{const d=document.createElement('div');d.className='member-item watch-member-item';const img=document.createElement('img');img.src=x.avatar||DEFAULT_AVATAR;const c=document.createElement('div');c.innerHTML=`<strong>${escText(x.name||'Usuário')}</strong><small>${escText(x.role||'Participante')}</small>`;d.append(img,c);list.appendChild(d)});
-  $('watchMediaInput').disabled=!isWatchHost();$('watchMediaForm').querySelector('button').disabled=!isWatchHost();$('watchPlayBtn').disabled=!isWatchHost();if($('watchMusicSkipBtn'))$('watchMusicSkipBtn').disabled=!isWatchHost();
+  $('watchMediaInput').disabled=!isWatchHost();$('watchMediaForm').querySelector('button').disabled=!isWatchHost();$('watchPlayBtn').disabled=!isWatchHost();if($('watchLocalFileBtn'))$('watchLocalFileBtn').disabled=!isWatchHost();if($('watchMusicSkipBtn'))$('watchMusicSkipBtn').disabled=!isWatchHost();
   renderWatchMedia(r.media||{});renderWatchMusic(r.musicQueue||{},r.musicAccess||{},r.musicPlan||{},r.musicPlayback||{});watchVoiceUi();if(!state.watchRtc.joined)ensureWatchRtcSession().catch(()=>{})
 }
 function youtubeEmbed(url,viewerLocked=false){
@@ -1640,6 +1642,10 @@ function googleDriveFileId(url){
   }catch{return''}
 }
 function googleDriveEmbed(url){const id=googleDriveFileId(url);if(!id)return '';const key=new URL(url).searchParams.get('resourcekey');return `https://drive.google.com/file/d/${encodeURIComponent(id)}/preview${key?'?resourcekey='+encodeURIComponent(key):''}`}
+function googleDriveDirect(url){
+  const id=googleDriveFileId(url);if(!id)return '';
+  try{const key=new URL(url).searchParams.get('resourcekey')||'';return `https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download&confirm=t${key?'&resourcekey='+encodeURIComponent(key):''}`}catch{return''}
+}
 function watchMediaPosition(media={}){return Number(media.position||0)+(media.playing?Math.max(0,(Date.now()-Number(media.updatedAt||Date.now()))/1000):0)}
 function youtubeCommand(iframe,func,args=[]){try{iframe?.contentWindow?.postMessage(JSON.stringify({event:'command',func,args}),'*')}catch{}}
 function startYoutubeListening(iframe){
@@ -1693,8 +1699,16 @@ function renderWatchMedia(media){
   const stage=$('watchMediaStage'),url=String(media.url||'');if(!stage)return;
   const playBtn=$('watchPlayBtn'),syncBtn=$('watchSyncBtn'),host=isWatchHost();
   if(playBtn)playBtn.textContent=media.playing?'Pausar':'Reproduzir';
-  if(!url){delete stage.dataset.url;if(!state.watchRtc.activeScreenUid&&!state.watchRtc.screenStream)stage.innerHTML='<div class="empty-state">Cole um link do YouTube, Google Drive ou vídeo direto; ou compartilhe sua tela.</div>';if(playBtn)playBtn.disabled=true;if(syncBtn)syncBtn.disabled=true;return}
-  const yt=youtubeEmbed(url,!host),drive=googleDriveEmbed(url);
+  if(media.type==='local'){
+    const local=host?state.watchRtc.localFileVideo:null;
+    if(playBtn){playBtn.disabled=!local;playBtn.textContent=local&&!local.paused?'Pausar':'Reproduzir'}
+    if(syncBtn)syncBtn.disabled=true;
+    if(local){stage.hidden=false;return}
+    if(!state.watchRtc.activeScreenUid&&!state.watchRtc.screenStream){stage.innerHTML=`<div class="empty-state">${host?'Escolha novamente o filme do dispositivo para iniciar a transmissão.':'O host está preparando um filme do dispositivo. Aguarde a transmissão ao vivo.'}</div>`}
+    return
+  }
+  if(!url){delete stage.dataset.url;if(!state.watchRtc.activeScreenUid&&!state.watchRtc.screenStream)stage.innerHTML='<div class="empty-state">Cole um link do YouTube, Google Drive ou vídeo direto; ou transmita um filme do dispositivo.</div>';if(playBtn)playBtn.disabled=true;if(syncBtn)syncBtn.disabled=true;return}
+  const yt=youtubeEmbed(url,!host),drive=googleDriveEmbed(url),driveDirect=googleDriveDirect(url);
   if(yt){
     if(playBtn)playBtn.disabled=!host;if(syncBtn)syncBtn.disabled=false;
     let f=stage.querySelector('iframe[data-watch-youtube="1"]');
@@ -1703,11 +1717,29 @@ function renderWatchMedia(media){
     return
   }
   if(drive){
-    if(playBtn){playBtn.disabled=true;playBtn.textContent='Controles no Drive'}if(syncBtn)syncBtn.disabled=true;
-    let f=stage.querySelector('iframe[data-watch-drive="1"]');if(!f||stage.dataset.url!==url){stage.innerHTML='';f=document.createElement('iframe');f.className='watch-iframe drive-iframe';f.dataset.watchDrive='1';f.src=drive;f.allow='autoplay; fullscreen';f.allowFullscreen=true;f.title='Vídeo do Google Drive';stage.appendChild(f);const help=document.createElement('div');help.className='drive-help';const note=document.createElement('p');note.textContent='O arquivo precisa estar compartilhado com quem vai assistir. No Drive, cada pessoa toca em Play; para sincronizar, o host pode compartilhar esta aba com áudio.';const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.className='btn';link.textContent='Abrir no Drive';const retry=document.createElement('button');retry.className='btn';retry.textContent='Recarregar player';retry.onclick=()=>{f.src=googleDriveEmbed(url)};help.append(note,link,retry);stage.appendChild(help);stage.dataset.url=url}return
+    if(playBtn)playBtn.disabled=!host;if(syncBtn)syncBtn.disabled=false;
+    const fallbackDrive=()=>{
+      if(stage.dataset.driveFallback==='1'&&stage.dataset.url===url)return;
+      stage.dataset.driveFallback='1';stage.innerHTML='';
+      const f=document.createElement('iframe');f.className='watch-iframe drive-iframe';f.dataset.watchDrive='1';f.src=drive;f.allow='autoplay; fullscreen';f.allowFullscreen=true;f.title='Vídeo do Google Drive';stage.appendChild(f);
+      const help=document.createElement('div');help.className='drive-help';const note=document.createElement('p');note.textContent='O Google não liberou este arquivo como vídeo direto. Se o iframe pedir login mesmo com o link público, use “Filme do dispositivo” ou compartilhe a aba/tela com áudio.';const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.className='btn';link.textContent='Abrir no Drive';const retry=document.createElement('button');retry.className='btn';retry.type='button';retry.textContent='Tentar vídeo direto';retry.onclick=()=>{delete stage.dataset.driveFallback;delete stage.dataset.url;renderWatchMedia(state.watchRoom?.media||media)};help.append(note,link,retry);stage.appendChild(help);stage.dataset.url=url;
+      if(playBtn){playBtn.disabled=true;playBtn.textContent='Controles no Drive'}if(syncBtn)syncBtn.disabled=true
+    };
+    let v=stage.querySelector('video[data-watch-drive-direct="1"]');
+    if(!v||stage.dataset.url!==url||stage.dataset.driveFallback==='1'){
+      delete stage.dataset.driveFallback;stage.innerHTML='';v=document.createElement('video');v.className='watch-video';v.dataset.watchDriveDirect='1';v.src=driveDirect;v.controls=host;v.playsInline=true;v.preload='metadata';
+      v.addEventListener('error',fallbackDrive,{once:true});
+      v.addEventListener('play',()=>{if(host&&!state.watchApplying)publishWatchPlayer(true)});v.addEventListener('pause',()=>{if(host&&!state.watchApplying)publishWatchPlayer(false)});v.addEventListener('seeked',()=>{if(host&&!state.watchApplying)publishWatchPlayer(!v.paused)});
+      stage.appendChild(v);stage.dataset.url=url
+    }
+    v.controls=host;v.classList.toggle('watch-viewer-locked',!host);const target=watchMediaPosition(media);
+    if(Number.isFinite(v.duration)&&Math.abs((v.currentTime||0)-target)>2){state.watchApplying=true;try{v.currentTime=target}catch{}setTimeout(()=>state.watchApplying=false,250)}
+    if(media.playing&&v.paused){state.watchApplying=true;v.play().catch(()=>{}).finally(()=>setTimeout(()=>state.watchApplying=false,250))}
+    if(!media.playing&&!v.paused){state.watchApplying=true;v.pause();setTimeout(()=>state.watchApplying=false,250)}
+    return
   }
   if(playBtn)playBtn.disabled=!host;if(syncBtn)syncBtn.disabled=false;
-  let v=stage.querySelector('video');if(!v||stage.dataset.url!==url){stage.innerHTML='';v=document.createElement('video');v.className='watch-video';v.src=url;v.controls=host;v.playsInline=true;v.addEventListener('error',()=>toast('Este link não abriu como vídeo. Use um MP4/WebM acessível ou a opção Google Drive.',6000));stage.appendChild(v);stage.dataset.url=url;v.addEventListener('play',()=>{if(host&&!state.watchApplying)publishWatchPlayer(true)});v.addEventListener('pause',()=>{if(host&&!state.watchApplying)publishWatchPlayer(false)});v.addEventListener('seeked',()=>{if(host&&!state.watchApplying)publishWatchPlayer(!v.paused)})}
+  let v=stage.querySelector('video');if(!v||stage.dataset.url!==url){stage.innerHTML='';v=document.createElement('video');v.className='watch-video';v.src=url;v.controls=host;v.playsInline=true;v.addEventListener('error',()=>toast('Este link não abriu como vídeo. Use um MP4/WebM acessível, Google Drive público ou filme do dispositivo.',6000));stage.appendChild(v);stage.dataset.url=url;v.addEventListener('play',()=>{if(host&&!state.watchApplying)publishWatchPlayer(true)});v.addEventListener('pause',()=>{if(host&&!state.watchApplying)publishWatchPlayer(false)});v.addEventListener('seeked',()=>{if(host&&!state.watchApplying)publishWatchPlayer(!v.paused)})}
   v.controls=host;v.classList.toggle('watch-viewer-locked',!host);const target=watchMediaPosition(media);
   if(Math.abs((v.currentTime||0)-target)>2){state.watchApplying=true;try{v.currentTime=target}catch{}setTimeout(()=>state.watchApplying=false,250)}
   if(media.playing&&v.paused){state.watchApplying=true;v.play().catch(()=>{}).finally(()=>setTimeout(()=>state.watchApplying=false,250))}
@@ -1716,9 +1748,10 @@ function renderWatchMedia(media){
 
 async function setWatchMedia(ev){
   ev.preventDefault();if(!isWatchHost())return;const url=$('watchMediaInput').value.trim();if(!/^https?:\/\//i.test(url))return toast('Use um link http/https.');
+  if(state.watchRtc.screenSource==='file'&&state.watchRtc.screenStream)await stopWatchPublishedStream({clearLocalMedia:false,silent:true});
   const type=youtubeEmbed(url)?'youtube':googleDriveEmbed(url)?'drive':'video';
   await set(ref(db,`watchRooms/${state.watchCode}/media`),{url,type,playing:false,position:0,updatedAt:Date.now()}).catch(e=>toast(permissionMessage(e)));
-  if(type==='drive')toast('Link do Google Drive enviado à sala. O Drive não permite sincronizar Play/Pause por API; cada pessoa usa os controles do player.');
+  if(type==='drive')toast('Drive carregado. O Gremory vai tentar o arquivo público direto e sincronizado; se o Google bloquear, cai no player do Drive.');
 }
 async function publishWatchPlayer(playing){
   if(!isWatchHost())return;const shell=$('watchMediaStage'),v=shell?.querySelector('video'),media=state.watchRoom?.media||{};
@@ -1726,16 +1759,17 @@ async function publishWatchPlayer(playing){
   await update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:!!playing,position,updatedAt:Date.now()}).catch(()=>{})
 }
 async function toggleWatchPlayback(){
-  if(!isWatchHost())return;const shell=$('watchMediaStage'),v=shell?.querySelector('video'),media=state.watchRoom?.media||{};
-  if(media.type==='drive')return toast('No Google Drive, Play/Pause usa os controles do próprio player.');
-  if(v){if(v.paused)v.play().catch(()=>{});else v.pause();return}
-  const iframe=shell.querySelector('iframe[data-watch-youtube="1"]');
+  if(!isWatchHost())return;const shell=$('watchMediaStage'),media=state.watchRoom?.media||{};
+  const local=state.watchRtc.localFileVideo;if(media.type==='local'&&local){if(local.paused)await local.play().catch(()=>{});else local.pause();return}
+  const v=shell?.querySelector('video');if(v){if(v.paused)v.play().catch(()=>{});else v.pause();return}
+  const iframe=shell?.querySelector('iframe[data-watch-youtube="1"]');
   if(iframe){const next=!media.playing;const position=Number(state.watchYoutube.lastTime||watchMediaPosition(media));state.watchApplying=true;youtubeCommand(iframe,next?'playVideo':'pauseVideo',[]);setTimeout(()=>state.watchApplying=false,500);await update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:next,position,updatedAt:Date.now()}).catch(()=>{});return}
+  if(media.type==='drive'&&shell?.querySelector('iframe[data-watch-drive="1"]'))return toast('O Google bloqueou o vídeo direto. Neste modo o Play/Pause fica no player do Drive.');
   toast('Carregue um vídeo primeiro.')
 }
 function syncWatchPlayer(){
-  const media=state.watchRoom?.media||{};if(media.type==='drive')return toast('Google Drive não expõe sincronização de reprodução.');
-  const iframe=$('watchMediaStage')?.querySelector('iframe[data-watch-youtube="1"]');if(iframe)applyYoutubeWatchState(iframe,media);else renderWatchMedia(media);toast('Player sincronizado.')
+  const media=state.watchRoom?.media||{};if(media.type==='local')return toast('O filme do dispositivo já é transmitido ao vivo para todos.');
+  const shell=$('watchMediaStage'),iframe=shell?.querySelector('iframe[data-watch-youtube="1"]');if(iframe)applyYoutubeWatchState(iframe,media);else if(media.type==='drive'&&shell?.querySelector('iframe[data-watch-drive="1"]'))return toast('O Google bloqueou a sincronização direta deste arquivo.');else renderWatchMedia(media);toast('Player sincronizado.')
 }
 function watchMusicRows(queueObj={}){
   const rows=Object.entries(queueObj||{}).map(([id,v])=>({id,...(v||{})})).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0));
@@ -1925,7 +1959,7 @@ function watchVoiceUi(){
   const rtc=state.watchRtc,audio=rtc.audioJoined;
   if($('watchJoinVoiceBtn'))$('watchJoinVoiceBtn').hidden=audio;
   if($('watchMicBtn')){$('watchMicBtn').hidden=!audio;$('watchMicBtn').textContent=rtc.micEnabled?'Silenciar':'Ativar microfone'}
-  if($('watchShareBtn')){$('watchShareBtn').hidden=!state.watchCode;$('watchShareBtn').textContent=rtc.screenStream?'Parar compartilhamento':'Compartilhar tela';$('watchShareBtn').classList.toggle('active',!!rtc.screenStream)}
+  if($('watchShareBtn')){$('watchShareBtn').hidden=!state.watchCode;$('watchShareBtn').textContent=rtc.screenStream?(rtc.screenSource==='file'?'Parar filme local':'Parar compartilhamento'):'Compartilhar tela';$('watchShareBtn').classList.toggle('active',!!rtc.screenStream)}
   if($('watchLeaveVoiceBtn'))$('watchLeaveVoiceBtn').hidden=!audio;
   if(state.watchRoom)renderWatchMusic(state.watchRoom.musicQueue||{},state.watchRoom.musicAccess||{},state.watchRoom.musicPlan||{},state.watchRoom.musicPlayback||{})
 }
@@ -2014,7 +2048,10 @@ function refreshWatchScreenStage(){
   if(!stream&&localVideo&&localVideo.readyState==='live'){stream=state.watchRtc.screenStream;uid=localUid;isLocal=true}
   if(!stream){for(const peerUid of state.watchRtc.screenSharers){if(peerUid===localUid)continue;const remote=watchScreenStreamFor(peerUid);if(watchRemoteHasScreen(peerUid,remote)){stream=remote;uid=peerUid;break}}}
   if(!stream){state.watchRtc.activeScreenUid=null;try{video.pause()}catch{}try{audio?.pause()}catch{}video.srcObject=null;if(audio)audio.srcObject=null;stage.hidden=true;if(mediaStage)mediaStage.hidden=false;return}
-  state.watchRtc.activeScreenUid=uid;stage.hidden=false;if(mediaStage)mediaStage.hidden=true;
+  state.watchRtc.activeScreenUid=uid;
+  const localFile=isLocal&&state.watchRtc.screenSource==='file'&&state.watchRtc.localFileVideo;
+  if(localFile){stage.hidden=true;if(mediaStage)mediaStage.hidden=false;return}
+  stage.hidden=false;if(mediaStage)mediaStage.hidden=true;
   const vtrack=stream.getVideoTracks?.().find(t=>t.readyState==='live'),atrack=stream.getAudioTracks?.().find(t=>t.readyState==='live');
   const videoStream=new MediaStream();if(vtrack)videoStream.addTrack(vtrack);if(video.srcObject?.getVideoTracks?.()[0]?.id!==vtrack?.id)video.srcObject=videoStream;video.muted=true;video.playsInline=true;video.play?.().catch(()=>{});
   if(audio){const audioStream=new MediaStream();if(atrack)audioStream.addTrack(atrack);if(audio.srcObject?.getAudioTracks?.()[0]?.id!==atrack?.id)audio.srcObject=atrack?audioStream:null;audio.muted=isLocal||state.watchRtc.screenSoundMuted;audio.volume=1;if(atrack&&!audio.muted)audio.play?.().catch(()=>{state.watchRtc.screenSoundMuted=true;audio.muted=true;if(soundBtn)soundBtn.textContent='Toque para ativar som'})}
@@ -2152,7 +2189,7 @@ function watchWatchPresence(){
     }
     if(ids.some(uid=>state.watchRtc.screenSharers.has(uid))&&!state.watchRtc.screenStream)setWatchRtcStatus('Recebendo compartilhamento de tela...','warn');
     else if(ids.length&&!Array.from(state.watchRtc.peers.values()).some(pc=>pc.connectionState==='connected'))setWatchRtcStatus('Conectando mídia...','warn');else setWatchRtcStatus('Aguardando outras pessoas','');
-    for(const [uid,person] of Object.entries(p)){const card=ensureWatchCallCard(uid);if(card){card.querySelector('strong').textContent=watchPeerName(uid)+(uid===state.user.uid?' (você)':'');card.querySelector('small').textContent=person.screen?'Compartilhando tela':person.audio?(person.muted?'Microfone silenciado':'Na chamada de voz'):'Assistindo';card.querySelector('img').src=person.avatar||state.watchRoom?.members?.[uid]?.avatar||DEFAULT_AVATAR}}
+    for(const [uid,person] of Object.entries(p)){const card=ensureWatchCallCard(uid);if(card){card.querySelector('strong').textContent=watchPeerName(uid)+(uid===state.user.uid?' (você)':'');card.querySelector('small').textContent=person.screen?(person.screenKind==='file'?`Transmitindo ${person.screenLabel||'filme local'}`:'Compartilhando tela'):person.audio?(person.muted?'Microfone silenciado':'Na chamada de voz'):'Assistindo';card.querySelector('img').src=person.avatar||state.watchRoom?.members?.[uid]?.avatar||DEFAULT_AVATAR}}
     refreshWatchScreenStage()
   })
 }
@@ -2185,24 +2222,65 @@ async function leaveWatchAudio(silent=false){
   if(state.watchCode&&state.user)await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:false}).catch(()=>{});
   $$('.watch-call-card audio').forEach(a=>a.muted=true);destroyWatchMusicPlayback();watchVoiceUi();if(!silent)toast('Você saiu da voz.')
 }
+function cleanupWatchLocalFilePlayer(){
+  const rtc=state.watchRtc,v=rtc.localFileVideo,url=rtc.localFileUrl;
+  if(v){try{v.onended=null;v.pause()}catch{}try{v.removeAttribute('src');v.load?.()}catch{}try{v.remove()}catch{}}
+  if(url)try{URL.revokeObjectURL(url)}catch{}
+  rtc.localFileVideo=null;rtc.localFileUrl='';rtc.localFileName=''
+}
+async function stopWatchPublishedStream({clearLocalMedia=true,silent=false}={}){
+  const rtc=state.watchRtc,source=rtc.screenSource,old=rtc.screenStream;
+  rtc.screenStream=null;rtc.screenSource='';
+  if(old)old.getTracks().forEach(t=>{t.onended=null;try{t.stop()}catch{}});
+  for(const [uid,pc] of rtc.peers){
+    const videoSender=watchPcSender(pc,'video');if(videoSender)await videoSender.replaceTrack(null);
+    const screenAudioSender=watchPcSender(pc,'audio','screen');if(screenAudioSender)await screenAudioSender.replaceTrack(null);
+    if(pc.signalingState==='stable')await negotiateWatchPeer(uid,{reason:'screen-stop'}).catch(()=>{})
+  }
+  rtc.screenSharers.delete(String(state.user?.uid||''));rtc.activeScreenUid=null;
+  if(source==='file')cleanupWatchLocalFilePlayer();
+  if(state.watchCode&&state.user)await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:false,screenAt:null,screenAudio:false,screenKind:null,screenLabel:null}).catch(()=>{});
+  if(source==='file'&&clearLocalMedia&&state.watchCode&&isWatchHost())await set(ref(db,`watchRooms/${state.watchCode}/media`),{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}).catch(()=>{});
+  if(!silent)setWatchRtcStatus(source==='file'?'Filme do dispositivo encerrado':'Compartilhamento encerrado','');
+  refreshWatchScreenStage();watchVoiceUi()
+}
+async function startWatchLocalFile(file){
+  if(!isWatchHost())return toast('Somente o host pode transmitir um filme do dispositivo.');
+  if(!file)return;
+  if(!String(file.type||'').startsWith('video/'))return toast('Escolha um arquivo de vídeo. MP4 (H.264/AAC) costuma ter a melhor compatibilidade.',6000);
+  if(!HTMLMediaElement.prototype.captureStream&&!HTMLMediaElement.prototype.mozCaptureStream)return toast('Seu navegador não permite transmitir um vídeo local diretamente. Use Chrome/Edge no computador ou “Compartilhar tela”.',7000);
+  if(!await ensureWatchRtcSession())return;
+  if(state.watchRtc.screenStream)await stopWatchPublishedStream({clearLocalMedia:true,silent:true});
+  const stage=$('watchMediaStage');if(!stage)return;
+  cleanupWatchLocalFilePlayer();
+  const objectUrl=URL.createObjectURL(file),v=document.createElement('video');
+  v.className='watch-video watch-local-file-video';v.src=objectUrl;v.controls=true;v.playsInline=true;v.preload='auto';v.autoplay=false;
+  stage.innerHTML='';stage.appendChild(v);delete stage.dataset.url;stage.hidden=false;
+  state.watchRtc.localFileVideo=v;state.watchRtc.localFileUrl=objectUrl;state.watchRtc.localFileName=file.name||'Filme do dispositivo';
+  await set(ref(db,`watchRooms/${state.watchCode}/media`),{url:'',type:'local',label:state.watchRtc.localFileName,playing:false,position:0,updatedAt:Date.now()}).catch(()=>{});
+  try{
+    await new Promise((resolve,reject)=>{if(v.readyState>=2)return resolve();const ok=()=>{cleanup();resolve()},bad=()=>{cleanup();reject(new Error('O navegador não conseguiu abrir este formato de vídeo.'))},cleanup=()=>{v.removeEventListener('canplay',ok);v.removeEventListener('error',bad)};v.addEventListener('canplay',ok,{once:true});v.addEventListener('error',bad,{once:true})});
+    await v.play();
+    const capture=(v.captureStream?.()||v.mozCaptureStream?.());
+    if(!capture?.getVideoTracks?.().length)throw new Error('O navegador não liberou a faixa de vídeo para transmissão.');
+    const videoTrack=capture.getVideoTracks()[0],audioTrack=capture.getAudioTracks()[0]||null;
+    try{videoTrack.contentHint='motion'}catch{}if(audioTrack)try{audioTrack.contentHint='music'}catch{}
+    state.watchRtc.screenStream=capture;state.watchRtc.screenSource='file';state.watchRtc.activeScreenUid=String(state.user.uid);state.watchRtc.screenSharers.add(String(state.user.uid));
+    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:true,screenAt:Date.now(),screenAudio:!!audioTrack,screenKind:'file',screenLabel:state.watchRtc.localFileName});
+    await update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:true,updatedAt:Date.now()}).catch(()=>{});
+    const ids=Object.keys(state.watchRtc.presence||{}).filter(uid=>uid!==state.user.uid);
+    for(const uid of ids){let pc=state.watchRtc.peers.get(uid);if(!pc)pc=await createWatchPeer(uid,false);await syncLocalScreenToPeer(uid,'local-file-start').catch(()=>{})}
+    v.addEventListener('play',()=>{if(isWatchHost()&&state.watchRtc.screenSource==='file')update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:true,updatedAt:Date.now()}).catch(()=>{})});
+    v.addEventListener('pause',()=>{if(isWatchHost()&&state.watchRtc.screenSource==='file'&&!v.ended)update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:false,updatedAt:Date.now()}).catch(()=>{})});
+    v.onended=()=>stopWatchPublishedStream({clearLocalMedia:false,silent:true}).then(()=>set(ref(db,`watchRooms/${state.watchCode}/media`),{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}).catch(()=>{})).then(()=>toast('Filme finalizado.')).catch(()=>{});
+    videoTrack.onended=()=>{if(state.watchRtc.screenSource==='file'&&!v.ended)stopWatchPublishedStream().catch(()=>{})};
+    setWatchRtcStatus(audioTrack?'Filme do dispositivo transmitindo com áudio':'Filme transmitindo sem faixa de áudio','ok');refreshWatchScreenStage();watchVoiceUi();toast(`Transmitindo “${state.watchRtc.localFileName}” para a sala.`)
+  }catch(e){await stopWatchPublishedStream({clearLocalMedia:true,silent:true}).catch(()=>{});toast(e?.message||'Não foi possível transmitir este vídeo.',7000)}
+}
 async function toggleWatchScreen(){
   if(!state.user||!state.watchCode)return toast('Entre numa sala primeiro.');
 
-  if(state.watchRtc.screenStream){
-    const old=state.watchRtc.screenStream;state.watchRtc.screenStream=null;
-    old.getTracks().forEach(t=>{t.onended=null;t.stop()});
-
-    for(const [uid,pc] of state.watchRtc.peers){
-      const videoSender=watchPcSender(pc,'video');if(videoSender)await videoSender.replaceTrack(null);
-      const screenAudioSender=watchPcSender(pc,'audio','screen');if(screenAudioSender)await screenAudioSender.replaceTrack(null);
-      if(pc.signalingState==='stable')await negotiateWatchPeer(uid,{reason:'screen-stop'}).catch(()=>{})
-    }
-
-    state.watchRtc.screenSharers.delete(String(state.user.uid));state.watchRtc.activeScreenUid=null;
-    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:false,screenAt:null,screenAudio:false}).catch(()=>{});
-    setWatchRtcStatus('Compartilhamento encerrado','');
-    refreshWatchScreenStage();watchVoiceUi();return
-  }
+  if(state.watchRtc.screenStream){await stopWatchPublishedStream();return}
 
   if(!navigator.mediaDevices?.getDisplayMedia)return toast('Este navegador não oferece captura de tela. Você pode assistir aqui e compartilhar pelo Chrome ou Edge no computador.');
   if(!await ensureWatchRtcSession())return;
@@ -2226,7 +2304,7 @@ async function toggleWatchScreen(){
     if(screenAudioTrack){screenAudioTrack.enabled=true;try{screenAudioTrack.contentHint='music'}catch{}}
     if(!videoTrack)throw new Error('Nenhuma tela selecionada.');
 
-    state.watchRtc.screenStream=stream;
+    state.watchRtc.screenStream=stream;state.watchRtc.screenSource='screen';
     state.watchRtc.activeScreenUid=String(state.user.uid);
     state.watchRtc.screenSharers.add(String(state.user.uid));
 
@@ -2249,7 +2327,7 @@ async function toggleWatchScreen(){
     if(screenAudioTrack)toast('Tela + áudio compartilhados com a sala.');
     else toast('Tela compartilhada. Para transmitir som, no seletor do navegador marque “Compartilhar áudio”.',6000)
   }catch(e){
-    state.watchRtc.screenStream=null;state.watchRtc.screenSharers.delete(String(state.user?.uid||''));
+    state.watchRtc.screenStream=null;state.watchRtc.screenSource='';state.watchRtc.screenSharers.delete(String(state.user?.uid||''));
     if(state.watchCode&&state.user)await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:false,screenAt:null,screenAudio:false}).catch(()=>{});
     setWatchRtcStatus('Compartilhamento não iniciado','');
     if(e?.name!=='NotAllowedError')toast(`Não foi possível compartilhar a tela${e?.message?`: ${e.message}`:'.'}`);
@@ -2292,7 +2370,7 @@ async function leaveWatchVoice(silent=false){
   state.watchRtc.presenceUnsub=null;state.watchRtc.inboxUnsub=null;state.watchRtc.disconnectRef=null;
   for(const pc of state.watchRtc.peers.values()){try{pc.close()}catch{}}
   state.watchRtc.peers.clear();state.watchRtc.remoteStreams.clear();state.watchRtc.remoteVoiceStreams.clear();state.watchRtc.remoteScreenStreams.clear();state.watchRtc.localStream?.getTracks?.().forEach(t=>t.stop());state.watchRtc.screenStream?.getTracks?.().forEach(t=>t.stop());
-  state.watchRtc.localStream=null;state.watchRtc.screenStream=null;state.watchRtc.joined=false;state.watchRtc.audioJoined=false;state.watchRtc.activeScreenUid=null;state.watchRtc.micEnabled=true;
+  cleanupWatchLocalFilePlayer();state.watchRtc.localStream=null;state.watchRtc.screenStream=null;state.watchRtc.screenSource='';state.watchRtc.joined=false;state.watchRtc.audioJoined=false;state.watchRtc.activeScreenUid=null;state.watchRtc.micEnabled=true;
   state.watchRtc.processed.clear();state.watchRtc.pendingCandidates.clear();state.watchRtc.screenSharers.clear();state.watchRtc.presence={};state.watchRtc.screenRetry.clear();state.watchRtc.makingOffer.clear();
   if(code&&uid){await remove(ref(db,`watchVoice/${code}/${uid}`)).catch(()=>{});await remove(ref(db,`watchRtc/${code}/${uid}`)).catch(()=>{})}
   if($('watchRemoteMedia'))$('watchRemoteMedia').innerHTML='';if($('watchVoiceCount'))$('watchVoiceCount').textContent='0';
