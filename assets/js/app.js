@@ -51,7 +51,7 @@ const state = {
   admin:{reports:{},updates:{},directory:{},bans:{},selectedUid:'',supportChats:{},supportSelectedUid:'',supportUnsub:null,backupStatus:{}},
   tinder:{current:null,seen:[]},updates:{},notifications:{},notificationDismissed:{},ban:null,supportChat:{messages:{}},
   watchCode:null,watchRoom:null,watchUnsubs:[],watchApplying:false,
-  watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,screenSource:'',localFileVideo:null,localFileUrl:'',localFileName:'',peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false},
+  watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,screenSource:'',localFileVideo:null,localFileUrl:'',localFileName:'',localFileAudioCtx:null,localFileAudioSource:null,localFileAudioDest:null,fullscreenUiTimer:null,peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false},
   watchYoutube:{lastTime:0,lastState:-1,lastPublishAt:0},
   watchMusic:{currentId:'',volume:Number(localStorage.getItem('gremory:watchMusicVolume')||65),muted:localStorage.getItem('gremory:watchMusicMuted')==='1',engineReady:false,lastAdvanceId:'',adding:false,currentTime:0,lastClockSync:0,endedId:''},
   rtc:{joined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true},premiumPoll:null
@@ -2234,12 +2234,35 @@ async function leaveWatchAudio(silent=false){
 }
 function cleanupWatchLocalFilePlayer(){
   const rtc=state.watchRtc,v=rtc.localFileVideo,url=rtc.localFileUrl;
-  if(v){try{v.onended=null;v.pause()}catch{}try{v.removeAttribute('src');v.load?.()}catch{}try{v.remove()}catch{}}
+  if(v){try{v.onended=null;v.onvolumechange=null;v.pause()}catch{}try{v.removeAttribute('src');v.load?.()}catch{}try{v.remove()}catch{}}
+  try{rtc.localFileAudioSource?.disconnect?.()}catch{}
+  try{rtc.localFileAudioDest?.disconnect?.()}catch{}
+  try{rtc.localFileAudioCtx?.close?.()}catch{}
   if(url)try{URL.revokeObjectURL(url)}catch{}
-  rtc.localFileVideo=null;rtc.localFileUrl='';rtc.localFileName=''
+  rtc.localFileVideo=null;rtc.localFileUrl='';rtc.localFileName='';rtc.localFileAudioCtx=null;rtc.localFileAudioSource=null;rtc.localFileAudioDest=null
+}
+async function buildWatchLocalFileStream(video,captured,preparedCtx=null){
+  const videoTrack=captured?.getVideoTracks?.().find(t=>t.readyState==='live');
+  if(!videoTrack)throw new Error('O navegador não liberou a faixa de vídeo para transmissão.');
+  let audioTrack=captured?.getAudioTracks?.().find(t=>t.readyState==='live')||null;
+  const AudioCtx=window.AudioContext||window.webkitAudioContext;
+  if(AudioCtx){
+    let ctx=preparedCtx;
+    try{
+      if(!ctx||ctx.state==='closed')ctx=new AudioCtx({latencyHint:'playback'});
+      const source=ctx.createMediaElementSource(video),dest=ctx.createMediaStreamDestination();
+      source.connect(ctx.destination);source.connect(dest);
+      await ctx.resume?.().catch(()=>{});
+      const routed=dest.stream.getAudioTracks?.().find(t=>t.readyState==='live')||dest.stream.getAudioTracks?.()[0]||null;
+      if(routed){audioTrack=routed;state.watchRtc.localFileAudioCtx=ctx;state.watchRtc.localFileAudioSource=source;state.watchRtc.localFileAudioDest=dest}
+      else try{await ctx.close?.()}catch{}
+    }catch(e){console.warn('[WATCH LOCAL AUDIO]',e);if(ctx&&ctx!==state.watchRtc.localFileAudioCtx)try{await ctx.close?.()}catch{}}
+  }
+  const out=new MediaStream();out.addTrack(videoTrack);if(audioTrack){audioTrack.enabled=true;try{audioTrack.contentHint='music'}catch{}out.addTrack(audioTrack)}
+  return {stream:out,videoTrack,audioTrack}
 }
 async function stopWatchPublishedStream({clearLocalMedia=true,silent=false}={}){
-  document.body.classList.remove('watch-pseudo-fullscreen');updateWatchFullscreenButton();
+  document.body.classList.remove('watch-pseudo-fullscreen');clearWatchFullscreenUiTimer();$('watchScreenStage')?.classList.remove('watch-fullscreen-ui-hidden');updateWatchFullscreenButton();
   const rtc=state.watchRtc,source=rtc.screenSource,old=rtc.screenStream;
   rtc.screenStream=null;rtc.screenSource='';
   if(old)old.getTracks().forEach(t=>{t.onended=null;try{t.stop()}catch{}});
@@ -2260,7 +2283,9 @@ async function startWatchLocalFile(file){
   if(!file)return;
   if(!String(file.type||'').startsWith('video/'))return toast('Escolha um arquivo de vídeo. MP4 (H.264/AAC) costuma ter a melhor compatibilidade.',6000);
   if(!HTMLMediaElement.prototype.captureStream&&!HTMLMediaElement.prototype.mozCaptureStream)return toast('Seu navegador não permite transmitir um vídeo local diretamente. Use Chrome/Edge no computador ou “Compartilhar tela”.',7000);
-  if(!await ensureWatchRtcSession())return;
+  const AudioCtx=window.AudioContext||window.webkitAudioContext;let preparedAudioCtx=null;
+  if(AudioCtx){try{preparedAudioCtx=new AudioCtx({latencyHint:'playback'});preparedAudioCtx.resume?.().catch(()=>{})}catch{preparedAudioCtx=null}}
+  if(!await ensureWatchRtcSession()){try{await preparedAudioCtx?.close?.()}catch{}return}
   if(state.watchRtc.screenStream)await stopWatchPublishedStream({clearLocalMedia:true,silent:true});
   const stage=$('watchMediaStage');if(!stage)return;
   cleanupWatchLocalFilePlayer();
@@ -2273,10 +2298,10 @@ async function startWatchLocalFile(file){
     await new Promise((resolve,reject)=>{if(v.readyState>=2)return resolve();const ok=()=>{cleanup();resolve()},bad=()=>{cleanup();reject(new Error('O navegador não conseguiu abrir este formato de vídeo.'))},cleanup=()=>{v.removeEventListener('canplay',ok);v.removeEventListener('error',bad)};v.addEventListener('canplay',ok,{once:true});v.addEventListener('error',bad,{once:true})});
     await v.play();
     const capture=(v.captureStream?.()||v.mozCaptureStream?.());
-    if(!capture?.getVideoTracks?.().length)throw new Error('O navegador não liberou a faixa de vídeo para transmissão.');
-    const videoTrack=capture.getVideoTracks()[0],audioTrack=capture.getAudioTracks()[0]||null;
-    try{videoTrack.contentHint='motion'}catch{}if(audioTrack)try{audioTrack.contentHint='music'}catch{}
-    state.watchRtc.screenStream=capture;state.watchRtc.screenSource='file';state.watchRtc.activeScreenUid=String(state.user.uid);state.watchRtc.screenSharers.add(String(state.user.uid));
+    const built=await buildWatchLocalFileStream(v,capture,preparedAudioCtx);preparedAudioCtx=null;
+    const {stream:publishStream,videoTrack,audioTrack}=built;
+    try{videoTrack.contentHint='motion'}catch{}
+    state.watchRtc.screenStream=publishStream;state.watchRtc.screenSource='file';state.watchRtc.activeScreenUid=String(state.user.uid);state.watchRtc.screenSharers.add(String(state.user.uid));
     await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:true,screenAt:Date.now(),screenAudio:!!audioTrack,screenKind:'file',screenLabel:state.watchRtc.localFileName});
     await update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:true,updatedAt:Date.now()}).catch(()=>{});
     const ids=Object.keys(state.watchRtc.presence||{}).filter(uid=>uid!==state.user.uid);
@@ -2290,7 +2315,7 @@ async function startWatchLocalFile(file){
     v.onended=()=>stopWatchPublishedStream({clearLocalMedia:false,silent:true}).then(()=>set(ref(db,`watchRooms/${state.watchCode}/media`),{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}).catch(()=>{})).then(()=>toast('Filme finalizado.')).catch(()=>{});
     videoTrack.onended=()=>{if(state.watchRtc.screenSource==='file'&&!v.ended)stopWatchPublishedStream().catch(()=>{})};
     setWatchRtcStatus(audioTrack?'Filme do dispositivo transmitindo com áudio':'Filme transmitindo sem faixa de áudio','ok');refreshWatchScreenStage();watchVoiceUi();toast(`Transmitindo “${state.watchRtc.localFileName}” para a sala.`)
-  }catch(e){await stopWatchPublishedStream({clearLocalMedia:true,silent:true}).catch(()=>{});toast(e?.message||'Não foi possível transmitir este vídeo.',7000)}
+  }catch(e){try{await preparedAudioCtx?.close?.()}catch{}await stopWatchPublishedStream({clearLocalMedia:true,silent:true}).catch(()=>{});toast(e?.message||'Não foi possível transmitir este vídeo.',7000)}
 }
 async function toggleWatchScreen(){
   if(!state.user||!state.watchCode)return toast('Entre numa sala primeiro.');
@@ -2350,9 +2375,14 @@ async function toggleWatchScreen(){
   }
 }
 function watchFullscreenIsActive(){const stage=$('watchScreenStage');return !!stage&&(document.fullscreenElement===stage||document.webkitFullscreenElement===stage||document.body.classList.contains('watch-pseudo-fullscreen'))}
+function clearWatchFullscreenUiTimer(){if(state.watchRtc.fullscreenUiTimer){clearTimeout(state.watchRtc.fullscreenUiTimer);state.watchRtc.fullscreenUiTimer=null}}
+function showWatchFullscreenUi(autoHide=true){
+  const stage=$('watchScreenStage');if(!stage)return;stage.classList.remove('watch-fullscreen-ui-hidden');clearWatchFullscreenUiTimer();
+  if(autoHide&&watchFullscreenIsActive())state.watchRtc.fullscreenUiTimer=setTimeout(()=>{if(watchFullscreenIsActive())stage.classList.add('watch-fullscreen-ui-hidden')},2800)
+}
 function updateWatchFullscreenButton(){
-  const btn=$('watchScreenFullscreenBtn');if(!btn)return;
-  btn.textContent=watchFullscreenIsActive()?'Sair da tela cheia':'Tela cheia'
+  const btn=$('watchScreenFullscreenBtn'),stage=$('watchScreenStage');if(btn)btn.textContent=watchFullscreenIsActive()?'Sair da tela cheia':'Tela cheia';
+  if(!watchFullscreenIsActive()){stage?.classList.remove('watch-fullscreen-ui-hidden');clearWatchFullscreenUiTimer()}else showWatchFullscreenUi(true)
 }
 async function fullscreenWatchScreen(){
   const stage=$('watchScreenStage'),video=$('watchScreenVideo');if(!stage||stage.hidden)return toast('Nenhuma transmissão está disponível.');
@@ -2380,11 +2410,13 @@ async function fullscreenWatchScreen(){
 document.addEventListener('fullscreenchange',updateWatchFullscreenButton);
 document.addEventListener('webkitfullscreenchange',updateWatchFullscreenButton);
 $('watchScreenSoundBtn')?.addEventListener('click',async()=>{
-  const audio=$('watchScreenAudio');state.watchRtc.screenSoundMuted=audio?.paused?false:!state.watchRtc.screenSoundMuted;refreshWatchScreenStage();
-  if(!state.watchRtc.screenSoundMuted&&audio?.srcObject){try{audio.muted=false;await audio.play()}catch{toast('Toque novamente em Som para liberar o áudio da transmissão.')}}
+  showWatchFullscreenUi(true);const audio=$('watchScreenAudio');state.watchRtc.screenSoundMuted=audio?.paused?false:!state.watchRtc.screenSoundMuted;refreshWatchScreenStage();
+  if(!state.watchRtc.screenSoundMuted&&audio?.srcObject){try{audio.muted=false;audio.volume=1;await audio.play();toast('Som da transmissão ativado.')}catch{state.watchRtc.screenSoundMuted=true;refreshWatchScreenStage();toast('Toque novamente em Som para liberar o áudio da transmissão.')}}
 });
+const watchFsStage=$('watchScreenStage');
+['pointermove','pointerdown','touchstart'].forEach(type=>watchFsStage?.addEventListener(type,()=>{if(watchFullscreenIsActive())showWatchFullscreenUi(true)},{passive:true}));
 async function leaveWatchVoice(silent=false){
-  document.body.classList.remove('watch-pseudo-fullscreen');updateWatchFullscreenButton();
+  document.body.classList.remove('watch-pseudo-fullscreen');clearWatchFullscreenUiTimer();$('watchScreenStage')?.classList.remove('watch-fullscreen-ui-hidden');updateWatchFullscreenButton();
   if(!state.watchRtc.joined&&!state.watchRtc.localStream&&!state.watchRtc.peers.size)return;
   const code=state.watchCode,uid=state.user?.uid;
   try{state.watchRtc.presenceUnsub?.()}catch{}try{state.watchRtc.inboxUnsub?.()}catch{}try{await state.watchRtc.disconnectRef?.cancel?.()}catch{}

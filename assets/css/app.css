@@ -1191,3 +1191,21 @@ body.watch-pseudo-fullscreen{overflow:hidden!important;touch-action:none}
   #watchScreenStage:-webkit-full-screen .watch-screen-head strong,
   body.watch-pseudo-fullscreen #watchScreenStage .watch-screen-head strong{font-size:11px!important}
 }
+
+
+/* V13.3 — áudio do filme local + controles fullscreen auto-hide */
+#watchScreenStage:fullscreen .watch-screen-head,
+#watchScreenStage:-webkit-full-screen .watch-screen-head,
+body.watch-pseudo-fullscreen #watchScreenStage .watch-screen-head{
+  transition:opacity .22s ease,transform .22s ease!important;
+}
+#watchScreenStage.watch-fullscreen-ui-hidden:fullscreen .watch-screen-head,
+#watchScreenStage.watch-fullscreen-ui-hidden:-webkit-full-screen .watch-screen-head,
+body.watch-pseudo-fullscreen #watchScreenStage.watch-fullscreen-ui-hidden .watch-screen-head{
+  opacity:0!important;
+  transform:translateY(-12px)!important;
+  pointer-events:none!important;
+}
+#watchScreenStage.watch-fullscreen-ui-hidden:fullscreen,
+#watchScreenStage.watch-fullscreen-ui-hidden:-webkit-full-screen,
+body.watch-pseudo-fullscreen #watchScreenStage.watch-fullscreen-ui-hidden{cursor:none}

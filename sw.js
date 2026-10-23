@@ -1,9 +1,9 @@
-const CACHE='gremory-v13-2-watch-mobile-stream-20261023';
+const CACHE='gremory-v13-3-watch-audio-autohide-20261023';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261023-v13-2-watch-mobile-stream',
-  '/assets/js/app.js?v=20261023-v13-2-watch-mobile-stream',
+  '/assets/css/app.css?v=20261023-v13-3-watch-audio-autohide',
+  '/assets/js/app.js?v=20261023-v13-3-watch-audio-autohide',
   '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
