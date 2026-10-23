@@ -1992,7 +1992,8 @@ function ensureWatchCallCard(uid){
   }
   return card
 }
-function watchRemoteHasScreen(uid,stream=watchScreenStreamFor(uid)){return state.watchRtc.screenSharers.has(String(uid||''))&&!!stream?.getVideoTracks?.().some(t=>t.readyState==='live'&&!t.muted)}
+function watchRemoteHasScreen(uid,stream=watchScreenStreamFor(uid)){return state.watchRtc.screenSharers.has(String(uid||''))&&!!stream?.getVideoTracks?.().some(t=>t.readyState==='live')}
+function watchRemoteScreenFlowing(uid,stream=watchScreenStreamFor(uid)){return state.watchRtc.screenSharers.has(String(uid||''))&&!!stream?.getVideoTracks?.().some(t=>t.readyState==='live'&&!t.muted)}
 async function sendWatchRtc(targetUid,payload){if(!state.user||!state.watchCode)return;await push(ref(db,`watchRtc/${state.watchCode}/${targetUid}`),{fromUid:state.user.uid,at:Date.now(),...payload})}
 async function negotiateWatchPeer(peerUid,{iceRestart=false,reason='update'}={}){
   const pc=state.watchRtc.peers.get(peerUid);if(!pc||pc.signalingState==='closed'||pc.signalingState!=='stable'||state.watchRtc.makingOffer.has(peerUid))return false;
@@ -2117,9 +2118,10 @@ async function createWatchPeer(peerUid,initiator=false){
     const isScreenAudio=ev.transceiver===pc.__watchScreenAudioTr;
     const target=(isScreenVideo||isScreenAudio)?screenRemote:voiceRemote;
     if(!target.getTracks().some(t=>t.id===ev.track.id))target.addTrack(ev.track);
-    ev.track.onunmute=()=>attachWatchRemote(peerUid);
+    if(isScreenVideo){state.watchRtc.activeScreenUid=peerUid;setWatchRtcStatus('Vídeo recebido. Preparando reprodução...','ok')}
+    ev.track.onunmute=()=>{if(isScreenVideo)state.watchRtc.activeScreenUid=peerUid;attachWatchRemote(peerUid);refreshWatchScreenStage();if(isScreenVideo)setWatchRtcStatus(`${watchPeerName(peerUid)} está transmitindo`,'ok')};
     ev.track.onended=()=>attachWatchRemote(peerUid);
-    attachWatchRemote(peerUid)
+    attachWatchRemote(peerUid);refreshWatchScreenStage()
   };
 
   pc.onicecandidate=ev=>{if(ev.candidate)sendWatchRtc(peerUid,{type:'candidate',candidate:ev.candidate.toJSON()}).catch(()=>{})};
@@ -2164,8 +2166,10 @@ async function handleWatchRtc(id,msg){
       if(pc.remoteDescription)try{await pc.addIceCandidate(msg.candidate)}catch{}else{const q=state.watchRtc.pendingCandidates.get(from)||[];q.push(msg.candidate);state.watchRtc.pendingCandidates.set(from,q)}
     }else if(msg.type==='screen_request'){
       const videoTrack=state.watchRtc.screenStream?.getVideoTracks?.()[0];
-      const audioTrack=state.watchRtc.screenStream?.getAudioTracks?.()[0];
-      if(videoTrack&&videoTrack.readyState==='live')await syncLocalScreenToPeer(from,'screen-request')
+      if(videoTrack&&videoTrack.readyState==='live'){
+        await syncLocalScreenToPeer(from,'screen-request');
+        setTimeout(()=>{if(state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live'))syncLocalScreenToPeer(from,'screen-request-retry').catch(()=>{})},1200)
+      }
     }
   }finally{remove(ref(db,`watchRtc/${state.watchCode}/${state.user.uid}/${id}`)).catch(()=>{})}
 }
@@ -2182,15 +2186,21 @@ function watchWatchPresence(){
     const localSharing=!!state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live');
     for(const uid of ids){
       updateWatchPeerScreenButton(uid);
-      if(localSharing)setTimeout(()=>syncLocalScreenToPeer(uid,'late-join').catch(()=>{}),650);
-      if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteHasScreen(uid,watchScreenStreamFor(uid))){
-        [500,1400,3000].forEach((delay,idx)=>setTimeout(()=>{if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteHasScreen(uid,watchScreenStreamFor(uid)))requestWatchScreenFrom(uid,idx>0).catch(()=>{})},delay))
+      if(localSharing){[250,1100,3000].forEach((delay,idx)=>setTimeout(()=>{if(state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live'))syncLocalScreenToPeer(uid,idx?'late-join-retry':'late-join').catch(()=>{})},delay))}
+      if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteScreenFlowing(uid,watchScreenStreamFor(uid))){
+        [350,1200,2800,5200].forEach((delay,idx)=>setTimeout(()=>{if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteScreenFlowing(uid,watchScreenStreamFor(uid)))requestWatchScreenFrom(uid,idx>0).catch(()=>{})},delay))
       }
     }
     if(ids.some(uid=>state.watchRtc.screenSharers.has(uid))&&!state.watchRtc.screenStream)setWatchRtcStatus('Recebendo compartilhamento de tela...','warn');
     else if(ids.length&&!Array.from(state.watchRtc.peers.values()).some(pc=>pc.connectionState==='connected'))setWatchRtcStatus('Conectando mídia...','warn');else setWatchRtcStatus('Aguardando outras pessoas','');
     for(const [uid,person] of Object.entries(p)){const card=ensureWatchCallCard(uid);if(card){card.querySelector('strong').textContent=watchPeerName(uid)+(uid===state.user.uid?' (você)':'');card.querySelector('small').textContent=person.screen?(person.screenKind==='file'?`Transmitindo ${person.screenLabel||'filme local'}`:'Compartilhando tela'):person.audio?(person.muted?'Microfone silenciado':'Na chamada de voz'):'Assistindo';card.querySelector('img').src=person.avatar||state.watchRoom?.members?.[uid]?.avatar||DEFAULT_AVATAR}}
-    refreshWatchScreenStage()
+    refreshWatchScreenStage();
+    for(const uid of ids){if(state.watchRtc.screenSharers.has(uid))setTimeout(()=>{
+      if(!state.watchRtc.screenSharers.has(uid)||watchRemoteScreenFlowing(uid,watchScreenStreamFor(uid)))return;
+      const pc=state.watchRtc.peers.get(uid),st=pc?.connectionState||pc?.iceConnectionState||'';
+      if(['failed','disconnected','closed'].includes(st))setWatchRtcStatus('A rede bloqueou a transmissão P2P. Tente a mesma rede Wi-Fi ou configure TURN.','warn');
+      else if(watchRemoteHasScreen(uid,watchScreenStreamFor(uid)))setWatchRtcStatus('Transmissão recebida; aguardando quadros do vídeo...','warn');
+    },9000)}
   })
 }
 async function ensureWatchRtcSession(){
@@ -2229,6 +2239,7 @@ function cleanupWatchLocalFilePlayer(){
   rtc.localFileVideo=null;rtc.localFileUrl='';rtc.localFileName=''
 }
 async function stopWatchPublishedStream({clearLocalMedia=true,silent=false}={}){
+  document.body.classList.remove('watch-pseudo-fullscreen');updateWatchFullscreenButton();
   const rtc=state.watchRtc,source=rtc.screenSource,old=rtc.screenStream;
   rtc.screenStream=null;rtc.screenSource='';
   if(old)old.getTracks().forEach(t=>{t.onended=null;try{t.stop()}catch{}});
@@ -2269,7 +2280,11 @@ async function startWatchLocalFile(file){
     await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:true,screenAt:Date.now(),screenAudio:!!audioTrack,screenKind:'file',screenLabel:state.watchRtc.localFileName});
     await update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:true,updatedAt:Date.now()}).catch(()=>{});
     const ids=Object.keys(state.watchRtc.presence||{}).filter(uid=>uid!==state.user.uid);
-    for(const uid of ids){let pc=state.watchRtc.peers.get(uid);if(!pc)pc=await createWatchPeer(uid,false);await syncLocalScreenToPeer(uid,'local-file-start').catch(()=>{})}
+    for(const uid of ids){
+      let pc=state.watchRtc.peers.get(uid);if(!pc)pc=await createWatchPeer(uid,false);
+      await syncLocalScreenToPeer(uid,'local-file-start').catch(()=>{});
+      [900,2400,5000].forEach((delay,idx)=>setTimeout(()=>{if(state.watchRtc.screenSource==='file'&&state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live'))syncLocalScreenToPeer(uid,`local-file-retry-${idx+1}`).catch(()=>{})},delay))
+    }
     v.addEventListener('play',()=>{if(isWatchHost()&&state.watchRtc.screenSource==='file')update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:true,updatedAt:Date.now()}).catch(()=>{})});
     v.addEventListener('pause',()=>{if(isWatchHost()&&state.watchRtc.screenSource==='file'&&!v.ended)update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:false,updatedAt:Date.now()}).catch(()=>{})});
     v.onended=()=>stopWatchPublishedStream({clearLocalMedia:false,silent:true}).then(()=>set(ref(db,`watchRooms/${state.watchCode}/media`),{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}).catch(()=>{})).then(()=>toast('Filme finalizado.')).catch(()=>{});
@@ -2334,28 +2349,33 @@ async function toggleWatchScreen(){
     watchVoiceUi()
   }
 }
+function watchFullscreenIsActive(){const stage=$('watchScreenStage');return !!stage&&(document.fullscreenElement===stage||document.webkitFullscreenElement===stage||document.body.classList.contains('watch-pseudo-fullscreen'))}
 function updateWatchFullscreenButton(){
-  const btn=$('watchScreenFullscreenBtn'),stage=$('watchScreenStage');if(!btn||!stage)return;
-  const active=document.fullscreenElement===stage||document.webkitFullscreenElement===stage;
-  btn.textContent=active?'Sair da tela cheia':'Tela cheia'
+  const btn=$('watchScreenFullscreenBtn');if(!btn)return;
+  btn.textContent=watchFullscreenIsActive()?'Sair da tela cheia':'Tela cheia'
 }
 async function fullscreenWatchScreen(){
-  const stage=$('watchScreenStage'),video=$('watchScreenVideo');if(!stage||stage.hidden)return toast('Nenhuma tela está sendo compartilhada.');
+  const stage=$('watchScreenStage'),video=$('watchScreenVideo');if(!stage||stage.hidden)return toast('Nenhuma transmissão está disponível.');
   try{
-    const active=document.fullscreenElement===stage||document.webkitFullscreenElement===stage;
-    if(active){
+    if(document.body.classList.contains('watch-pseudo-fullscreen')){document.body.classList.remove('watch-pseudo-fullscreen');updateWatchFullscreenButton();return}
+    const nativeActive=document.fullscreenElement===stage||document.webkitFullscreenElement===stage;
+    if(nativeActive){
       if(document.exitFullscreen)await document.exitFullscreen();
       else if(document.webkitExitFullscreen)document.webkitExitFullscreen();
       updateWatchFullscreenButton();return
     }
-
-    if(stage.requestFullscreen)await stage.requestFullscreen();
-    else if(stage.webkitRequestFullscreen)stage.webkitRequestFullscreen();
-    else if(video?.webkitEnterFullscreen)video.webkitEnterFullscreen();
-    else return toast('Tela cheia não é suportada neste navegador.');
-
-    updateWatchFullscreenButton()
-  }catch{toast('Não foi possível alternar a tela cheia.')}
+    if(stage.requestFullscreen){await stage.requestFullscreen();updateWatchFullscreenButton();return}
+    if(stage.webkitRequestFullscreen){stage.webkitRequestFullscreen();updateWatchFullscreenButton();return}
+    if(video?.webkitEnterFullscreen){
+      const hadControls=video.controls;video.controls=true;
+      const restore=()=>{video.controls=hadControls;updateWatchFullscreenButton()};
+      video.addEventListener('webkitendfullscreen',restore,{once:true});
+      video.webkitEnterFullscreen();return
+    }
+    document.body.classList.add('watch-pseudo-fullscreen');updateWatchFullscreenButton()
+  }catch{
+    document.body.classList.add('watch-pseudo-fullscreen');updateWatchFullscreenButton()
+  }
 }
 document.addEventListener('fullscreenchange',updateWatchFullscreenButton);
 document.addEventListener('webkitfullscreenchange',updateWatchFullscreenButton);
@@ -2364,6 +2384,7 @@ $('watchScreenSoundBtn')?.addEventListener('click',async()=>{
   if(!state.watchRtc.screenSoundMuted&&audio?.srcObject){try{audio.muted=false;await audio.play()}catch{toast('Toque novamente em Som para liberar o áudio da transmissão.')}}
 });
 async function leaveWatchVoice(silent=false){
+  document.body.classList.remove('watch-pseudo-fullscreen');updateWatchFullscreenButton();
   if(!state.watchRtc.joined&&!state.watchRtc.localStream&&!state.watchRtc.peers.size)return;
   const code=state.watchCode,uid=state.user?.uid;
   try{state.watchRtc.presenceUnsub?.()}catch{}try{state.watchRtc.inboxUnsub?.()}catch{}try{await state.watchRtc.disconnectRef?.cancel?.()}catch{}
