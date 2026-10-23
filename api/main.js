@@ -1281,6 +1281,14 @@ module.exports = async (req, res) => {
 
   // slots_spin_site removido: o Slots usa diretamente o bridge/Rupias existentes.
 
+  if(action === 'youtube_search'){
+    if(req.method!=='GET')return sendJson(res,405,{erro:'Método inválido'});
+    const key=process.env.YOUTUBE_API_KEY,term=String(qp(req,'q')||'').trim().slice(0,120);
+    if(!key)return sendJson(res,503,{erro:'Busca indisponível: configure YOUTUBE_API_KEY na Vercel. Você ainda pode colar o link do vídeo.'});
+    if(!term)return sendJson(res,400,{erro:'Digite o título do vídeo.'});
+    try{const url=new URL('https://www.googleapis.com/youtube/v3/search');url.search=new URLSearchParams({key,part:'snippet',type:'video',videoEmbeddable:'true',maxResults:'8',q:term}).toString();const response=await fetch(url,{signal:AbortSignal.timeout(8000)});if(!response.ok)return sendJson(res,502,{erro:'Busca do YouTube indisponível. Verifique a chave e a cota.'});const data=await response.json();res.setHeader('Cache-Control','public, max-age=120');return sendJson(res,200,{items:(data.items||[]).map(x=>({id:x.id.videoId,title:x.snippet.title,thumbnail:x.snippet.thumbnails?.medium?.url||''}))})}catch{return sendJson(res,502,{erro:'O YouTube não respondeu. Tente novamente.'})}
+  }
+
   if (action === 'rtc_config') {
     if (req.method !== 'GET') return sendJson(res, 405, { erro: 'Método inválido' });
     const iceServers = [

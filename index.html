@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261019-v12-17-vinculo-audio-slots">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261022-v13-watch-social">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -100,6 +100,7 @@
           <span class="nav-section-label">Ferramentas</span>
           <button class="nav-item" data-route="studio"><span>▤</span><b>PDF & Canvas</b></button>
           <button class="nav-item" data-route="downloads"><span>↓</span><b>Downloads</b></button>
+          <button class="nav-item" data-route="feed"><span>▧</span><b>Comunidade</b></button>
           <button class="nav-item" data-route="updates"><span>◌</span><b>Atualizações</b></button>
           <button class="nav-item" data-route="support"><span>?</span><b>Suporte</b></button>
         </div>
@@ -672,7 +673,7 @@
                 </div>
 
                 <div class="watch-source-card">
-                  <form class="watch-media-form" id="watchMediaForm">
+                  <form id="watchYoutubeSearch" class="stack-form"><label>Pesquisar no YouTube<input id="watchYoutubeQuery" maxlength="120" placeholder="Título do vídeo" required></label><button class="btn" type="submit">Pesquisar</button></form><div id="watchYoutubeResults" class="youtube-results"></div><form class="watch-media-form" id="watchMediaForm">
                     <input id="watchMediaInput" placeholder="YouTube, Google Drive ou link de vídeo">
                     <button class="btn primary" type="submit">Carregar</button>
                   </form>
@@ -847,6 +848,12 @@
           </div>
         </section>
 
+<section class="view community-view" data-view="feed">
+ <div class="section-head"><div><span class="tag">COMUNIDADE</span><h2>Seu espaço na Gremory</h2><p class="muted">Momentos, amigos e suas conquistas.</p></div><button id="feedRefresh" class="btn" type="button">Atualizar</button></div>
+ <article class="panel"><form id="feedForm" class="stack-form"><label>Nova publicação<textarea id="feedText" maxlength="1800" rows="3" placeholder="O que você quer compartilhar?"></textarea></label><label>Foto ou vídeo<input id="feedFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"></label><p class="muted">Fotos até 10 MB • Vídeos até 50 MB. Publique apenas conteúdo que você pode compartilhar.</p><label>Ou link HTTPS da mídia<input id="feedUrl" type="url" placeholder="https://..."></label><label>Tipo da mídia por link<select id="feedKind"><option value="image">Foto / GIF</option><option value="video">Vídeo MP4 / WebM</option></select></label><button class="btn primary" type="submit">Publicar</button><p id="feedProgress" role="status"></p></form></article>
+ <div class="feed-filters"><button class="btn active" id="feedAll" type="button">Todos</button><button class="btn" id="feedFollowing" type="button">Seguindo</button><button class="btn" id="feedMyProfile" type="button">Meu perfil e emblemas</button></div>
+ <div id="feedProfile" class="panel" hidden></div><div id="feedList" class="feed-list" aria-live="polite"></div><button id="feedMore" class="btn" type="button">Carregar mais</button>
+</section>
         <section class="view" data-view="updates">
           <div class="section-head"><div><span class="tag">ATUALIZAÇÕES</span><h2>Novidades</h2></div></div>
           <div class="updates-feed" id="updatesFeed"><div class="empty-state">Nenhuma atualização publicada.</div></div>
@@ -917,7 +924,7 @@
               </div>
             </article>
 
-            <article class="panel admin-panel">
+            <article class="panel admin-panel"><span class="tag">PERFIS</span><h3>Conceder emblema</h3><button class="btn" id="adminVerifyEmail" type="button">Confirmar e-mail do administrador</button><p class="muted">Localize o usuário no painel acima. Ele poderá equipar o emblema no perfil da comunidade.</p><form id="adminBadgeForm" class="stack-form"><label>ID<input id="adminBadgeId" pattern="[a-z0-9_-]{3,40}" required placeholder="pioneiro"></label><label>Nome<input id="adminBadgeName" maxlength="60" required></label><label>Símbolo<input id="adminBadgeIcon" maxlength="8" value="🏅" required></label><div class="admin-row-actions"><button class="btn primary">Conceder emblema</button><button id="adminBadgeRevoke" type="button" class="btn">Revogar</button></div></form></article><article class="panel admin-panel">
               <div class="panel-head"><div><span class="tag">NOTIFICAÇÕES</span><h3>Enviar aviso</h3></div></div>
               <form id="adminNotificationForm" class="stack-form compact">
                 <label>Destino<select id="adminNotificationTarget"><option value="all">Todos os usuários</option><option value="selected">Usuário localizado</option></select></label>
@@ -978,6 +985,7 @@
         <button data-route="rpg"><span>⚄</span><b>RPG</b></button>
         <button data-route="studio"><span>▤</span><b>PDF & Canvas</b></button>
         <button data-route="downloads"><span>⇩</span><b>Downloads</b></button>
+        <button data-route="feed"><span>▧</span><b>Feed</b></button>
         <button data-route="updates"><span>◌</span><b>Novidades</b></button>
         <button data-route="support"><span>?</span><b>Suporte</b></button>
         <button id="mobileAccountBtn"><span>●</span><b>Conta</b></button>
@@ -1055,6 +1063,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261019-v12-17-vinculo-audio-slots"></script>
+  <script type="module" src="/assets/js/app.js?v=20261022-v13-watch-social"></script>
 </body>
 </html>

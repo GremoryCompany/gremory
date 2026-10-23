@@ -1,8 +1,9 @@
+import { initCommunity } from './community.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js';
 import {
   getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence, inMemoryPersistence,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail,
-  signOut, updateProfile
+  signOut, updateProfile, sendEmailVerification
 } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js';
 import {
   getDatabase, ref, get, set, update, push, onValue, remove, onDisconnect, query, orderByChild, limitToLast, runTransaction
@@ -116,7 +117,7 @@ function authFlowError(err){
 }
 
 const routeMeta={
-  home:['GREMORY','Início'],charlotte:['CHARLOTTE','Charlotte'],pokemon:['POKÉMON','Centro Pokémon'],friends:['AMIGOS','Pessoas'],tinder:['TINDER','Descobrir pessoas'],updates:['ATUALIZAÇÕES','Novidades'],downloads:['DOWNLOADS','Downloads'],studio:['STUDIO','PDF & Canvas'],games:['JOGOS','Jogos'],watch:['WATCH PARTY','Assistir com amigos'],rpg:['RPG','Mesas'],premium:['PREMIUM','Gremory Premium'],personalize:['PERSONALIZAR','Loja de rúpias'],support:['SUPORTE','Gremory oficial'],admin:['ADMINISTRAÇÃO','Painel do host']
+  feed:['COMUNIDADE','Feed'],home:['GREMORY','Início'],charlotte:['CHARLOTTE','Charlotte'],pokemon:['POKÉMON','Centro Pokémon'],friends:['AMIGOS','Pessoas'],tinder:['TINDER','Descobrir pessoas'],updates:['ATUALIZAÇÕES','Novidades'],downloads:['DOWNLOADS','Downloads'],studio:['STUDIO','PDF & Canvas'],games:['JOGOS','Jogos'],watch:['WATCH PARTY','Assistir com amigos'],rpg:['RPG','Mesas'],premium:['PREMIUM','Gremory Premium'],personalize:['PERSONALIZAR','Loja de rúpias'],support:['SUPORTE','Gremory oficial'],admin:['ADMINISTRAÇÃO','Painel do host']
 };
 function navigate(route){
   if(route==='admin'&&!isSiteAdmin()){toast('Acesso restrito ao host.');route='home'}
@@ -475,16 +476,16 @@ function playSiteSound(name,fallbackFreq=720){
 // Sons personalizados: os MP3 em /assets/audio/custom/ são carregados uma vez
 // e ficam prontos no AudioContext depois da primeira interação. Isso evita o bloqueio
 // de autoplay do mobile em sons disparados depois de Firebase/bridge (turno, Pokémon etc.).
-const GAME_AUDIO_VERSION='20261019-v12-17-audio';
+const GAME_AUDIO_VERSION='20261022-v13-audio';
 const CUSTOM_GAME_SOUND_FILES=Object.freeze({
   notification:['notification.mp3'],victory:['victory.mp3'],defeat:['defeat.mp3'],select:['select.mp3'],move:['move.mp3'],turn:['turn.mp3'],start:['start.mp3'],
-  accept:['accept.mp3'],reject:['reject.mp3'],card:['card.mp3'],stand:['stand.mp3'],correct:['correct.mp3'],wrong:['wrong.mp3'],draw:['draw.mp3'],switch:['switch.mp3'],
-  reelStop:['reel-stop.mp3'],coins:['money-win.mp3'],debit:['money-lose.mp3'],jackpot:['jackpot.mp3'],purchase:['purchase-customization.mp3'],
-  slotSpin:['slot-spin.mp3'],pokemonEncounter:['pokemon-encounter (2).mp3','pokemon-encounter.mp3'],pokemonHit:['pokemon-hit.mp3'],pokemonBall:['pokemon-ball.mp3'],pokemonCapture:['pokemon-capture.mp3']
+  accept:['accept.mp3'],reject:['reject.mp3'],card:['select.mp3'],stand:['turn.mp3'],correct:['correct.mp3'],wrong:['wrong.mp3'],draw:['draw.mp3'],switch:['move.mp3'],
+  reelStop:['select.mp3'],coins:['money-win.mp3'],debit:['wrong.mp3'],jackpot:['money-win.mp3'],purchase:['purchase-customization.mp3'],
+  slotSpin:['slot-spin.mp3'],pokemonEncounter:['pokemon-encounter (2).mp3','pokemon-encounter.mp3'],pokemonHit:['pokemon-hit.mp3'],pokemonBall:['move.mp3'],pokemonCapture:['correct.mp3']
 });
 function customGameSoundUrls(kind){
   const files=CUSTOM_GAME_SOUND_FILES[kind]||[];
-  return files.map(file=>`/assets/audio/custom/${encodeURIComponent(file)}?v=${GAME_AUDIO_VERSION}`);
+  return files.map(file=>`${['notification','victory'].includes(kind)?'/assets/audio/':'/assets/audio/custom/'}${encodeURIComponent(file)}?v=${GAME_AUDIO_VERSION}`);
 }
 function customGameSoundPath(kind){return customGameSoundUrls(kind)[0]||''}
 
@@ -598,7 +599,7 @@ function primeGameAudio(){
   try{gameSfxContext()?.resume?.().catch(()=>{})}catch{}
   if(gameAudioPrimed)return;gameAudioPrimed=true;
   // Estes são os MP3 que já existem na pasta custom enviada pelo usuário.
-  ['select','move','turn','start','accept','reject','correct','wrong','draw','coins','purchase','slotSpin','pokemonEncounter','pokemonHit','defeat'].forEach(kind=>preloadCustomGameSound(kind).catch(()=>{}));
+  ['select','move','turn','start','accept','reject','correct','wrong','draw','coins','purchase','slotSpin','pokemonEncounter','pokemonHit','defeat','notification','victory'].forEach(kind=>preloadCustomGameSound(kind).catch(()=>{}));
 }
 document.addEventListener('pointerdown',primeGameAudio,{capture:true,passive:true,once:true});
 document.addEventListener('touchstart',primeGameAudio,{capture:true,passive:true,once:true});
@@ -1480,7 +1481,7 @@ function applyPublicProfileStyle(style=[]){
   const card=$('publicProfileCard');if(!card)return;Object.values(STORE_CATALOG).forEach(x=>card.classList.remove(x.className));const ids=Array.isArray(style)?style:[];ids.forEach(id=>{const item=STORE_CATALOG[String(id)];if(item)card.classList.add(item.className)});applyPublicProfileMedia(ids);if($('publicProfileStyle'))$('publicProfileStyle').textContent=ids.filter(id=>STORE_CATALOG[id]).map(id=>STORE_CATALOG[id].name).join(' • ')||'Padrão'
 }
 async function openPublicProfile(uid,fallback={}){
-  if(!uid)return;let p=fallback;try{const sn=await get(ref(db,`directory/${uid}`));if(sn.exists())p=sn.val()}catch{}currentPublicProfile={uid,...p};$('publicProfileAvatar').src=p.avatar||DEFAULT_AVATAR;$('publicProfileName').textContent=p.nome||'Usuário';if($('publicProfileUsername'))$('publicProfileUsername').textContent=p.username?`@${normalizeUsername(p.username)}`:'@sem_usuario';$('publicProfileBio').textContent=p.bio||'Sem bio ainda.';$('publicProfileAnime').textContent=p.favoriteAnime||'—';$('publicProfileSince').textContent=p.createdAt?shortDate(p.createdAt):'—';const isSelf=uid===state.user?.uid,isFriend=!!state.friends?.[uid];if($('publicProfileRelation'))$('publicProfileRelation').textContent=isSelf?'Seu perfil':isFriend?'Amigo':'Visitante';applyPublicProfileStyle(p.style||[]);const btn=$('publicProfileActionBtn');btn.textContent=isSelf?'Seu perfil':isFriend?'Amigo':'Adicionar amigo';btn.disabled=isFriend||isSelf;$('publicProfileDuelBtn').disabled=!isFriend||isSelf;openModal('publicProfileModal')
+  if(!uid)return;let p=fallback;try{const sn=await get(ref(db,`directory/${uid}`));if(sn.exists())p=sn.val()}catch{}currentPublicProfile={uid,...p};$('publicProfileAvatar').src=p.avatar||DEFAULT_AVATAR;$('publicProfileName').textContent=p.nome||'Usuário';if($('publicProfileUsername'))$('publicProfileUsername').textContent=p.username?`@${normalizeUsername(p.username)}`:'@sem_usuario';$('publicProfileBio').textContent=p.bio||'Sem bio ainda.';$('publicProfileAnime').textContent=p.favoriteAnime||'—';$('publicProfileSince').textContent=p.createdAt?shortDate(p.createdAt):'—';const isSelf=uid===state.user?.uid,isFriend=!!state.friends?.[uid];if($('publicProfileRelation'))$('publicProfileRelation').textContent=isSelf?'Seu perfil':isFriend?'Amigo':'Visitante';applyPublicProfileStyle(p.style||[]);const btn=$('publicProfileActionBtn');btn.textContent=isSelf?'Seu perfil':isFriend?'Amigo':'Adicionar amigo';btn.disabled=isFriend||isSelf;$('publicProfileDuelBtn').disabled=!isFriend||isSelf;openModal('publicProfileModal');renderPublicBadge(uid)
 }
 $('publicProfileActionBtn')?.addEventListener('click',()=>{if(currentPublicProfile)sendFriendRequest(currentPublicProfile.uid,currentPublicProfile)});
 $('publicProfileDuelBtn')?.addEventListener('click',()=>{if(!currentPublicProfile)return;closeModal('publicProfileModal');navigate('pokemon');$('duelFriendSelect').value=currentPublicProfile.uid;setTimeout(()=>$('sendDuelChallengeBtn')?.scrollIntoView({behavior:'smooth',block:'center'}),80)});
@@ -1609,7 +1610,7 @@ async function uniqueWatchCode(){for(let i=0;i<8;i++){const c=randomCode();const
 async function createWatchRoom(ev){ev.preventDefault();if(!state.user)return;try{const code=await uniqueWatchCode(),createdAt=nowIso(),name=$('watchNameInput').value.trim()||'Watch Party';const room={meta:{code,name,ownerUid:state.user.uid,createdAt},members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Host',joinedAt:createdAt}},media:{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}};await set(ref(db,`watchRooms/${code}`),room);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name,role:'Host',joinedAt:createdAt});closeModal('watchCreateModal');$('watchCreateForm').reset();await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível criar a sala.'),6000)}}
 async function loadWatchRooms(){if(!state.user)return;const box=$('watchRoomsList');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await get(ref(db,`watchUserRooms/${state.user.uid}`));box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];$('homeWatchRecent').textContent=rows.length?`${rows.length} sala${rows.length===1?'':'s'}`:'Assistir e conversar';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala.</div>';return}rows.forEach(r=>{const item=document.createElement('div');item.className='room-item';const c=document.createElement('div');c.innerHTML=`<strong>${escText(r.name||r.code)}</strong><small>${escText(r.code)} • ${escText(r.role||'Participante')}</small>`;const acts=document.createElement('div');acts.className='room-item-actions';const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=()=>openWatchRoom(r.code);acts.appendChild(b);if(r.role==='Host'){const del=document.createElement('button');del.className='btn danger-ghost';del.textContent='Apagar';del.onclick=()=>deleteWatchRoom(r.code,r.name);acts.appendChild(del)}item.append(c,acts);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
 async function joinWatchRoom(code){if(!state.user)return;try{const sn=await get(ref(db,`watchRooms/${code}`));if(!sn.exists())throw new Error('Sala não encontrada.');const room=sn.val(),member={uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:room.meta?.ownerUid===state.user.uid?'Host':'Participante',joinedAt:nowIso()};await set(ref(db,`watchRooms/${code}/members/${state.user.uid}`),member);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name:room.meta?.name||code,role:member.role,joinedAt:nowIso()});$('watchJoinCode').value='';await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível entrar.'))}}
-async function openWatchRoom(code){clearUnsubs(state.watchUnsubs);state.watchCode=code;$('watchLobby').hidden=true;$('watchRoom').hidden=false;if($('watchCreateBtn'))$('watchCreateBtn').hidden=true;state.watchUnsubs.push(onValue(ref(db,`watchRooms/${code}`),sn=>{if(!sn.exists()){toast('Essa sala não existe mais.');closeWatchRoom(false);return}state.watchRoom=sn.val();renderWatchRoom()}));navigate('watch')}
+async function openWatchRoom(code){if(state.watchCode&&state.watchCode!==code)await leaveWatchVoice(true);clearUnsubs(state.watchUnsubs);state.watchCode=code;$('watchLobby').hidden=true;$('watchRoom').hidden=false;if($('watchCreateBtn'))$('watchCreateBtn').hidden=true;state.watchUnsubs.push(onValue(ref(db,`watchRooms/${code}`),sn=>{if(!sn.exists()){toast('Essa sala não existe mais.');closeWatchRoom(false);return}state.watchRoom=sn.val();renderWatchRoom()}));navigate('watch')}
 function isWatchHost(){return !!state.user&&state.watchRoom?.meta?.ownerUid===state.user.uid}
 function renderWatchRoom(){
   const r=state.watchRoom||{},m=r.meta||{};$('watchRoomName').textContent=m.name||'Watch Party';$('watchCode').textContent=state.watchCode||'------';$('watchHostPill').textContent=isWatchHost()?'Host':'Participante';$('watchMemberCount').textContent=String(Object.keys(r.members||{}).length);
@@ -1635,10 +1636,10 @@ function googleDriveFileId(url){
   try{
     const u=new URL(url);if(!/(^|\.)drive\.google\.com$/i.test(u.hostname))return'';
     const byPath=u.pathname.match(/\/file\/d\/([^/]+)/i)?.[1];
-    return byPath||u.searchParams.get('id')||'';
+    const id=byPath||u.searchParams.get('id')||'';return /^[a-zA-Z0-9_-]{10,200}$/.test(id)?id:'';
   }catch{return''}
 }
-function googleDriveEmbed(url){const id=googleDriveFileId(url);return id?`https://drive.google.com/file/d/${encodeURIComponent(id)}/preview`:''}
+function googleDriveEmbed(url){const id=googleDriveFileId(url);if(!id)return '';const key=new URL(url).searchParams.get('resourcekey');return `https://drive.google.com/file/d/${encodeURIComponent(id)}/preview${key?'?resourcekey='+encodeURIComponent(key):''}`}
 function watchMediaPosition(media={}){return Number(media.position||0)+(media.playing?Math.max(0,(Date.now()-Number(media.updatedAt||Date.now()))/1000):0)}
 function youtubeCommand(iframe,func,args=[]){try{iframe?.contentWindow?.postMessage(JSON.stringify({event:'command',func,args}),'*')}catch{}}
 function startYoutubeListening(iframe){
@@ -1692,7 +1693,7 @@ function renderWatchMedia(media){
   const stage=$('watchMediaStage'),url=String(media.url||'');if(!stage)return;
   const playBtn=$('watchPlayBtn'),syncBtn=$('watchSyncBtn'),host=isWatchHost();
   if(playBtn)playBtn.textContent=media.playing?'Pausar':'Reproduzir';
-  if(!url){if(!state.watchRtc.activeScreenUid&&!state.watchRtc.screenStream)stage.innerHTML='<div class="empty-state">Cole um link do YouTube, Google Drive ou vídeo direto; ou compartilhe sua tela.</div>';if(playBtn)playBtn.disabled=true;if(syncBtn)syncBtn.disabled=true;return}
+  if(!url){delete stage.dataset.url;if(!state.watchRtc.activeScreenUid&&!state.watchRtc.screenStream)stage.innerHTML='<div class="empty-state">Cole um link do YouTube, Google Drive ou vídeo direto; ou compartilhe sua tela.</div>';if(playBtn)playBtn.disabled=true;if(syncBtn)syncBtn.disabled=true;return}
   const yt=youtubeEmbed(url,!host),drive=googleDriveEmbed(url);
   if(yt){
     if(playBtn)playBtn.disabled=!host;if(syncBtn)syncBtn.disabled=false;
@@ -1703,10 +1704,10 @@ function renderWatchMedia(media){
   }
   if(drive){
     if(playBtn){playBtn.disabled=true;playBtn.textContent='Controles no Drive'}if(syncBtn)syncBtn.disabled=true;
-    let f=stage.querySelector('iframe[data-watch-drive="1"]');if(!f||stage.dataset.url!==url){stage.innerHTML='';f=document.createElement('iframe');f.className='watch-iframe drive-iframe';f.dataset.watchDrive='1';f.src=drive;f.allow='autoplay; fullscreen';f.allowFullscreen=true;stage.appendChild(f);stage.dataset.url=url}return
+    let f=stage.querySelector('iframe[data-watch-drive="1"]');if(!f||stage.dataset.url!==url){stage.innerHTML='';f=document.createElement('iframe');f.className='watch-iframe drive-iframe';f.dataset.watchDrive='1';f.src=drive;f.allow='autoplay; fullscreen';f.allowFullscreen=true;f.title='Vídeo do Google Drive';stage.appendChild(f);const help=document.createElement('div');help.className='drive-help';const note=document.createElement('p');note.textContent='O arquivo precisa estar compartilhado com quem vai assistir. No Drive, cada pessoa toca em Play; para sincronizar, o host pode compartilhar esta aba com áudio.';const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.className='btn';link.textContent='Abrir no Drive';const retry=document.createElement('button');retry.className='btn';retry.textContent='Recarregar player';retry.onclick=()=>{f.src=googleDriveEmbed(url)};help.append(note,link,retry);stage.appendChild(help);stage.dataset.url=url}return
   }
   if(playBtn)playBtn.disabled=!host;if(syncBtn)syncBtn.disabled=false;
-  let v=stage.querySelector('video');if(!v||stage.dataset.url!==url){stage.innerHTML='';v=document.createElement('video');v.className='watch-video';v.src=url;v.controls=host;v.playsInline=true;stage.appendChild(v);stage.dataset.url=url;v.addEventListener('play',()=>{if(host&&!state.watchApplying)publishWatchPlayer(true)});v.addEventListener('pause',()=>{if(host&&!state.watchApplying)publishWatchPlayer(false)});v.addEventListener('seeked',()=>{if(host&&!state.watchApplying)publishWatchPlayer(!v.paused)})}
+  let v=stage.querySelector('video');if(!v||stage.dataset.url!==url){stage.innerHTML='';v=document.createElement('video');v.className='watch-video';v.src=url;v.controls=host;v.playsInline=true;v.addEventListener('error',()=>toast('Este link não abriu como vídeo. Use um MP4/WebM acessível ou a opção Google Drive.',6000));stage.appendChild(v);stage.dataset.url=url;v.addEventListener('play',()=>{if(host&&!state.watchApplying)publishWatchPlayer(true)});v.addEventListener('pause',()=>{if(host&&!state.watchApplying)publishWatchPlayer(false)});v.addEventListener('seeked',()=>{if(host&&!state.watchApplying)publishWatchPlayer(!v.paused)})}
   v.controls=host;v.classList.toggle('watch-viewer-locked',!host);const target=watchMediaPosition(media);
   if(Math.abs((v.currentTime||0)-target)>2){state.watchApplying=true;try{v.currentTime=target}catch{}setTimeout(()=>state.watchApplying=false,250)}
   if(media.playing&&v.paused){state.watchApplying=true;v.play().catch(()=>{}).finally(()=>setTimeout(()=>state.watchApplying=false,250))}
@@ -1717,7 +1718,7 @@ async function setWatchMedia(ev){
   ev.preventDefault();if(!isWatchHost())return;const url=$('watchMediaInput').value.trim();if(!/^https?:\/\//i.test(url))return toast('Use um link http/https.');
   const type=youtubeEmbed(url)?'youtube':googleDriveEmbed(url)?'drive':'video';
   await set(ref(db,`watchRooms/${state.watchCode}/media`),{url,type,playing:false,position:0,updatedAt:Date.now()}).catch(e=>toast(permissionMessage(e)));
-  if(type==='drive')toast('Google Drive carregado. O Drive não permite sincronizar Play/Pause por API; cada pessoa usa os controles do player.');
+  if(type==='drive')toast('Link do Google Drive enviado à sala. O Drive não permite sincronizar Play/Pause por API; cada pessoa usa os controles do player.');
 }
 async function publishWatchPlayer(playing){
   if(!isWatchHost())return;const shell=$('watchMediaStage'),v=shell?.querySelector('video'),media=state.watchRoom?.media||{};
@@ -1931,7 +1932,7 @@ function watchVoiceUi(){
 function setWatchRtcStatus(text,tone=''){
   const el=$('watchRtcStatus');if(!el)return;el.textContent=String(text||'');el.dataset.tone=tone||''
 }
-function watchPeerName(uid){return state.watchRoom?.members?.[uid]?.name||'Participante'}
+function watchPeerName(uid){return state.watchRtc.presence?.[uid]?.name||state.watchRoom?.members?.[uid]?.name||'Participante'}
 function watchPcSender(pc,kind,role='voice'){
   if(!pc)return null;
   if(kind==='video')return pc.__watchVideoSender||pc.getTransceivers?.().find(t=>t.receiver?.track?.kind==='video')?.sender||null;
@@ -1980,8 +1981,8 @@ async function tuneWatchScreenSender(pc){
   const sender=watchPcSender(pc,'video');if(!sender)return;
   try{
     const p=sender.getParameters();p.encodings=p.encodings?.length?p.encodings:[{}];
-    const mobile=matchMedia('(max-width:820px)').matches;
-    p.encodings[0].maxBitrate=mobile?3200000:6500000;
+    
+    p.encodings[0].maxBitrate=Math.max(600000,Math.floor(3600000/Math.max(1,state.watchRtc.peers.size))); 
     p.encodings[0].maxFramerate=30;
     try{p.encodings[0].priority='high'}catch{}
     try{p.encodings[0].networkPriority='high'}catch{}
@@ -2016,7 +2017,7 @@ function refreshWatchScreenStage(){
   state.watchRtc.activeScreenUid=uid;stage.hidden=false;if(mediaStage)mediaStage.hidden=true;
   const vtrack=stream.getVideoTracks?.().find(t=>t.readyState==='live'),atrack=stream.getAudioTracks?.().find(t=>t.readyState==='live');
   const videoStream=new MediaStream();if(vtrack)videoStream.addTrack(vtrack);if(video.srcObject?.getVideoTracks?.()[0]?.id!==vtrack?.id)video.srcObject=videoStream;video.muted=true;video.playsInline=true;video.play?.().catch(()=>{});
-  if(audio){const audioStream=new MediaStream();if(atrack)audioStream.addTrack(atrack);if(audio.srcObject?.getAudioTracks?.()[0]?.id!==atrack?.id)audio.srcObject=atrack?audioStream:null;audio.muted=isLocal||state.watchRtc.screenSoundMuted;audio.volume=1;if(atrack&&!audio.muted)audio.play?.().catch(()=>{})}
+  if(audio){const audioStream=new MediaStream();if(atrack)audioStream.addTrack(atrack);if(audio.srcObject?.getAudioTracks?.()[0]?.id!==atrack?.id)audio.srcObject=atrack?audioStream:null;audio.muted=isLocal||state.watchRtc.screenSoundMuted;audio.volume=1;if(atrack&&!audio.muted)audio.play?.().catch(()=>{state.watchRtc.screenSoundMuted=true;audio.muted=true;if(soundBtn)soundBtn.textContent='Toque para ativar som'})}
   if(label)label.textContent=isLocal?'Sua tela compartilhada':`${watchPeerName(uid)} está compartilhando`;
   if(soundBtn){const hasAudio=!!atrack;soundBtn.hidden=isLocal;soundBtn.disabled=!hasAudio;soundBtn.textContent=!hasAudio?'Sem áudio':(state.watchRtc.screenSoundMuted?'Ativar som':'Som ligado')}
 }
@@ -2087,7 +2088,7 @@ async function createWatchPeer(peerUid,initiator=false){
   pc.onicecandidate=ev=>{if(ev.candidate)sendWatchRtc(peerUid,{type:'candidate',candidate:ev.candidate.toJSON()}).catch(()=>{})};
   pc.oniceconnectionstatechange=()=>{
     const st=pc.iceConnectionState;
-    if(['connected','completed'].includes(st)){setWatchRtcStatus('Chamada conectada','ok');state.watchRtc.screenRetry.delete(peerUid)}
+    if(['connected','completed'].includes(st)){setWatchRtcStatus('Mídia conectada','ok');state.watchRtc.screenRetry.delete(peerUid)}
     if(st==='failed'){
       setWatchRtcStatus('Reconectando mídia...','warn');
       if(String(state.user?.uid).localeCompare(peerUid)<0)negotiateWatchPeer(peerUid,{iceRestart:true,reason:'ice-failed'}).catch(()=>{});
@@ -2112,13 +2113,17 @@ async function handleWatchRtc(id,msg){
   try{
     const pc=await createWatchPeer(from,false);if(!pc)return;
     if(msg.type==='offer'){
-      if(pc.signalingState==='have-local-offer'){try{await pc.setLocalDescription({type:'rollback'})}catch{}}
+      const collision=state.watchRtc.makingOffer.has(from)||pc.signalingState!=='stable';
+      const polite=String(state.user.uid).localeCompare(from)>0;
+      pc.__ignoreOffer=collision&&!polite;if(pc.__ignoreOffer)return;
+      if(collision){try{await pc.setLocalDescription({type:'rollback'})}catch{}}
       if(pc.signalingState!=='stable')return;
       await pc.setRemoteDescription({type:'offer',sdp:msg.sdp});await flushWatchCandidates(from,pc);
       const ans=await pc.createAnswer();await pc.setLocalDescription(ans);await sendWatchRtc(from,{type:'answer',sdp:pc.localDescription?.sdp||ans.sdp,reason:msg.reason||''})
     }else if(msg.type==='answer'){
-      if(pc.signalingState==='have-local-offer'){await pc.setRemoteDescription({type:'answer',sdp:msg.sdp});await flushWatchCandidates(from,pc)}
+      if(pc.signalingState==='have-local-offer'){pc.__ignoreOffer=false;await pc.setRemoteDescription({type:'answer',sdp:msg.sdp});await flushWatchCandidates(from,pc)}
     }else if(msg.type==='candidate'&&msg.candidate){
+      if(pc.__ignoreOffer)return;
       if(pc.remoteDescription)try{await pc.addIceCandidate(msg.candidate)}catch{}else{const q=state.watchRtc.pendingCandidates.get(from)||[];q.push(msg.candidate);state.watchRtc.pendingCandidates.set(from,q)}
     }else if(msg.type==='screen_request'){
       const videoTrack=state.watchRtc.screenStream?.getVideoTracks?.()[0];
@@ -2127,7 +2132,7 @@ async function handleWatchRtc(id,msg){
     }
   }finally{remove(ref(db,`watchRtc/${state.watchCode}/${state.user.uid}/${id}`)).catch(()=>{})}
 }
-function watchWatchRtcInbox(){try{state.watchRtc.inboxUnsub?.()}catch{}state.watchRtc.inboxUnsub=onValue(ref(db,`watchRtc/${state.watchCode}/${state.user.uid}`),sn=>{const all=sn.exists()?sn.val():{};Object.entries(all).sort((a,b)=>(a[1]?.at||0)-(b[1]?.at||0)).forEach(([id,msg])=>handleWatchRtc(id,msg).catch(()=>{}))})}
+function watchWatchRtcInbox(){try{state.watchRtc.inboxUnsub?.()}catch{}state.watchRtc.inboxUnsub=onValue(ref(db,`watchRtc/${state.watchCode}/${state.user.uid}`),sn=>{const all=sn.exists()?sn.val():{};Object.entries(all).sort((a,b)=>(a[1]?.at||0)-(b[1]?.at||0)).forEach(([id,msg])=>{state.watchRtc.signalQueue=(state.watchRtc.signalQueue||Promise.resolve()).then(()=>handleWatchRtc(id,msg)).catch(e=>setWatchRtcStatus('Falha na conexão: '+e.message,'warn'))})})}
 function watchWatchPresence(){
   try{state.watchRtc.presenceUnsub?.()}catch{}
   state.watchRtc.presenceUnsub=onValue(ref(db,`watchVoice/${state.watchCode}`),sn=>{
@@ -2146,16 +2151,18 @@ function watchWatchPresence(){
       }
     }
     if(ids.some(uid=>state.watchRtc.screenSharers.has(uid))&&!state.watchRtc.screenStream)setWatchRtcStatus('Recebendo compartilhamento de tela...','warn');
-    else if(ids.length)setWatchRtcStatus('Chamada conectada','ok');else setWatchRtcStatus('Aguardando outras pessoas','');
+    else if(ids.length&&!Array.from(state.watchRtc.peers.values()).some(pc=>pc.connectionState==='connected'))setWatchRtcStatus('Conectando mídia...','warn');else setWatchRtcStatus('Aguardando outras pessoas','');
+    for(const [uid,person] of Object.entries(p)){const card=ensureWatchCallCard(uid);if(card){card.querySelector('strong').textContent=watchPeerName(uid)+(uid===state.user.uid?' (você)':'');card.querySelector('small').textContent=person.screen?'Compartilhando tela':person.audio?(person.muted?'Microfone silenciado':'Na chamada de voz'):'Assistindo';card.querySelector('img').src=person.avatar||state.watchRoom?.members?.[uid]?.avatar||DEFAULT_AVATAR}}
     refreshWatchScreenStage()
   })
 }
 async function ensureWatchRtcSession(){
   if(state.watchRtc.joined)return true;if(!state.user||!state.watchCode)return false;
   state.watchRtc.joined=true;
+  await loadRtcConfig();
   try{
     const presenceRef=ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`);
-    await set(presenceRef,{uid:state.user.uid,name:displayName(),joinedAt:Date.now(),audio:false,screen:false});
+    await set(presenceRef,{uid:state.user.uid,name:displayName(),avatar:avatarFor(),joinedAt:Date.now(),audio:false,screen:false});
     try{state.watchRtc.disconnectRef=onDisconnect(presenceRef);await state.watchRtc.disconnectRef.remove()}catch{}
     watchWatchRtcInbox();watchWatchPresence();setWatchRtcStatus('Preparando conexão...','warn');watchVoiceUi();return true
   }catch(e){state.watchRtc.joined=false;toast(permissionMessage(e,'Não foi possível iniciar a chamada.'));return false}
@@ -2171,7 +2178,7 @@ async function joinWatchVoice(){
     $$('.watch-call-card audio').forEach(a=>{a.muted=false;a.play?.().catch(()=>{})});watchVoiceUi();toast('Você entrou na voz.')
   }catch(e){toast(e?.name==='NotAllowedError'?'Permissão do microfone negada.':'Não foi possível abrir o microfone.')}
 }
-function toggleWatchMic(){const track=state.watchRtc.localStream?.getAudioTracks?.()[0];if(!track)return;track.enabled=!track.enabled;state.watchRtc.micEnabled=track.enabled;watchVoiceUi()}
+function toggleWatchMic(){const track=state.watchRtc.localStream?.getAudioTracks?.()[0];if(!track)return;track.enabled=!track.enabled;state.watchRtc.micEnabled=track.enabled;update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{muted:!track.enabled}).catch(()=>{});watchVoiceUi()}
 async function leaveWatchAudio(silent=false){
   const track=state.watchRtc.localStream?.getAudioTracks?.()[0];if(track)track.stop();state.watchRtc.localStream=null;state.watchRtc.audioJoined=false;state.watchRtc.micEnabled=true;
   for(const pc of state.watchRtc.peers.values()){const sender=watchPcSender(pc,'audio','voice');if(sender)await sender.replaceTrack(null)}
@@ -2197,7 +2204,7 @@ async function toggleWatchScreen(){
     refreshWatchScreenStage();watchVoiceUi();return
   }
 
-  if(!navigator.mediaDevices?.getDisplayMedia)return toast('Seu navegador não permite compartilhar a tela.');
+  if(!navigator.mediaDevices?.getDisplayMedia)return toast('Este navegador não oferece captura de tela. Você pode assistir aqui e compartilhar pelo Chrome ou Edge no computador.');
   if(!await ensureWatchRtcSession())return;
 
   try{
@@ -2206,7 +2213,7 @@ async function toggleWatchScreen(){
     // audio:true solicita o áudio da aba/tela quando o navegador/SO oferece suporte.
     // Em Chrome/Edge, ao compartilhar uma aba, marque "Compartilhar áudio".
     const stream=await navigator.mediaDevices.getDisplayMedia({
-      video:{frameRate:{ideal:30,max:60},width:{ideal:1920,max:1920},height:{ideal:1080,max:1080}},
+      video:{frameRate:{ideal:24,max:30},width:{ideal:1280,max:1920},height:{ideal:720,max:1080}},
       audio:{suppressLocalAudioPlayback:false},
       systemAudio:'include',
       windowAudio:'system',
@@ -2275,7 +2282,7 @@ async function fullscreenWatchScreen(){
 document.addEventListener('fullscreenchange',updateWatchFullscreenButton);
 document.addEventListener('webkitfullscreenchange',updateWatchFullscreenButton);
 $('watchScreenSoundBtn')?.addEventListener('click',async()=>{
-  const audio=$('watchScreenAudio');state.watchRtc.screenSoundMuted=!state.watchRtc.screenSoundMuted;refreshWatchScreenStage();
+  const audio=$('watchScreenAudio');state.watchRtc.screenSoundMuted=audio?.paused?false:!state.watchRtc.screenSoundMuted;refreshWatchScreenStage();
   if(!state.watchRtc.screenSoundMuted&&audio?.srcObject){try{audio.muted=false;await audio.play()}catch{toast('Toque novamente em Som para liberar o áudio da transmissão.')}}
 });
 async function leaveWatchVoice(silent=false){
@@ -2678,3 +2685,16 @@ $('hangmanExitBtn')?.addEventListener('click',async()=>{const g=state.hangman.ga
 // O site controla toda a experiência visual: aposta, giro, som e exibição do resultado.
 
 const initialRoute=(location.hash||'#home').slice(1);navigate(routeMeta[initialRoute]?initialRoute:'home');
+
+initCommunity({app, db, getUser:()=>state.user, isAdmin:isSiteAdmin, toast, getSelectedUid:()=>state.admin.selectedUid, bridgeRequest});
+$('watchYoutubeSearch')?.addEventListener('submit',async ev=>{
+ ev.preventDefault();const box=$('watchYoutubeResults');box.textContent='Pesquisando...';
+ try{const r=await fetch('/api/main?action=youtube_search&q='+encodeURIComponent($('watchYoutubeQuery').value.trim()));const data=await r.json();if(!r.ok)throw new Error(data.erro||'Busca indisponível');box.replaceChildren();for(const item of data.items||[]){const b=document.createElement('button');b.type='button';b.className='youtube-result';const im=document.createElement('img');im.src=item.thumbnail;im.alt='';im.loading='lazy';const title=document.createElement('span');title.textContent=item.title;b.append(im,title);b.onclick=()=>{if(!isWatchHost())return toast('Somente o host pode escolher o vídeo.');$('watchMediaInput').value='https://www.youtube.com/watch?v='+item.id;$('watchMediaForm').requestSubmit()};box.append(b)}if(!box.children.length)box.textContent='Nenhum vídeo encontrado.'}catch(e){box.textContent=e.message}
+});
+
+const watchEnable=document.createElement('button');watchEnable.type='button';watchEnable.className='btn';watchEnable.textContent='Ativar reprodução e som';$('watchMediaForm')?.after(watchEnable);
+watchEnable.addEventListener('click',async()=>{primeGameAudio();const stage=$('watchMediaStage'),f=stage?.querySelector('iframe[data-watch-youtube="1"]'),v=stage?.querySelector('video');if(f){youtubeCommand(f,'unMute',[]);applyYoutubeWatchState(f,state.watchRoom?.media||{})}if(v){try{v.muted=false;if(state.watchRoom?.media?.playing)await v.play()}catch{toast('Não foi possível reproduzir. Verifique se o link aponta para um vídeo compatível.')}}state.watchRtc.screenSoundMuted=false;refreshWatchScreenStage();try{await $('watchScreenAudio')?.play()}catch{}if(stage?.querySelector('iframe[data-watch-drive]'))toast('No Drive, toque em Play dentro do vídeo.');});
+
+async function renderPublicBadge(uid){let badge=$('publicEarnedBadge');if(!badge){badge=document.createElement('p');badge.id='publicEarnedBadge';badge.className='profile-badge';$('publicProfileName')?.after(badge)}badge.hidden=true;try{const id=(await get(ref(db,`profileEquippedBadge/${uid}`))).val();if(!id)return;const b=(await get(ref(db,`profileBadges/${uid}/${id}`))).val();if(b&&currentPublicProfile?.uid===uid){badge.textContent=`${b.icon} ${b.name}`;badge.hidden=false}}catch{}}
+
+$('adminVerifyEmail')?.addEventListener('click',async()=>{try{if(auth.currentUser?.emailVerified)return toast('Seu e-mail já está confirmado.');await sendEmailVerification(auth.currentUser);toast('Confirme o e-mail pelo link recebido; depois saia e entre novamente.')}catch(e){toast(e.message)}});
