@@ -1,4 +1,4 @@
-const CACHE='gremory-v13-5-watch-dedicated-stream-20261023';
+const CACHE='gremory-v13-6-raid-only-20261023';
 const CORE=[
   '/',
   '/index.html',

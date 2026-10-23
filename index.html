@@ -281,6 +281,22 @@
             <div class="wild-stage" id="wildStage"><div class="empty-state small">Explore para encontrar um Pokémon selvagem.</div></div>
           </article>
 
+          <article class="panel site-raid-panel" id="siteRaidPanel">
+            <div class="panel-head">
+              <div><span class="tag">RAID GLOBAL</span><h3>Raid Pokémon</h3></div>
+              <span class="pill" id="siteRaidStatus">Aguardando</span>
+            </div>
+            <p class="panel-help">Quando uma Raid Global estiver ativa, o boss aparece aqui em tempo real. Ataque com sua equipe vinculada à Charlotte e participe das recompensas.</p>
+            <div class="site-raid-stage" id="siteRaidStage"><div class="empty-state small">Nenhuma raid ativa. O modo automático pode iniciar uma nova raid a cada hora.</div></div>
+            <div class="site-raid-prefs">
+              <label class="check-row"><input id="raidWhatsappNotify" type="checkbox"><span>Receber avisos de Raid no WhatsApp</span></label>
+              <div class="site-raid-admin" id="siteRaidAdmin" hidden>
+                <label class="check-row"><input id="siteRaidAutoToggle" type="checkbox"><span>Raid automática</span></label>
+                <button class="btn primary" id="siteRaidStartBtn" type="button">Iniciar Raid Global</button>
+              </div>
+            </div>
+          </article>
+
           <article class="panel pokemon-inventory-panel">
             <div class="panel-head"><div><span class="tag">MOCHILA</span><h3>Itens de batalha</h3></div><span class="pill" id="pokemonPotionCount">0 poções</span></div>
             <div class="pokemon-inventory-grid">
