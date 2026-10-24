@@ -54,7 +54,8 @@ const state = {
   watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,screenSource:'',localFileVideo:null,localFileUrl:'',localFileName:'',localFileAudioCtx:null,localFileAudioSource:null,localFileAudioDest:null,localFileAudioGain:null,localFileAudioLimiter:null,screenVolume:Number(localStorage.getItem('gremory:watchScreenVolume')||150),localFileTransmitGainPct:Number(localStorage.getItem('gremory:watchTransmitGain')||150),fullscreenUiTimer:null,peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),screenOutPeers:new Map(),screenInPeers:new Map(),screenOutCandidates:new Map(),screenInCandidates:new Map(),screenOfferAt:new Map(),screenOfferLocks:new Set(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false},
   watchYoutube:{lastTime:0,lastState:-1,lastPublishAt:0},
   watchMusic:{currentId:'',volume:Number(localStorage.getItem('gremory:watchMusicVolume')||65),muted:localStorage.getItem('gremory:watchMusicMuted')==='1',engineReady:false,lastAdvanceId:'',adding:false,currentTime:0,lastClockSync:0,endedId:''},
-  rtc:{joined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true},premiumPoll:null
+  rtc:{joined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true},premiumPoll:null,
+  gameRealtimePoll:null,gameRealtimeSyncing:false
 };
 
 function toast(message, ms=3300){
@@ -379,7 +380,38 @@ $('profileForm').addEventListener('submit',async ev=>{
   }
 });
 
-function clearUserSubscriptions(){try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonAudio={encounterId:'',resultId:''};state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.notificationDismissed={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null}
+function clearUserSubscriptions(){try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}if(state.gameRealtimePoll){clearInterval(state.gameRealtimePoll);state.gameRealtimePoll=null}state.gameRealtimeSyncing=false;clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonAudio={encounterId:'',resultId:''};state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.notificationDismissed={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null}
+async function syncSiteGameRealtimeState(){
+  if(!state.user||state.gameRealtimeSyncing)return;
+  const uid=state.user.uid;
+  state.gameRealtimeSyncing=true;
+  try{
+    const [challengeSn,tttSn,blackjackSn,hangmanSn]=await Promise.all([
+      get(ref(db,`siteGameChallenges/${uid}`)),
+      get(ref(db,`ticTacToeIndex/${uid}`)),
+      get(ref(db,`blackjackIndex/${uid}`)),
+      get(ref(db,`hangmanIndex/${uid}`))
+    ]);
+    if(!state.user||state.user.uid!==uid)return;
+    state.siteGameChallenges=challengeSn.exists()?challengeSn.val():{};
+    renderSiteGameChallenges();
+    state.ttt.index=tttSn.exists()?tttSn.val():{};handleTttIndex(state.ttt.index);
+    state.blackjack.index=blackjackSn.exists()?blackjackSn.val():{};handleBlackjackIndex(state.blackjack.index);
+    state.hangman.index=hangmanSn.exists()?hangmanSn.val():{};handleHangmanIndex(state.hangman.index);
+  }catch(e){
+    console.warn('[GAMES REALTIME] ressincronização falhou:',e?.code||e?.message||e);
+  }finally{
+    state.gameRealtimeSyncing=false;
+  }
+}
+function scheduleGameRealtimeSync(delay=250){
+  if(!state.user)return;
+  setTimeout(()=>syncSiteGameRealtimeState().catch(()=>{}),Math.max(0,Number(delay)||0));
+}
+function gameRealtimeListenerError(label,e){
+  console.warn(`[GAMES REALTIME] listener ${label} interrompido:`,e?.code||e?.message||e);
+  scheduleGameRealtimeSync(500);
+}
 function startUserSubscriptions(){
   clearUserSubscriptions();const uid=state.user.uid;
   state.userUnsubs.push(onValue(ref(db,`friends/${uid}`),s=>{state.friends=s.exists()?s.val():{};renderFriends();renderDuelFriendSelect();$('homeFriendsText').textContent=`${Object.keys(state.friends).length} amigo${Object.keys(state.friends).length===1?'':'s'}`}));
@@ -398,10 +430,10 @@ function startUserSubscriptions(){
   state.userUnsubs.push(onValue(ref(db,'pokemonSiteRaid/current'),s=>{state.siteRaid=s.exists()?s.val():null;renderSiteRaid()}));
   state.userUnsubs.push(onValue(ref(db,'pokemonSiteRaidConfig'),s=>{state.siteRaidConfig=s.exists()?s.val():{};renderSiteRaid()}));
 
-  state.userUnsubs.push(onValue(ref(db,`ticTacToeIndex/${uid}`),s=>{state.ttt.index=s.exists()?s.val():{};handleTttIndex(state.ttt.index)}));
-  state.userUnsubs.push(onValue(ref(db,`blackjackIndex/${uid}`),s=>{state.blackjack.index=s.exists()?s.val():{};handleBlackjackIndex(state.blackjack.index)}));
-  state.userUnsubs.push(onValue(ref(db,`hangmanIndex/${uid}`),s=>{state.hangman.index=s.exists()?s.val():{};handleHangmanIndex(state.hangman.index)}));
-  state.userUnsubs.push(onValue(ref(db,`siteGameChallenges/${uid}`),s=>{state.siteGameChallenges=s.exists()?s.val():{};renderSiteGameChallenges();renderNotifications()}));
+  state.userUnsubs.push(onValue(ref(db,`ticTacToeIndex/${uid}`),s=>{state.ttt.index=s.exists()?s.val():{};handleTttIndex(state.ttt.index)},e=>gameRealtimeListenerError('ticTacToeIndex',e)));
+  state.userUnsubs.push(onValue(ref(db,`blackjackIndex/${uid}`),s=>{state.blackjack.index=s.exists()?s.val():{};handleBlackjackIndex(state.blackjack.index)},e=>gameRealtimeListenerError('blackjackIndex',e)));
+  state.userUnsubs.push(onValue(ref(db,`hangmanIndex/${uid}`),s=>{state.hangman.index=s.exists()?s.val():{};handleHangmanIndex(state.hangman.index)},e=>gameRealtimeListenerError('hangmanIndex',e)));
+  state.userUnsubs.push(onValue(ref(db,`siteGameChallenges/${uid}`),s=>{state.siteGameChallenges=s.exists()?s.val():{};renderSiteGameChallenges();renderNotifications()},e=>gameRealtimeListenerError('siteGameChallenges',e)));
   state.userUnsubs.push(onValue(query(ref(db,'siteUpdates'),orderByChild('createdAt'),limitToLast(60)),s=>{state.updates=s.exists()?s.val():{};renderUpdates()}));
   state.userUnsubs.push(onValue(ref(db,`siteNotificationDismissed/${uid}`),s=>{state.notificationDismissed=s.exists()?s.val():{};renderNotifications()}));
   let notificationBoot=true,notificationNewestAt=0;
@@ -415,6 +447,10 @@ function startUserSubscriptions(){
     notificationBoot=false;
   }));
   state.userUnsubs.push(onValue(ref(db,`siteBans/${uid}`),s=>{state.ban=s.exists()?s.val():null;applySiteBan()}));
+  // Fallback leve: se um listener do Firebase for cancelado (ex.: regras foram publicadas com o site aberto),
+  // convites e partidas continuam aparecendo sem precisar recarregar a página.
+  scheduleGameRealtimeSync(350);
+  state.gameRealtimePoll=setInterval(()=>syncSiteGameRealtimeState().catch(()=>{}),3000);
 }
 
 await initialAuthPolicy();
@@ -1557,13 +1593,14 @@ async function createSiteGame(type,opponentUid){
   const idx={id:gameId,type,status:'active',createdAt,updatedAt:createdAt,createdBy:me,opponentUid:other};
   const updates={};updates[`${meta.games}/${gameId}`]=game;updates[`${meta.index}/${me}/${gameId}`]=idx;updates[`${meta.index}/${other}/${gameId}`]={...idx,opponentUid:me};await update(ref(db),updates);return gameId
 }
-async function acceptSiteGameChallenge(ch){if(!state.user||!ch?.id||!ch?.fromUid)throw new Error('Convite inválido.');await createSiteGame(ch.type,ch.fromUid);await remove(ref(db,`siteGameChallenges/${state.user.uid}/${ch.id}`));playGameSfx('accept');toast(`${SITE_GAME_META[ch.type]?.label||'Partida'} iniciada.`)}
+async function acceptSiteGameChallenge(ch){if(!state.user||!ch?.id||!ch?.fromUid)throw new Error('Convite inválido.');const gameId=await createSiteGame(ch.type,ch.fromUid);if(ch.type==='ttt')subscribeTtt(gameId);else if(ch.type==='blackjack')subscribeBlackjack(gameId);else if(ch.type==='hangman')subscribeHangman(gameId);await remove(ref(db,`siteGameChallenges/${state.user.uid}/${ch.id}`));scheduleGameRealtimeSync(100);navigate('games');playGameSfx('accept');toast(`${SITE_GAME_META[ch.type]?.label||'Partida'} iniciada.`);return gameId}
 async function finishIndexes(type,game){if(!game?.id)return;const meta=SITE_GAME_META[type];if(!meta)return;const updates={};const now=Number(game.updatedAt||game.finishedAt||Date.now());for(const uid of Object.keys(game.players||{})){const base=`${meta.index}/${uid}/${game.id}`;updates[`${base}/status`]=game.status||'finished';updates[`${base}/updatedAt`]=now;updates[`${base}/finishedAt`]=Number(game.finishedAt||now);if(game.winnerUid!=null)updates[`${base}/winnerUid`]=game.winnerUid;if(game.finishReason)updates[`${base}/finishReason`]=game.finishReason;if(game.leftUid)updates[`${base}/leftUid`]=game.leftUid}try{await update(ref(db),updates)}catch(e){console.warn('[GAME EXIT] Não foi possível sincronizar os índices:',e?.message||e)}}
 function applyFinishedGameLocally(type,game){if(!game?.id)return;if(type==='ttt'&&state.ttt.game?.id===game.id)setTttGame(game);else if(type==='blackjack'&&state.blackjack.game?.id===game.id)setBlackjackGame(game);else if(type==='hangman'&&state.hangman.game?.id===game.id)setHangmanGame(game)}
 async function directGameExit(type,game){if(!state.user||!game?.id)return;const meta=SITE_GAME_META[type],uid=state.user.uid;if(!meta)throw new Error('Jogo inválido.');let failReason='';const gameRef=ref(db,`${meta.games}/${game.id}`);const tx=await runTransaction(gameRef,g=>{if(!g){failReason='Partida não encontrada.';return}if(!g.players?.[uid]){failReason='Você não participa desta partida.';return}if(g.status!=='active'){failReason='Partida já encerrada.';return}const other=Object.keys(g.players).find(x=>x!==uid)||null,now=Date.now();g.status='finished';g.winnerUid=other;g.leftUid=uid;g.finishReason='exit';g.finishedAt=now;g.updatedAt=now;g.turnUid=null;appendGameLog(g,`${g.players[uid]?.name||'Jogador'} saiu da partida. ${other?`${g.players[other]?.name||'Adversário'} venceu por desistência.`:'Partida encerrada.'}`);return g});if(!tx.committed){const current=await get(gameRef).catch(()=>null);if(current?.exists()){const value={id:game.id,...current.val()};if(value.status!=='active'){applyFinishedGameLocally(type,value);return value}}throw new Error(failReason||'Não foi possível encerrar a partida.')}const final={id:game.id,...tx.snapshot.val()};await finishIndexes(type,final);applyFinishedGameLocally(type,final);toast('Você saiu. A partida foi encerrada para os dois jogadores.');return final}
 
 $('tttCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('tttFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('ttt',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
-function handleTttIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.ttt.game?.id!==active.id)subscribeTtt(active.id);return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.ttt.game?.id!==finished.id)subscribeTtt(finished.id);else if(!finished)setTttGame(null)}
+function focusNewSiteGame(type,id){if(!id)return;if(state.route!=='games')navigate('games');const label=SITE_GAME_META[type]?.label||'Partida';toast(`${label} iniciada.`,2600)}
+function handleTttIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.ttt.game?.id!==active.id){subscribeTtt(active.id);focusNewSiteGame('ttt',active.id)}return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.ttt.game?.id!==finished.id)subscribeTtt(finished.id);else if(!finished)setTttGame(null)}
 function subscribeTtt(id){if(state.ttt.unsub){try{state.ttt.unsub()}catch{}}state.ttt.unsub=onValue(ref(db,`ticTacToeGames/${id}`),sn=>setTttGame(sn.exists()?{id,...sn.val()}:null))}
 function setTttGame(g){
   const prev=state.ttt.game;
@@ -2874,7 +2911,7 @@ function cardHtml(c){if(!c)return'';const red=c.s==='♥'||c.s==='♦';return `<
 
 // 21 PvP
 $('blackjackCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('blackjackFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('blackjack',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
-function handleBlackjackIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.blackjack.game?.id!==active.id)subscribeBlackjack(active.id);return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.blackjack.game?.id!==finished.id)subscribeBlackjack(finished.id);else if(!finished)setBlackjackGame(null)}
+function handleBlackjackIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.blackjack.game?.id!==active.id){subscribeBlackjack(active.id);focusNewSiteGame('blackjack',active.id)}return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.blackjack.game?.id!==finished.id)subscribeBlackjack(finished.id);else if(!finished)setBlackjackGame(null)}
 function subscribeBlackjack(id){if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}}state.blackjack.unsub=onValue(ref(db,`blackjackGames/${id}`),sn=>setBlackjackGame(sn.exists()?{id,...sn.val()}:null))}
 function blackjackCardLabel(c={}){return `${c.r||'?'}${c.s||''}`}
 function blackjackHandLabel(p={}){const cards=Array.isArray(p.cards)?p.cards:[];return `${cards.map(blackjackCardLabel).join(' + ')||'—'} = ${Number(p.score||0)}`}
@@ -2914,7 +2951,7 @@ $('blackjackExitBtn')?.addEventListener('click',async()=>{const g=state.blackjac
 
 // Forca PvP
 $('hangmanCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('hangmanFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('hangman',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
-function handleHangmanIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.hangman.game?.id!==active.id)subscribeHangman(active.id);return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.hangman.game?.id!==finished.id)subscribeHangman(finished.id);else if(!finished)setHangmanGame(null)}
+function handleHangmanIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.hangman.game?.id!==active.id){subscribeHangman(active.id);focusNewSiteGame('hangman',active.id)}return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.hangman.game?.id!==finished.id)subscribeHangman(finished.id);else if(!finished)setHangmanGame(null)}
 function subscribeHangman(id){if(state.hangman.unsub){try{state.hangman.unsub()}catch{}}state.hangman.unsub=onValue(ref(db,`hangmanGames/${id}`),sn=>setHangmanGame(sn.exists()?{id,...sn.val()}:null))}
 function setHangmanGame(g){
   const prev=state.hangman.game;
