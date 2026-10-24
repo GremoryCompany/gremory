@@ -51,7 +51,7 @@ const state = {
   admin:{reports:{},updates:{},directory:{},bans:{},selectedUid:'',supportChats:{},supportSelectedUid:'',supportUnsub:null,backupStatus:{}},
   tinder:{current:null,seen:[]},updates:{},notifications:{},notificationDismissed:{},ban:null,supportChat:{messages:{}},
   watchCode:null,watchRoom:null,watchUnsubs:[],watchApplying:false,
-  watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,screenSource:'',localFileVideo:null,localFileUrl:'',localFileName:'',localFileAudioCtx:null,localFileAudioSource:null,localFileAudioDest:null,fullscreenUiTimer:null,peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),screenOutPeers:new Map(),screenInPeers:new Map(),screenOutCandidates:new Map(),screenInCandidates:new Map(),screenOfferAt:new Map(),screenOfferLocks:new Set(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false},
+  watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,screenSource:'',localFileVideo:null,localFileUrl:'',localFileName:'',localFileAudioCtx:null,localFileAudioSource:null,localFileAudioDest:null,localFileAudioGain:null,localFileAudioLimiter:null,screenVolume:Number(localStorage.getItem('gremory:watchScreenVolume')||150),localFileTransmitGainPct:Number(localStorage.getItem('gremory:watchTransmitGain')||150),fullscreenUiTimer:null,peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),screenOutPeers:new Map(),screenInPeers:new Map(),screenOutCandidates:new Map(),screenInCandidates:new Map(),screenOfferAt:new Map(),screenOfferLocks:new Set(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false},
   watchYoutube:{lastTime:0,lastState:-1,lastPublishAt:0},
   watchMusic:{currentId:'',volume:Number(localStorage.getItem('gremory:watchMusicVolume')||65),muted:localStorage.getItem('gremory:watchMusicMuted')==='1',engineReady:false,lastAdvanceId:'',adding:false,currentTime:0,lastClockSync:0,endedId:''},
   rtc:{joined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true},premiumPoll:null
@@ -2115,6 +2115,40 @@ async function requestWatchScreenFrom(uid,force=false){
   const last=Number(state.watchRtc.screenRetry.get(uid)||0);if(!force&&Date.now()-last<3500)return;
   state.watchRtc.screenRetry.set(uid,Date.now());await sendWatchRtc(uid,{type:'screen_request'}).catch(()=>{})
 }
+
+let watchScreenAudioGraph=null;
+function clampWatchVolume(v,min=0,max=300){return Math.max(min,Math.min(max,Number(v)||0))}
+function ensureWatchScreenAudioGraph(){
+  if(watchScreenAudioGraph)return watchScreenAudioGraph;
+  const audio=$('watchScreenAudio'),AudioCtx=window.AudioContext||window.webkitAudioContext;if(!audio||!AudioCtx)return null;
+  try{
+    const ctx=new AudioCtx({latencyHint:'playback'}),source=ctx.createMediaElementSource(audio),gain=ctx.createGain(),limiter=ctx.createDynamicsCompressor();
+    limiter.threshold.value=-5;limiter.knee.value=8;limiter.ratio.value=12;limiter.attack.value=.003;limiter.release.value=.22;
+    source.connect(gain);gain.connect(limiter);limiter.connect(ctx.destination);
+    watchScreenAudioGraph={ctx,source,gain,limiter};return watchScreenAudioGraph
+  }catch(e){console.warn('[WATCH SCREEN VOLUME]',e);return null}
+}
+function applyWatchScreenVolume({resume=false}={}){
+  const pct=clampWatchVolume(state.watchRtc.screenVolume,0,300);state.watchRtc.screenVolume=pct;localStorage.setItem('gremory:watchScreenVolume',String(pct));
+  if($('watchScreenVolumeRange'))$('watchScreenVolumeRange').value=String(pct);if($('watchScreenVolumeValue'))$('watchScreenVolumeValue').textContent=`${Math.round(pct)}%`;
+  const audio=$('watchScreenAudio'),graph=ensureWatchScreenAudioGraph(),level=state.watchRtc.screenSoundMuted?0:pct/100;
+  if(graph){try{graph.gain.gain.setTargetAtTime(level,graph.ctx.currentTime,.015)}catch{graph.gain.gain.value=level}if(resume&&!state.watchRtc.screenSoundMuted)graph.ctx.resume?.().catch(()=>{})}
+  else if(audio){audio.volume=Math.min(1,pct/100);audio.muted=state.watchRtc.screenSoundMuted}
+  return graph
+}
+function applyWatchTransmitGain(){
+  const pct=clampWatchVolume(state.watchRtc.localFileTransmitGainPct,50,300);state.watchRtc.localFileTransmitGainPct=pct;localStorage.setItem('gremory:watchTransmitGain',String(pct));
+  if($('watchTransmitVolumeRange'))$('watchTransmitVolumeRange').value=String(pct);if($('watchTransmitVolumeValue'))$('watchTransmitVolumeValue').textContent=`${Math.round(pct)}%`;
+  const node=state.watchRtc.localFileAudioGain;if(node){const ctx=state.watchRtc.localFileAudioCtx;try{node.gain.setTargetAtTime(pct/100,ctx?.currentTime||0,.02)}catch{node.gain.value=pct/100}}
+}
+function refreshWatchVolumeUi(){
+  const remoteControl=$('watchScreenVolumeControl'),txControl=$('watchTransmitVolumeControl');
+  const activeRemote=!!(state.watchRtc.activeScreenUid&&state.watchRtc.activeScreenUid!==String(state.user?.uid||'')&&watchScreenStreamFor(state.watchRtc.activeScreenUid)?.getAudioTracks?.().some(t=>t.readyState==='live'));
+  if(remoteControl)remoteControl.hidden=!activeRemote;
+  const txActive=!!(isWatchHost()&&state.watchRtc.screenSource==='file'&&state.watchRtc.screenStream?.getAudioTracks?.().some(t=>t.readyState==='live'));
+  if(txControl)txControl.hidden=!txActive;
+  applyWatchScreenVolume();applyWatchTransmitGain()
+}
 function updateWatchPeerScreenButton(uid){
   const card=ensureWatchCallCard(uid),btn=card?.querySelector('.watch-view-screen'),stream=watchScreenStreamFor(uid),sharing=state.watchRtc.screenSharers.has(String(uid)),ready=watchRemoteHasScreen(uid,stream);
   if(btn){
@@ -2129,16 +2163,21 @@ function refreshWatchScreenStage(){
   if(state.watchRtc.activeScreenUid&&state.watchRtc.activeScreenUid!==localUid){const remote=watchScreenStreamFor(state.watchRtc.activeScreenUid);if(watchRemoteHasScreen(state.watchRtc.activeScreenUid,remote)){stream=remote;uid=state.watchRtc.activeScreenUid}}
   if(!stream&&localVideo&&localVideo.readyState==='live'){stream=state.watchRtc.screenStream;uid=localUid;isLocal=true}
   if(!stream){for(const peerUid of state.watchRtc.screenSharers){if(peerUid===localUid)continue;const remote=watchScreenStreamFor(peerUid);if(watchRemoteHasScreen(peerUid,remote)){stream=remote;uid=peerUid;break}}}
-  if(!stream){state.watchRtc.activeScreenUid=null;try{video.pause()}catch{}try{audio?.pause()}catch{}video.srcObject=null;if(audio)audio.srcObject=null;stage.hidden=true;if(mediaStage)mediaStage.hidden=false;return}
+  if(!stream){state.watchRtc.activeScreenUid=null;try{video.pause()}catch{}try{audio?.pause()}catch{}video.srcObject=null;if(audio)audio.srcObject=null;stage.hidden=true;if(mediaStage)mediaStage.hidden=false;refreshWatchVolumeUi();return}
   state.watchRtc.activeScreenUid=uid;
   const localFile=isLocal&&state.watchRtc.screenSource==='file'&&state.watchRtc.localFileVideo;
   if(localFile){stage.hidden=true;if(mediaStage)mediaStage.hidden=false;return}
   stage.hidden=false;if(mediaStage)mediaStage.hidden=true;
   const vtrack=stream.getVideoTracks?.().find(t=>t.readyState==='live'),atrack=stream.getAudioTracks?.().find(t=>t.readyState==='live');
   const videoStream=new MediaStream();if(vtrack)videoStream.addTrack(vtrack);if(video.srcObject?.getVideoTracks?.()[0]?.id!==vtrack?.id)video.srcObject=videoStream;video.muted=true;video.playsInline=true;video.play?.().catch(()=>{});
-  if(audio){const audioStream=new MediaStream();if(atrack)audioStream.addTrack(atrack);if(audio.srcObject?.getAudioTracks?.()[0]?.id!==atrack?.id)audio.srcObject=atrack?audioStream:null;audio.muted=isLocal||state.watchRtc.screenSoundMuted;audio.volume=1;if(atrack&&!audio.muted)audio.play?.().catch(()=>{state.watchRtc.screenSoundMuted=true;audio.muted=true;if(soundBtn)soundBtn.textContent='Toque para ativar som'})}
+  if(audio){
+    const audioStream=new MediaStream();if(atrack)audioStream.addTrack(atrack);if(audio.srcObject?.getAudioTracks?.()[0]?.id!==atrack?.id)audio.srcObject=atrack?audioStream:null;audio.volume=1;audio.muted=false;
+    if(atrack&&!isLocal){const graph=applyWatchScreenVolume();if(!state.watchRtc.screenSoundMuted){graph?.ctx?.resume?.().catch(()=>{});audio.play?.().catch(()=>{state.watchRtc.screenSoundMuted=true;applyWatchScreenVolume();if(soundBtn)soundBtn.textContent='Toque para ativar som'})}}
+    else if(!atrack){try{audio.pause()}catch{}}
+  }
   if(label)label.textContent=isLocal?'Sua tela compartilhada':`${watchPeerName(uid)} está compartilhando`;
   if(soundBtn){const hasAudio=!!atrack;soundBtn.hidden=isLocal;soundBtn.disabled=!hasAudio;soundBtn.textContent=!hasAudio?'Sem áudio':(state.watchRtc.screenSoundMuted?'Ativar som':'Som ligado')}
+  refreshWatchVolumeUi()
 }
 function attachWatchRemote(uid){
   const voice=watchVoiceStreamFor(uid),screen=watchScreenStreamFor(uid),card=ensureWatchCallCard(uid),audio=card?.querySelector('audio');
@@ -2319,10 +2358,12 @@ function cleanupWatchLocalFilePlayer(){
   const rtc=state.watchRtc,v=rtc.localFileVideo,url=rtc.localFileUrl;
   if(v){try{v.onended=null;v.onvolumechange=null;v.pause()}catch{}try{v.removeAttribute('src');v.load?.()}catch{}try{v.remove()}catch{}}
   try{rtc.localFileAudioSource?.disconnect?.()}catch{}
+  try{rtc.localFileAudioGain?.disconnect?.()}catch{}
+  try{rtc.localFileAudioLimiter?.disconnect?.()}catch{}
   try{rtc.localFileAudioDest?.disconnect?.()}catch{}
   try{rtc.localFileAudioCtx?.close?.()}catch{}
   if(url)try{URL.revokeObjectURL(url)}catch{}
-  rtc.localFileVideo=null;rtc.localFileUrl='';rtc.localFileName='';rtc.localFileAudioCtx=null;rtc.localFileAudioSource=null;rtc.localFileAudioDest=null
+  rtc.localFileVideo=null;rtc.localFileUrl='';rtc.localFileName='';rtc.localFileAudioCtx=null;rtc.localFileAudioSource=null;rtc.localFileAudioDest=null;rtc.localFileAudioGain=null;rtc.localFileAudioLimiter=null;refreshWatchVolumeUi()
 }
 async function buildWatchLocalFileStream(video,captured,preparedCtx=null){
   const videoTrack=captured?.getVideoTracks?.().find(t=>t.readyState==='live');
@@ -2333,11 +2374,12 @@ async function buildWatchLocalFileStream(video,captured,preparedCtx=null){
     let ctx=preparedCtx;
     try{
       if(!ctx||ctx.state==='closed')ctx=new AudioCtx({latencyHint:'playback'});
-      const source=ctx.createMediaElementSource(video),dest=ctx.createMediaStreamDestination();
-      source.connect(ctx.destination);source.connect(dest);
+      const source=ctx.createMediaElementSource(video),dest=ctx.createMediaStreamDestination(),txGain=ctx.createGain(),limiter=ctx.createDynamicsCompressor();
+      limiter.threshold.value=-5;limiter.knee.value=8;limiter.ratio.value=12;limiter.attack.value=.003;limiter.release.value=.22;txGain.gain.value=clampWatchVolume(state.watchRtc.localFileTransmitGainPct,50,300)/100;
+      source.connect(ctx.destination);source.connect(txGain);txGain.connect(limiter);limiter.connect(dest);
       await ctx.resume?.().catch(()=>{});
       const routed=dest.stream.getAudioTracks?.().find(t=>t.readyState==='live')||dest.stream.getAudioTracks?.()[0]||null;
-      if(routed){audioTrack=routed;state.watchRtc.localFileAudioCtx=ctx;state.watchRtc.localFileAudioSource=source;state.watchRtc.localFileAudioDest=dest}
+      if(routed){audioTrack=routed;state.watchRtc.localFileAudioCtx=ctx;state.watchRtc.localFileAudioSource=source;state.watchRtc.localFileAudioDest=dest;state.watchRtc.localFileAudioGain=txGain;state.watchRtc.localFileAudioLimiter=limiter;applyWatchTransmitGain()}
       else try{await ctx.close?.()}catch{}
     }catch(e){console.warn('[WATCH LOCAL AUDIO]',e);if(ctx&&ctx!==state.watchRtc.localFileAudioCtx)try{await ctx.close?.()}catch{}}
   }
@@ -2362,7 +2404,7 @@ async function stopWatchPublishedStream({clearLocalMedia=true,silent=false}={}){
   if(state.watchCode&&state.user)await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:false,screenAt:null,screenAudio:false,screenKind:null,screenLabel:null}).catch(()=>{});
   if(source==='file'&&clearLocalMedia&&state.watchCode&&isWatchHost())await set(ref(db,`watchRooms/${state.watchCode}/media`),{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}).catch(()=>{});
   if(!silent)setWatchRtcStatus(source==='file'?'Filme do dispositivo encerrado':'Compartilhamento encerrado','');
-  refreshWatchScreenStage();watchVoiceUi()
+  refreshWatchScreenStage();refreshWatchVolumeUi();watchVoiceUi()
 }
 async function startWatchLocalFile(file){
   if(!isWatchHost())return toast('Somente o host pode transmitir um filme do dispositivo.');
@@ -2400,7 +2442,7 @@ async function startWatchLocalFile(file){
     v.addEventListener('pause',()=>{if(isWatchHost()&&state.watchRtc.screenSource==='file'&&!v.ended)update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:false,updatedAt:Date.now()}).catch(()=>{})});
     v.onended=()=>stopWatchPublishedStream({clearLocalMedia:false,silent:true}).then(()=>set(ref(db,`watchRooms/${state.watchCode}/media`),{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}).catch(()=>{})).then(()=>toast('Filme finalizado.')).catch(()=>{});
     videoTrack.onended=()=>{if(state.watchRtc.screenSource==='file'&&!v.ended)stopWatchPublishedStream().catch(()=>{})};
-    setWatchRtcStatus(audioTrack?'Filme do dispositivo transmitindo com áudio':'Filme transmitindo sem faixa de áudio','ok');refreshWatchScreenStage();watchVoiceUi();toast(`Transmitindo “${state.watchRtc.localFileName}” para a sala.`)
+    setWatchRtcStatus(audioTrack?'Filme do dispositivo transmitindo com áudio':'Filme transmitindo sem faixa de áudio','ok');refreshWatchScreenStage();refreshWatchVolumeUi();watchVoiceUi();toast(`Transmitindo “${state.watchRtc.localFileName}” para a sala.`)
   }catch(e){try{await preparedAudioCtx?.close?.()}catch{}await stopWatchPublishedStream({clearLocalMedia:true,silent:true}).catch(()=>{});toast(e?.message||'Não foi possível transmitir este vídeo.',7000)}
 }
 async function toggleWatchScreen(){
@@ -2496,9 +2538,13 @@ async function fullscreenWatchScreen(){
 document.addEventListener('fullscreenchange',updateWatchFullscreenButton);
 document.addEventListener('webkitfullscreenchange',updateWatchFullscreenButton);
 $('watchScreenSoundBtn')?.addEventListener('click',async()=>{
-  showWatchFullscreenUi(true);const audio=$('watchScreenAudio');state.watchRtc.screenSoundMuted=audio?.paused?false:!state.watchRtc.screenSoundMuted;refreshWatchScreenStage();
-  if(!state.watchRtc.screenSoundMuted&&audio?.srcObject){try{audio.muted=false;audio.volume=1;await audio.play();toast('Som da transmissão ativado.')}catch{state.watchRtc.screenSoundMuted=true;refreshWatchScreenStage();toast('Toque novamente em Som para liberar o áudio da transmissão.')}}
+  showWatchFullscreenUi(true);const audio=$('watchScreenAudio'),turnOn=state.watchRtc.screenSoundMuted||audio?.paused;state.watchRtc.screenSoundMuted=!turnOn;
+  const graph=applyWatchScreenVolume({resume:turnOn});refreshWatchScreenStage();
+  if(turnOn&&audio?.srcObject){try{audio.muted=false;audio.volume=1;await graph?.ctx?.resume?.();await audio.play();state.watchRtc.screenSoundMuted=false;applyWatchScreenVolume();refreshWatchScreenStage();toast(`Som ativado em ${Math.round(state.watchRtc.screenVolume)}%.`)}catch{state.watchRtc.screenSoundMuted=true;applyWatchScreenVolume();refreshWatchScreenStage();toast('Toque novamente em Som para liberar o áudio da transmissão.')}}
 });
+$('watchScreenVolumeRange')?.addEventListener('input',async e=>{showWatchFullscreenUi(true);state.watchRtc.screenVolume=clampWatchVolume(e.target.value,0,300);if(state.watchRtc.screenVolume>0)state.watchRtc.screenSoundMuted=false;const graph=applyWatchScreenVolume({resume:true});const audio=$('watchScreenAudio');try{await graph?.ctx?.resume?.();if(audio?.srcObject){audio.muted=false;await audio.play()}}catch{};refreshWatchScreenStage()});
+$('watchTransmitVolumeRange')?.addEventListener('input',e=>{state.watchRtc.localFileTransmitGainPct=clampWatchVolume(e.target.value,50,300);applyWatchTransmitGain()});
+refreshWatchVolumeUi();
 const watchFsStage=$('watchScreenStage');
 ['pointermove','pointerdown','touchstart'].forEach(type=>watchFsStage?.addEventListener(type,()=>{if(watchFullscreenIsActive())showWatchFullscreenUi(true)},{passive:true}));
 async function leaveWatchVoice(silent=false){

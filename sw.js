@@ -1,9 +1,9 @@
-const CACHE='gremory-v13-6-raid-only-20261023';
+const CACHE='gremory-v13-7-watch-volume-invites-20261023';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261023-v13-5-watch-dedicated-stream',
-  '/assets/js/app.js?v=20261023-v13-5-watch-dedicated-stream',
+  '/assets/css/app.css?v=20261023-v13-7-watch-volume-invites',
+  '/assets/js/app.js?v=20261023-v13-7-watch-volume-invites',
   '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',

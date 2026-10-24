@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261023-v13-5-watch-dedicated-stream">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261023-v13-7-watch-volume-invites">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -679,6 +679,10 @@
                     <div class="watch-screen-head">
                       <div><span class="status-dot"></span><strong id="watchScreenLabel">Tela compartilhada</strong></div>
                       <div class="watch-screen-actions">
+                        <label class="watch-volume-inline" id="watchScreenVolumeControl">
+                          <span>Meu volume <b id="watchScreenVolumeValue">150%</b></span>
+                          <input id="watchScreenVolumeRange" type="range" min="0" max="300" step="5" value="150" aria-label="Meu volume da transmissão">
+                        </label>
                         <button class="btn" id="watchScreenSoundBtn" type="button">Som: ligado</button>
                         <button class="btn" id="watchScreenFullscreenBtn" type="button">Tela cheia</button>
                       </div>
@@ -697,6 +701,10 @@
                     <input id="watchLocalFileInput" type="file" accept="video/*" hidden>
                     <button class="btn" id="watchLocalFileBtn" type="button">🎬 Filme do dispositivo</button>
                     <small>O arquivo não é enviado ao servidor: o host transmite direto para a sala.</small>
+                    <label class="watch-transmit-volume" id="watchTransmitVolumeControl" hidden>
+                      <span>Volume enviado para a sala <b id="watchTransmitVolumeValue">150%</b></span>
+                      <input id="watchTransmitVolumeRange" type="range" min="50" max="300" step="5" value="150" aria-label="Volume enviado para a sala">
+                    </label>
                   </div>
                   <div class="watch-controls">
                     <button class="btn" id="watchPlayBtn" type="button">Play / Pause</button>
@@ -1084,6 +1092,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261023-v13-5-watch-dedicated-stream"></script>
+  <script type="module" src="/assets/js/app.js?v=20261023-v13-7-watch-volume-invites"></script>
 </body>
 </html>
