@@ -1,9 +1,9 @@
-const CACHE='gremory-watch-voice-screen-permission-r5';
+const CACHE='gremory-watch-realtime-r3';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261025-watch-voice-screen-permission-r5',
-  '/assets/js/app.js?v=20261025-watch-voice-screen-permission-r5',
+  '/assets/css/app.css?v=20261025-watch-realtime-r3',
+  '/assets/js/app.js?v=20261025-watch-realtime-r3',
   '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
