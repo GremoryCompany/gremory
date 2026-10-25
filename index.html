@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261024-v12-1-admin">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261024-layout-restaurado">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -551,15 +551,15 @@
           </article>
         </section>
 
-        <section class="view" data-view="games">
-          <div class="section-head"><div><span class="tag">JOGOS</span><h2>Jogo da velha</h2></div></div>
+        <section class="view games-view-pro" data-view="games">
+          <div class="section-head"><div><span class="tag">JOGOS</span><h2>Salão de jogos</h2></div></div>
           <div class="games-grid">
             <article class="panel ttt-lobby" id="tttLobby">
               <div class="panel-head"><div><h3>Desafiar um amigo</h3><small class="muted">Partida sincronizada em tempo real</small></div><span class="pill" id="tttStatus">Livre</span></div>
               <div class="duel-create"><label>Amigo<select id="tttFriendSelect"><option value="">Escolha um amigo</option></select></label><button class="btn primary" id="tttCreateBtn" type="button">Jogar</button></div>
               <div id="tttInvites" class="people-list"></div>
             </article>
-            <article class="panel ttt-game" id="tttGamePanel" hidden>
+            <article class="panel ttt-game game-arena-large" id="tttGamePanel" hidden>
               <div class="panel-head"><div><h3 id="tttTitle">Partida</h3><small id="tttTurnText">Aguardando...</small></div><button class="btn danger-ghost" id="tttExitBtn" type="button">Sair</button></div>
               <div class="ttt-board" id="tttBoard"></div>
               <div class="duel-log" id="tttLog"></div>
@@ -583,7 +583,7 @@
 
             <article class="panel arcade-card slots-card">
               <div class="panel-head"><div><span class="tag">SLOTS</span><h3>Slots Gremory</h3></div><span class="pill" id="slotsStatus">Arcade</span></div>
-              <div class="slot-machine"><div class="slot-reel" id="slotReel1">✦</div><div class="slot-reel" id="slotReel2">♛</div><div class="slot-reel" id="slotReel3">◆</div></div>
+              <div class="slot-machine slot-machine-large"><div class="slot-reel" id="slotReel1">✦</div><div class="slot-reel" id="slotReel2">♛</div><div class="slot-reel" id="slotReel3">◆</div></div>
               <div class="arcade-actions"><button class="btn primary full" id="slotsSpinBtn" type="button">Girar</button></div>
             </article>
           </div>
@@ -1043,6 +1043,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261024-v12-1-admin"></script>
+  <script type="module" src="/assets/js/app.js?v=20261024-layout-restaurado"></script>
 </body>
 </html>
