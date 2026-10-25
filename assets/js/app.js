@@ -1,12 +1,11 @@
-import { initCommunity } from './community.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js';
 import {
   getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence, inMemoryPersistence,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail,
-  signOut, updateProfile, sendEmailVerification
+  signOut, updateProfile, getIdTokenResult
 } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js';
 import {
-  getDatabase, ref, get, set, update, push, onValue, remove, onDisconnect, query, orderByChild, limitToLast, runTransaction
+  getDatabase, ref, get, set, update, push, onValue, remove, onDisconnect, query, orderByChild, limitToLast
 } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js';
 
 const firebaseConfig = {
@@ -39,23 +38,20 @@ const state = {
   downloadService:'tiktok', lastDownloadInput:'',
   roomCode:null, room:null, roomUnsubs:[],
   userUnsubs:[], duel:null, duelUnsub:null,
-  bridgeResults:{}, siteInventory:{}, siteCustomization:{}, storeCatalog:{},
-  teamDraft:[], pokemonEncounter:null, pokemonHealing:{}, pokemonAudio:{encounterId:'',resultId:''}, siteRaid:null, siteRaidConfig:{},
+  bridgeResults:{}, siteInventory:{}, siteCustomization:{},
+  teamDraft:[], pokemonEncounter:null, pokemonHealing:{}, pokemonAudio:{encounterId:''}, siteRaid:null, siteRaidConfig:{},
   ttt:{game:null,unsub:null,index:{},lastResultId:'',seenActiveIds:new Set()},
-  blackjack:{game:null,unsub:null,index:{},seenActiveIds:new Set()},
-  hangman:{game:null,unsub:null,index:{},seenActiveIds:new Set()},
-  siteGameChallenges:{},siteGameChallengeSeen:new Set(),
   duelSeenActiveIds:new Set(),
   notificationFilter:'team',
   browserNotificationLastAt:0,
-  admin:{reports:{},updates:{},directory:{},bans:{},selectedUid:'',supportChats:{},supportSelectedUid:'',supportUnsub:null,backupStatus:{}},
-  tinder:{current:null,seen:[]},updates:{},notifications:{},notificationDismissed:{},ban:null,supportChat:{messages:{}},
+  adminClaim:false,
+  admin:{reports:{},updates:{},directory:{},bans:{},selectedUid:'',supportChats:{},supportSelectedUid:''},
+  tinder:{current:null,seen:[]},updates:{},notifications:{},ban:null,dynamicStoreCatalog:{},supportMessages:{},
   watchCode:null,watchRoom:null,watchUnsubs:[],watchApplying:false,
-  watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,screenSource:'',localFileVideo:null,localFileUrl:'',localFileName:'',localFileAudioCtx:null,localFileAudioSource:null,localFileAudioDest:null,localFileAudioGain:null,localFileAudioLimiter:null,screenVolume:Number(localStorage.getItem('gremory:watchScreenVolume')||150),localFileTransmitGainPct:Number(localStorage.getItem('gremory:watchTransmitGain')||150),fullscreenUiTimer:null,peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),screenOutPeers:new Map(),screenInPeers:new Map(),screenOutCandidates:new Map(),screenInCandidates:new Map(),screenOfferAt:new Map(),screenOfferLocks:new Set(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false},
+  watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false,screenVolume:Number(localStorage.getItem('gremory:watchScreenVolume')||100),screenRecoveryTimer:null,screenAudioCtx:null,screenAudioSource:null,screenAudioGain:null,screenAudioTrackId:''},
   watchYoutube:{lastTime:0,lastState:-1,lastPublishAt:0},
   watchMusic:{currentId:'',volume:Number(localStorage.getItem('gremory:watchMusicVolume')||65),muted:localStorage.getItem('gremory:watchMusicMuted')==='1',engineReady:false,lastAdvanceId:'',adding:false,currentTime:0,lastClockSync:0,endedId:''},
-  rtc:{joined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true},premiumPoll:null,
-  gameRealtimePoll:null,gameRealtimeSyncing:false
+  rtc:{joined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true},premiumPoll:null
 };
 
 function toast(message, ms=3300){
@@ -69,7 +65,7 @@ function setDrawer(open){const d=$('accountDrawer');if(!d)return;d.classList.tog
 function escText(v){return String(v??'')}
 function formatNumber(v){return new Intl.NumberFormat('pt-BR').format(Number(v||0))}
 function displayName(){return state.profile?.nome||state.user?.displayName||state.user?.email?.split('@')[0]||'Usuário'}
-function isSiteAdmin(){return String(state.user?.email||'').trim().toLowerCase()===ADMIN_EMAIL}
+function isSiteAdmin(){return state.adminClaim===true||String(state.user?.email||'').trim().toLowerCase()===ADMIN_EMAIL}
 function normalizeUsername(v=''){return String(v||'').trim().toLowerCase().replace(/^@+/,'')}
 function validUsername(v=''){return /^[a-z][a-z0-9_]{2,19}$/.test(normalizeUsername(v))}
 function usernameLabel(p=state.profile){const u=normalizeUsername(p?.username||'');return u?`@${u}`:'@sem_usuario'}
@@ -77,7 +73,7 @@ function usernameCooldownRemaining(p=state.profile){
   const at=Number(p?.usernameChangedAt||0);if(!at)return 0;
   return Math.max(0,USERNAME_COOLDOWN_MS-(Date.now()-at));
 }
-if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').then(reg=>reg.update().catch(()=>{})).catch(()=>{}),{once:true})}
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}),{once:true})}
 
 function formatCooldown(ms){
   if(ms<=0)return'Você pode alterar agora.';
@@ -100,7 +96,7 @@ function wa(command){window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encode
 function clearUnsubs(list){list.splice(0).forEach(fn=>{try{fn()}catch{}})}
 function permissionMessage(err, fallback='Não foi possível concluir essa ação.'){
   const txt=String(err?.code||err?.message||err||'').toLowerCase();
-  if(txt.includes('permission_denied')||txt.includes('permission denied')) return 'Não foi possível concluir essa ação agora.';
+  if(txt.includes('permission_denied')||txt.includes('permission denied')) return isSiteAdmin()?'Permissão do Firebase ainda não foi atualizada para esta ação. Publique as Rules V12.1 e entre novamente.':'Não foi possível concluir essa ação agora.';
   return fallback;
 }
 
@@ -118,11 +114,11 @@ function authFlowError(err){
 }
 
 const routeMeta={
-  feed:['COMUNIDADE','Feed'],home:['GREMORY','Início'],charlotte:['CHARLOTTE','Charlotte'],pokemon:['POKÉMON','Centro Pokémon'],friends:['AMIGOS','Pessoas'],tinder:['TINDER','Descobrir pessoas'],updates:['ATUALIZAÇÕES','Novidades'],downloads:['DOWNLOADS','Downloads'],studio:['STUDIO','PDF & Canvas'],games:['JOGOS','Jogos'],watch:['WATCH PARTY','Assistir com amigos'],rpg:['RPG','Mesas'],premium:['PREMIUM','Gremory Premium'],personalize:['PERSONALIZAR','Loja de rúpias'],support:['SUPORTE','Gremory oficial'],admin:['ADMINISTRAÇÃO','Painel do host']
+  home:['GREMORY','Início'],charlotte:['CHARLOTTE','Charlotte'],pokemon:['POKÉMON','Centro Pokémon'],friends:['AMIGOS','Pessoas'],tinder:['TINDER','Descobrir pessoas'],updates:['ATUALIZAÇÕES','Novidades'],downloads:['DOWNLOADS','Downloads'],studio:['STUDIO','PDF & Canvas'],games:['JOGOS','Jogos'],watch:['WATCH PARTY','Assistir com amigos'],rpg:['RPG','Mesas'],premium:['PREMIUM','Gremory Premium'],personalize:['PERSONALIZAR','Loja de rúpias'],support:['SUPORTE','Gremory oficial'],admin:['ADMINISTRAÇÃO','Painel do host']
 };
 function navigate(route){
   if(route==='admin'&&!isSiteAdmin()){toast('Acesso restrito ao host.');route='home'}
-  if(!routeMeta[route]) route='home'; state.route=route; document.body.classList.toggle('watch-performance',route==='watch');
+  if(!routeMeta[route]) route='home'; state.route=route;
   $$('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===route));
   $$('[data-route]').forEach(el=>el.classList.toggle('active',el.dataset.route===route));
   const [eye,title]=routeMeta[route]; $('pageEyebrow').textContent=eye; $('pageTitle').textContent=title;
@@ -131,13 +127,12 @@ function navigate(route){
   if(route==='friends') loadDirectory();
   if(route==='tinder'){loadOwnTinderProfile();loadTinderProfile();}
   if(route==='updates') renderUpdates();
-  if(route==='games') renderGameFriendSelects();
+  if(route==='games') renderTttFriendSelect();
   if(route==='studio') initGremoryDesignStudio().catch(e=>toast(e.message||'Não foi possível abrir o Design Studio.'));
   if(route==='watch'&&state.user&&!state.watchCode) loadWatchRooms();
   if(route==='rpg'&&state.user&&!state.roomCode) loadMyRooms();
   if(route==='premium'&&state.user&&state.charlottePublic?.status==='linked') requestAccountSync().catch(()=>{});
   if(route==='personalize') renderStore();
-  if(route==='support') renderSupportChat();
   if(route==='admin') loadAdminDashboard();
 }
 $$('[data-route]').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.route)));
@@ -166,37 +161,10 @@ $$('[data-auth-tab]').forEach(b=>{
     if(ev.pointerType==='touch')authTab(b.dataset.authTab)
   });
 });
-function authError(err){
-  const code=String(err?.code||err?.message||'');
-  const map={
-    'auth/email-already-in-use':'Esse e-mail já está em uso.',
-    'auth/invalid-email':'E-mail inválido.',
-    'auth/weak-password':'Use uma senha com pelo menos 6 caracteres.',
-    'auth/invalid-credential':'E-mail ou senha incorretos.',
-    'auth/too-many-requests':'Muitas tentativas. Tente novamente mais tarde.',
-    'auth/network-request-failed':'Falha de conexão com o Firebase. Verifique sua internet e tente novamente.',
-    'auth/unauthorized-domain':'Este endereço do site ainda não está autorizado no Firebase Authentication.',
-    'auth/operation-not-allowed':'O cadastro por e-mail/senha está desativado no Firebase Authentication.',
-    'auth/web-storage-unsupported':'O navegador bloqueou o armazenamento local. O cadastro continuará sem manter a sessão salva.',
-    'auth/configuration-not-found':'A configuração de autenticação do Firebase não foi encontrada.'
-  };
-  if(map[code])return map[code];
-  console.warn('[GREMORY AUTH]',code,err);
-  return code&&code.startsWith('auth/')?`Não foi possível concluir agora. (${code})`:'Não foi possível concluir agora.';
-}
+function authError(err){const map={'auth/email-already-in-use':'Esse e-mail já está em uso.','auth/invalid-email':'E-mail inválido.','auth/weak-password':'Use uma senha com pelo menos 6 caracteres.','auth/invalid-credential':'E-mail ou senha incorretos.','auth/too-many-requests':'Muitas tentativas. Tente novamente mais tarde.'};return map[err?.code]||'Não foi possível concluir.'}
 async function configurePersistence(remember){
-  // Persistência do navegador é conveniência, não pode impedir login/cadastro.
-  // Alguns WebViews/iOS/abas privadas bloqueiam IndexedDB/localStorage.
-  try{
-    await withTimeout(setPersistence(auth,remember?browserLocalPersistence:inMemoryPersistence),8000,'PERSISTENCE_TIMEOUT');
-    try{if(remember)localStorage.setItem('gremory:remember','1');else localStorage.removeItem('gremory:remember')}catch{}
-    return true;
-  }catch(e){
-    console.warn('[GREMORY AUTH] Persistência indisponível; continuando com sessão temporária.',e);
-    try{await setPersistence(auth,inMemoryPersistence)}catch{}
-    try{localStorage.removeItem('gremory:remember')}catch{}
-    return false;
-  }
+  await withTimeout(setPersistence(auth,remember?browserLocalPersistence:inMemoryPersistence),8000,'PERSISTENCE_TIMEOUT');
+  if(remember)localStorage.setItem('gremory:remember','1');else localStorage.removeItem('gremory:remember');
 }
 async function initialAuthPolicy(){
   const remember=localStorage.getItem('gremory:remember')==='1';
@@ -269,7 +237,7 @@ $('registerForm').addEventListener('submit',async ev=>{
       nome:name,
       ...(usernameOk?{username,usernameChangedAt:stamp}:{}),
       avatar:'',bio:'',favoriteAnime:'',email:cred.user.email||email,
-      whatsappSiteNotify:false,raidWhatsappNotify:false,createdAt:nowIso(),updatedAt:nowIso()
+      raidWhatsappNotify:false,createdAt:nowIso(),updatedAt:nowIso()
     };
 
     // Não bloqueia a entrada no site indefinidamente por causa do RTDB.
@@ -303,11 +271,11 @@ $('resetPasswordBtn').addEventListener('click',async()=>{const email=$('loginEma
 $('logoutBtn').addEventListener('click',async()=>{localStorage.removeItem('gremory:remember');clearUserSubscriptions();await signOut(auth);setDrawer(false)});
 
 function publicCustomizationIds(){
-  try{return equippedCustomizationIds().map(String).filter(id=>/^[a-z0-9_-]{2,64}$/i.test(id)).slice(0,8)}catch{return[]}
+  try{return equippedCustomizationIds().filter(id=>STORE_CATALOG[id]).slice(0,8)}catch{return[]}
 }
 function publicProfile(p,styleOverride=null){
   const style=Array.isArray(styleOverride)?styleOverride:publicCustomizationIds();
-  return{uid:p.uid,nome:p.nome||'Usuário',username:normalizeUsername(p.username||''),avatar:p.avatar||'',bio:p.bio||'',favoriteAnime:p.favoriteAnime||'',style:style.map(String).filter(id=>/^[a-z0-9_-]{2,64}$/i.test(id)).slice(0,8),createdAt:p.createdAt||nowIso(),updatedAt:p.updatedAt||nowIso()}
+  return{uid:p.uid,nome:p.nome||'Usuário',username:normalizeUsername(p.username||''),avatar:p.avatar||'',bio:p.bio||'',favoriteAnime:p.favoriteAnime||'',style:style.filter(id=>{try{return!!STORE_CATALOG[id]}catch{return false}}).slice(0,8),createdAt:p.createdAt||nowIso(),updatedAt:p.updatedAt||nowIso()}
 }
 async function syncPublicCustomization(){
   if(!state.user)return;
@@ -316,9 +284,9 @@ async function syncPublicCustomization(){
 async function readUserData(user){
   const [ps,old,dirSnap]=await Promise.all([get(ref(db,`profiles/${user.uid}`)).catch(()=>null),get(ref(db,`users/${user.uid}`)).catch(()=>null),get(ref(db,`directory/${user.uid}`)).catch(()=>null)]);
   const p=ps?.exists()?ps.val():{};const o=old?.exists()?old.val():{};const oldDirectory=dirSnap?.exists()?dirSnap.val():{};
-  const merged={uid:user.uid,nome:p.nome||o.nome||user.displayName||'Usuário',username:normalizeUsername(p.username||o.username||''),usernameChangedAt:Number(p.usernameChangedAt||o.usernameChangedAt||0),avatar:p.avatar||o.avatar||user.photoURL||'',bio:p.bio||o.bio||'',favoriteAnime:p.favoriteAnime||o.favoriteAnime||o.animeFavorito||'',email:p.email||user.email||'',whatsappSiteNotify:Boolean(p.whatsappSiteNotify),raidWhatsappNotify:Boolean(p.raidWhatsappNotify),createdAt:p.createdAt||o.createdAt||user.metadata?.creationTime||nowIso()};
+  const merged={uid:user.uid,nome:p.nome||o.nome||user.displayName||'Usuário',username:normalizeUsername(p.username||o.username||''),usernameChangedAt:Number(p.usernameChangedAt||o.usernameChangedAt||0),avatar:p.avatar||o.avatar||user.photoURL||'',bio:p.bio||o.bio||'',favoriteAnime:p.favoriteAnime||o.favoriteAnime||o.animeFavorito||'',email:p.email||user.email||'',raidWhatsappNotify:Boolean(p.raidWhatsappNotify),createdAt:p.createdAt||o.createdAt||user.metadata?.creationTime||nowIso()};
   if(!ps?.exists()) await set(ref(db,`profiles/${user.uid}`),{...merged,updatedAt:nowIso()}).catch(()=>{});
-  else if((!p.email&&user.email)||p.raidWhatsappNotify==null||p.whatsappSiteNotify==null) await update(ref(db,`profiles/${user.uid}`),{email:user.email||p.email||'',whatsappSiteNotify:Boolean(p.whatsappSiteNotify),raidWhatsappNotify:Boolean(p.raidWhatsappNotify),updatedAt:nowIso()}).catch(()=>{});
+  else if((!p.email&&user.email)||p.raidWhatsappNotify==null) await update(ref(db,`profiles/${user.uid}`),{email:user.email||p.email||'',raidWhatsappNotify:Boolean(p.raidWhatsappNotify),updatedAt:nowIso()}).catch(()=>{});
   await set(ref(db,`directory/${user.uid}`),publicProfile(merged,publicCustomizationIds().length?publicCustomizationIds():(Array.isArray(oldDirectory?.style)?oldDirectory.style:[]))).catch(()=>{});
   state.profile=merged;state.privateData=o;renderAccount();
 }
@@ -335,15 +303,25 @@ function accountSnapshot(){
 }
 function renderAccount(){
   const p=state.profile||{};const avatar=avatarFor(p);const name=p.nome||'Usuário';const acc=accountSnapshot();const premium=acc.premium;const level=acc.level;const balance=acc.balance;
-  ['sideAvatar','topAvatar','profileAvatarPreview'].forEach(id=>{if($(id))$(id).src=avatar});$('sideName').textContent=name;$('sideStatus').textContent=premium?'Premium':usernameLabel(p);$('profileNameView').textContent=name;if($('profileUsernameView'))$('profileUsernameView').textContent=usernameLabel(p);$('profilePlanView').textContent=premium?'Premium':'Padrão';$('profileName').value=name;if($('profileUsername'))$('profileUsername').value=normalizeUsername(p.username||'');if($('profileUsernameHint'))$('profileUsernameHint').textContent=formatCooldown(usernameCooldownRemaining(p));$('profileAvatar').value=p.avatar||'';$('profileBio').value=p.bio||'';$('profileFavoriteAnime').value=p.favoriteAnime||'';if($('profileWhatsappSiteNotify'))$('profileWhatsappSiteNotify').checked=Boolean(p.whatsappSiteNotify);if($('profileRaidWhatsapp'))$('profileRaidWhatsapp').checked=Boolean(p.raidWhatsappNotify);if($('profileBrowserNotify'))$('profileBrowserNotify').checked=browserNotificationsEnabled();if($('raidWhatsappNotify'))$('raidWhatsappNotify').checked=Boolean(p.raidWhatsappNotify);renderAdminAccess();$('profileLevel').textContent=formatNumber(level);$('profileBalance').textContent=`₹ ${formatNumber(balance)}`;$('homePlan').textContent=premium?'Premium':'Padrão';$('homeLevel').textContent=formatNumber(level);$('homeBalance').textContent=`₹ ${formatNumber(balance)}`;$('homeGreeting').textContent=`Olá, ${name}.`;
+  ['sideAvatar','topAvatar','profileAvatarPreview'].forEach(id=>{if($(id))$(id).src=avatar});$('sideName').textContent=name;$('sideStatus').textContent=premium?'Premium':usernameLabel(p);$('profileNameView').textContent=name;if($('profileUsernameView'))$('profileUsernameView').textContent=usernameLabel(p);$('profilePlanView').textContent=premium?'Premium':'Padrão';$('profileName').value=name;if($('profileUsername'))$('profileUsername').value=normalizeUsername(p.username||'');if($('profileUsernameHint'))$('profileUsernameHint').textContent=formatCooldown(usernameCooldownRemaining(p));$('profileAvatar').value=p.avatar||'';$('profileBio').value=p.bio||'';$('profileFavoriteAnime').value=p.favoriteAnime||'';if($('profileRaidWhatsapp'))$('profileRaidWhatsapp').checked=Boolean(p.raidWhatsappNotify);if($('profileBrowserNotify'))$('profileBrowserNotify').checked=browserNotificationsEnabled();if($('raidWhatsappNotify'))$('raidWhatsappNotify').checked=Boolean(p.raidWhatsappNotify);renderAdminAccess();$('profileLevel').textContent=formatNumber(level);$('profileBalance').textContent=`₹ ${formatNumber(balance)}`;$('homePlan').textContent=premium?'Premium':'Padrão';$('homeLevel').textContent=formatNumber(level);$('homeBalance').textContent=`₹ ${formatNumber(balance)}`;$('homeGreeting').textContent=`Olá, ${name}.`;
   if($('storeBalance'))$('storeBalance').textContent=`₹ ${formatNumber(balance)}`;
-  if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(balance)}`;
   if($('premiumStatusPill'))$('premiumStatusPill').textContent=premium?'Premium':'Padrão';
   if($('premiumStatusTitle'))$('premiumStatusTitle').textContent=premium?'Premium ativo':'Plano padrão';
   if($('premiumStatusText'))$('premiumStatusText').textContent=state.charlottePublic?.status==='linked'?(premium?'Seu Premium está sincronizado com a Charlotte.':'Escolha um plano abaixo. O pagamento é criado pelo bot com Mercado Pago.'):'Vincule a Charlotte para comprar e sincronizar o Premium pelo site.';
-  applyOwnProfileCustomization();renderPokemonInventory();
+}
+async function imageFileToProfileDataUrl(file,{maxSize=512,maxBytes=260000}={}){
+  if(!file||!String(file.type||'').startsWith('image/'))throw new Error('Escolha uma imagem válida.');
+  const bitmap=await createImageBitmap(file);const scale=Math.min(1,maxSize/Math.max(bitmap.width,bitmap.height));
+  const w=Math.max(1,Math.round(bitmap.width*scale)),h=Math.max(1,Math.round(bitmap.height*scale));
+  const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const ctx=canvas.getContext('2d',{alpha:false});
+  ctx.fillStyle='#08090d';ctx.fillRect(0,0,w,h);ctx.drawImage(bitmap,0,0,w,h);try{bitmap.close?.()}catch{}
+  let quality=.88,data='';
+  do{data=canvas.toDataURL('image/jpeg',quality);quality-=.08}while(data.length>maxBytes*1.34&&quality>=.44);
+  if(data.length>maxBytes*1.5)throw new Error('A imagem ficou muito grande. Escolha uma foto menor.');
+  return data;
 }
 $('profileAvatar').addEventListener('input',()=>{$('profileAvatarPreview').src=$('profileAvatar').value.trim()||DEFAULT_AVATAR});
+$('profileAvatarFile')?.addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;const status=$('profileAvatarFileStatus');try{if(status)status.textContent='Preparando foto...';const data=await imageFileToProfileDataUrl(file);$('profileAvatar').value=data;$('profileAvatarPreview').src=data;if(status)status.textContent='Foto pronta para salvar.'}catch(err){if(status)status.textContent='Não foi possível usar essa foto.';toast(err.message)}});
 $('profileForm').addEventListener('submit',async ev=>{
   ev.preventDefault();if(!state.user)return;
   const oldProfile=state.profile||{},oldUsername=normalizeUsername(oldProfile.username||''),username=normalizeUsername($('profileUsername')?.value||'');
@@ -361,7 +339,7 @@ $('profileForm').addEventListener('submit',async ev=>{
       await set(ref(db,`usernames/${username}`),{uid:state.user.uid,username,updatedAt:Date.now()});
       reservedNew=true;
     }
-    const payload={uid:state.user.uid,nome:$('profileName').value.trim().slice(0,40)||'Usuário',username,usernameChangedAt:changing?Date.now():Number(oldProfile.usernameChangedAt||Date.now()),avatar:$('profileAvatar').value.trim(),bio:$('profileBio').value.trim().slice(0,500),favoriteAnime:$('profileFavoriteAnime').value.trim().slice(0,80),email:state.user.email||oldProfile.email||'',whatsappSiteNotify:Boolean($('profileWhatsappSiteNotify')?.checked),raidWhatsappNotify:Boolean($('profileRaidWhatsapp')?.checked),createdAt:oldProfile.createdAt||nowIso(),updatedAt:nowIso()};
+    const payload={uid:state.user.uid,nome:$('profileName').value.trim().slice(0,40)||'Usuário',username,usernameChangedAt:changing?Date.now():Number(oldProfile.usernameChangedAt||Date.now()),avatar:$('profileAvatar').value.trim(),bio:$('profileBio').value.trim().slice(0,500),favoriteAnime:$('profileFavoriteAnime').value.trim().slice(0,80),email:state.user.email||oldProfile.email||'',raidWhatsappNotify:Boolean($('profileRaidWhatsapp')?.checked),createdAt:oldProfile.createdAt||nowIso(),updatedAt:nowIso()};
     await set(ref(db,`profiles/${state.user.uid}`),payload);
     await set(ref(db,`directory/${state.user.uid}`),publicProfile(payload));
     if(changing&&oldUsername)await remove(ref(db,`usernames/${oldUsername}`)).catch(()=>{});
@@ -380,49 +358,18 @@ $('profileForm').addEventListener('submit',async ev=>{
   }
 });
 
-function clearUserSubscriptions(){try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}if(state.gameRealtimePoll){clearInterval(state.gameRealtimePoll);state.gameRealtimePoll=null}state.gameRealtimeSyncing=false;clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonAudio={encounterId:'',resultId:''};state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.notificationDismissed={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null}
-async function syncSiteGameRealtimeState(){
-  if(!state.user||state.gameRealtimeSyncing)return;
-  const uid=state.user.uid;
-  state.gameRealtimeSyncing=true;
-  try{
-    const [challengeSn,tttSn,blackjackSn,hangmanSn]=await Promise.all([
-      get(ref(db,`siteGameChallenges/${uid}`)),
-      get(ref(db,`ticTacToeIndex/${uid}`)),
-      get(ref(db,`blackjackIndex/${uid}`)),
-      get(ref(db,`hangmanIndex/${uid}`))
-    ]);
-    if(!state.user||state.user.uid!==uid)return;
-    state.siteGameChallenges=challengeSn.exists()?challengeSn.val():{};
-    renderSiteGameChallenges();
-    state.ttt.index=tttSn.exists()?tttSn.val():{};handleTttIndex(state.ttt.index);
-    state.blackjack.index=blackjackSn.exists()?blackjackSn.val():{};handleBlackjackIndex(state.blackjack.index);
-    state.hangman.index=hangmanSn.exists()?hangmanSn.val():{};handleHangmanIndex(state.hangman.index);
-  }catch(e){
-    console.warn('[GAMES REALTIME] ressincronização falhou:',e?.code||e?.message||e);
-  }finally{
-    state.gameRealtimeSyncing=false;
-  }
-}
-function scheduleGameRealtimeSync(delay=250){
-  if(!state.user)return;
-  setTimeout(()=>syncSiteGameRealtimeState().catch(()=>{}),Math.max(0,Number(delay)||0));
-}
-function gameRealtimeListenerError(label,e){
-  console.warn(`[GAMES REALTIME] listener ${label} interrompido:`,e?.code||e?.message||e);
-  scheduleGameRealtimeSync(500);
-}
+function clearUserSubscriptions(){if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.ban=null;state.watchCode=null;state.watchRoom=null}
 function startUserSubscriptions(){
   clearUserSubscriptions();const uid=state.user.uid;
   state.userUnsubs.push(onValue(ref(db,`friends/${uid}`),s=>{state.friends=s.exists()?s.val():{};renderFriends();renderDuelFriendSelect();$('homeFriendsText').textContent=`${Object.keys(state.friends).length} amigo${Object.keys(state.friends).length===1?'':'s'}`}));
   state.userUnsubs.push(onValue(ref(db,`friendRequests/${uid}`),s=>{state.requests=s.exists()?s.val():{};renderFriendRequests()}));
   state.userUnsubs.push(onValue(ref(db,`charlottePublic/${uid}`),s=>{state.charlottePublic=s.exists()?s.val():null;renderCharlotteStatus()}));
-  state.userUnsubs.push(onValue(ref(db,`charlotteSync/${uid}`),s=>{state.charlotteSync=s.exists()?s.val():null;renderCharlotteSync();renderAccount();loadPokemonSources();renderCollection();renderStore();renderPokemonInventory()}));
+  state.userUnsubs.push(onValue(ref(db,`charlotteSync/${uid}`),s=>{state.charlotteSync=s.exists()?s.val():null;renderCharlotteSync();renderAccount();loadPokemonSources();renderCollection();renderStore()}));
   state.userUnsubs.push(onValue(ref(db,`siteBridgeResults/${uid}`),s=>{state.bridgeResults=s.exists()?s.val():{}}));
   state.userUnsubs.push(onValue(ref(db,`siteInventory/${uid}`),s=>{state.siteInventory=s.exists()?s.val():{};renderStore()}));
   state.userUnsubs.push(onValue(ref(db,`siteCustomization/${uid}`),s=>{state.siteCustomization=s.exists()?s.val():{};applyCustomization();renderStore();syncPublicCustomization().catch(()=>{})}));
-  state.userUnsubs.push(onValue(ref(db,'siteStoreCatalog'),sn=>{state.storeCatalog=sn.exists()?sn.val():{};mergeRemoteStoreCatalog(state.storeCatalog);renderStore();applyCustomization();}));
-  state.userUnsubs.push(onValue(query(ref(db,`supportChats/${uid}/messages`),orderByChild('createdAt'),limitToLast(120)),sn=>{state.supportChat.messages=sn.exists()?sn.val():{};renderSupportChat()}));
+  state.userUnsubs.push(onValue(ref(db,'siteStoreCatalog'),s=>{state.dynamicStoreCatalog=s.exists()?s.val():{};hydrateDynamicStoreCatalog();renderStore()}));
+  state.userUnsubs.push(onValue(ref(db,`siteSupportChats/${uid}/messages`),s=>{state.supportMessages=s.exists()?s.val():{};renderSupportChat()}));
   state.userUnsubs.push(onValue(ref(db,`pokemonSiteChallenges/${uid}`),s=>renderDuelInbox(s.exists()?s.val():{})));
   state.userUnsubs.push(onValue(ref(db,`pokemonSiteDuelIndex/${uid}`),s=>handleDuelIndex(s.exists()?s.val():{})));
   state.userUnsubs.push(onValue(ref(db,`pokemonSiteEncounter/${uid}`),s=>{state.pokemonEncounter=s.exists()?s.val():null;renderWildEncounter()}));
@@ -430,12 +377,8 @@ function startUserSubscriptions(){
   state.userUnsubs.push(onValue(ref(db,'pokemonSiteRaid/current'),s=>{state.siteRaid=s.exists()?s.val():null;renderSiteRaid()}));
   state.userUnsubs.push(onValue(ref(db,'pokemonSiteRaidConfig'),s=>{state.siteRaidConfig=s.exists()?s.val():{};renderSiteRaid()}));
 
-  state.userUnsubs.push(onValue(ref(db,`ticTacToeIndex/${uid}`),s=>{state.ttt.index=s.exists()?s.val():{};handleTttIndex(state.ttt.index)},e=>gameRealtimeListenerError('ticTacToeIndex',e)));
-  state.userUnsubs.push(onValue(ref(db,`blackjackIndex/${uid}`),s=>{state.blackjack.index=s.exists()?s.val():{};handleBlackjackIndex(state.blackjack.index)},e=>gameRealtimeListenerError('blackjackIndex',e)));
-  state.userUnsubs.push(onValue(ref(db,`hangmanIndex/${uid}`),s=>{state.hangman.index=s.exists()?s.val():{};handleHangmanIndex(state.hangman.index)},e=>gameRealtimeListenerError('hangmanIndex',e)));
-  state.userUnsubs.push(onValue(ref(db,`siteGameChallenges/${uid}`),s=>{state.siteGameChallenges=s.exists()?s.val():{};renderSiteGameChallenges();renderNotifications()},e=>gameRealtimeListenerError('siteGameChallenges',e)));
+  state.userUnsubs.push(onValue(ref(db,`ticTacToeIndex/${uid}`),s=>{state.ttt.index=s.exists()?s.val():{};handleTttIndex(state.ttt.index)}));
   state.userUnsubs.push(onValue(query(ref(db,'siteUpdates'),orderByChild('createdAt'),limitToLast(60)),s=>{state.updates=s.exists()?s.val():{};renderUpdates()}));
-  state.userUnsubs.push(onValue(ref(db,`siteNotificationDismissed/${uid}`),s=>{state.notificationDismissed=s.exists()?s.val():{};renderNotifications()}));
   let notificationBoot=true,notificationNewestAt=0;
   state.userUnsubs.push(onValue(query(ref(db,`siteNotifications/${uid}`),orderByChild('createdAt'),limitToLast(100)),s=>{
     const previousNewest=notificationNewestAt;
@@ -447,16 +390,13 @@ function startUserSubscriptions(){
     notificationBoot=false;
   }));
   state.userUnsubs.push(onValue(ref(db,`siteBans/${uid}`),s=>{state.ban=s.exists()?s.val():null;applySiteBan()}));
-  // Fallback leve: se um listener do Firebase for cancelado (ex.: regras foram publicadas com o site aberto),
-  // convites e partidas continuam aparecendo sem precisar recarregar a página.
-  scheduleGameRealtimeSync(350);
-  state.gameRealtimePoll=setInterval(()=>syncSiteGameRealtimeState().catch(()=>{}),3000);
 }
 
 await initialAuthPolicy();
 onAuthStateChanged(auth,user=>{
   document.body.classList.remove('auth-loading');
   state.user=user||null;
+  state.adminClaim=false;
 
   if(!user){
     document.body.classList.remove('authenticated');
@@ -482,6 +422,7 @@ onAuthStateChanged(auth,user=>{
   }
   renderAccount();
   renderAdminAccess();
+  getIdTokenResult(user,true).then(token=>{state.adminClaim=Boolean(token?.claims?.gremoryAdmin===true||token?.claims?.admin===true);renderAdminAccess();if(state.adminClaim&&state.route==='admin')loadAdminDashboard().catch(()=>{})}).catch(()=>{});
   startUserSubscriptions();
 
   withTimeout(readUserData(user),12000,'DB_TIMEOUT').then(()=>{
@@ -508,320 +449,31 @@ function generatedTone(freq=720,duration=.12){
 function playSiteSound(name,fallbackFreq=720){
   try{const audio=new Audio(`/assets/audio/${name}.mp3`);audio.volume=.35;audio.play().catch(()=>generatedTone(fallbackFreq))}catch{generatedTone(fallbackFreq)}
 }
-
-// Sons personalizados: os MP3 em /assets/audio/custom/ são carregados uma vez
-// e ficam prontos no AudioContext depois da primeira interação. Isso evita o bloqueio
-// de autoplay do mobile em sons disparados depois de Firebase/bridge (turno, Pokémon etc.).
-const GAME_AUDIO_VERSION='20261022-v13-audio';
-const CUSTOM_GAME_SOUND_FILES=Object.freeze({
-  notification:['notification.mp3'],victory:['victory.mp3'],defeat:['defeat.mp3'],select:['select.mp3'],move:['move.mp3'],turn:['turn.mp3'],start:['start.mp3'],
-  accept:['accept.mp3'],reject:['reject.mp3'],card:['select.mp3'],stand:['turn.mp3'],correct:['correct.mp3'],wrong:['wrong.mp3'],draw:['draw.mp3'],switch:['move.mp3'],
-  reelStop:['select.mp3'],coins:['money-win.mp3'],debit:['wrong.mp3'],jackpot:['money-win.mp3'],purchase:['purchase-customization.mp3'],
-  slotSpin:['slot-spin.mp3'],pokemonEncounter:['pokemon-encounter (2).mp3','pokemon-encounter.mp3'],pokemonHit:['pokemon-hit.mp3'],pokemonBall:['move.mp3'],pokemonCapture:['correct.mp3']
-});
-function customGameSoundUrls(kind){
-  const files=CUSTOM_GAME_SOUND_FILES[kind]||[];
-  return files.map(file=>`${['notification','victory'].includes(kind)?'/assets/audio/':'/assets/audio/custom/'}${encodeURIComponent(file)}?v=${GAME_AUDIO_VERSION}`);
-}
-function customGameSoundPath(kind){return customGameSoundUrls(kind)[0]||''}
-
-let gameSfxCtx=null;
-const customGameSoundBuffers=new Map();
-const customGameSoundLoads=new Map();
-function gameSfxContext(){
-  try{
-    const Ctx=window.AudioContext||window.webkitAudioContext;
-    if(!Ctx)return null;
-    if(!gameSfxCtx||gameSfxCtx.state==='closed')gameSfxCtx=new Ctx();
-    if(gameSfxCtx.state==='suspended')gameSfxCtx.resume().catch(()=>{});
-    return gameSfxCtx;
-  }catch{return null}
-}
-async function preloadCustomGameSound(kind){
-  if(customGameSoundBuffers.has(kind))return customGameSoundBuffers.get(kind);
-  if(customGameSoundLoads.has(kind))return customGameSoundLoads.get(kind);
-  const task=(async()=>{
-    const ctx=gameSfxContext();if(!ctx)return null;
-    for(const src of customGameSoundUrls(kind)){
-      try{
-        const response=await fetch(src,{cache:'no-store'});
-        if(!response.ok)continue;
-        const bytes=await response.arrayBuffer();
-        const buffer=await ctx.decodeAudioData(bytes.slice(0));
-        if(buffer){customGameSoundBuffers.set(kind,buffer);return buffer}
-      }catch{}
-    }
-    return null;
-  })().finally(()=>customGameSoundLoads.delete(kind));
-  customGameSoundLoads.set(kind,task);return task;
-}
-function playDecodedGameSound(buffer,{volume=.38,loop=false}={}){
-  try{
-    const ctx=gameSfxContext();if(!ctx||!buffer)return null;
-    const source=ctx.createBufferSource(),gain=ctx.createGain();
-    source.buffer=buffer;source.loop=!!loop;gain.gain.value=Math.max(0,Math.min(1,Number(volume)||.38));
-    source.connect(gain);gain.connect(ctx.destination);source.start(0);
-    let stopped=false;
-    return{stop(){if(stopped)return;stopped=true;try{source.stop()}catch{}},pause(){this.stop()}};
-  }catch{return null}
-}
-function tryCustomGameSound(kind,{volume=.38,loop=false,fallback=null}={}){
-  let failed=false,controller=null,audio=null,stopped=false;
-  const useFallback=()=>{if(failed||stopped)return;failed=true;if(typeof fallback==='function')fallback()};
-  const cached=customGameSoundBuffers.get(kind);
-  if(cached){controller=playDecodedGameSound(cached,{volume,loop});if(controller)return controller}
-
-  // Prepara o buffer para sons assíncronos futuros e tenta tocar imediatamente em cliques diretos.
-  preloadCustomGameSound(kind).catch(()=>{});
-  const src=customGameSoundPath(kind);if(!src){useFallback();return null}
-  try{
-    audio=new Audio(src);audio.volume=Math.max(0,Math.min(1,Number(volume)||.38));audio.loop=!!loop;audio.preload='auto';
-    audio.addEventListener('error',useFallback,{once:true});
-    const promise=audio.play();
-    if(promise?.catch)promise.catch(()=>{
-      const ready=customGameSoundBuffers.get(kind);
-      if(ready&&!stopped){controller=playDecodedGameSound(ready,{volume,loop});if(controller)return}
-      useFallback();
-    });
-    return{
-      pause(){stopped=true;try{audio?.pause?.()}catch{};try{controller?.stop?.()}catch{}},
-      stop(){this.pause()}
-    };
-  }catch{useFallback();return null}
-}
-function playNotificationTone(){tryCustomGameSound('notification',{fallback:()=>playSiteSound('notification',720)})}
-function playVictoryTone(){tryCustomGameSound('victory',{volume:.45,fallback:()=>playSiteSound('victory',920)})}
-function playDefeatTone(){tryCustomGameSound('defeat',{volume:.45,fallback:()=>playSiteSound('defeat',190)})}
-
-function gameSfxTone(freq,delay=0,duration=.07,volume=.028,type='sine'){
-  try{
-    const ctx=gameSfxContext();if(!ctx)return;
-    const osc=ctx.createOscillator(),gain=ctx.createGain(),t=ctx.currentTime+Math.max(0,delay);
-    osc.type=type;osc.frequency.setValueAtTime(Math.max(40,Number(freq||440)),t);
-    gain.gain.setValueAtTime(.0001,t);
-    gain.gain.exponentialRampToValueAtTime(Math.max(.001,volume),t+.008);
-    gain.gain.exponentialRampToValueAtTime(.0001,t+Math.max(.025,duration));
-    osc.connect(gain);gain.connect(ctx.destination);osc.start(t);osc.stop(t+Math.max(.03,duration)+.02);
-  }catch{}
-}
-function playGameSfx(kind){
-  const patterns={
-    select:[[520,0,.045,.018,'square'],[690,.045,.05,.016,'sine']],
-    move:[[330,0,.05,.024,'square'],[470,.045,.065,.02,'triangle']],
-    turn:[[620,0,.06,.022,'sine'],[820,.075,.08,.025,'sine']],
-    start:[[430,0,.05,.02,'triangle'],[620,.07,.06,.024,'triangle'],[840,.145,.09,.026,'sine']],
-    accept:[[560,0,.05,.02,'sine'],[760,.06,.08,.024,'sine']],
-    reject:[[350,0,.055,.018,'square'],[240,.055,.08,.018,'triangle']],
-    card:[[420,0,.04,.018,'triangle'],[540,.035,.045,.018,'triangle']],
-    stand:[[520,0,.045,.018,'sine'],[390,.055,.08,.018,'sine']],
-    correct:[[650,0,.05,.02,'sine'],[880,.055,.075,.025,'sine']],
-    wrong:[[250,0,.07,.022,'sawtooth'],[180,.07,.09,.018,'triangle']],
-    draw:[[440,0,.07,.018,'sine'],[440,.09,.07,.018,'sine']],
-    switch:[[360,0,.045,.02,'triangle'],[610,.055,.075,.022,'triangle']],
-    reelStop:[[300,0,.035,.025,'square'],[220,.035,.055,.018,'triangle']],
-    coins:[[880,0,.045,.024,'sine'],[1080,.05,.045,.025,'sine'],[1320,.10,.055,.027,'sine'],[1640,.16,.08,.03,'sine']],
-    debit:[[320,0,.05,.02,'square'],[230,.055,.075,.022,'triangle']],
-    jackpot:[[740,0,.05,.026,'sine'],[980,.06,.05,.028,'sine'],[1240,.12,.06,.03,'sine'],[1560,.19,.09,.032,'sine']],
-    purchase:[[520,0,.045,.02,'triangle'],[760,.055,.06,.024,'sine'],[1040,.12,.085,.028,'sine']]
-  };
-  if(kind==='victory'){playVictoryTone();return}
-  if(kind==='defeat'){playDefeatTone();return}
-  const fallback=()=>{(patterns[kind]||patterns.select).forEach(([f,d,du,v,t])=>gameSfxTone(f,d,du,v,t))};
-  tryCustomGameSound(kind,{volume:['coins','jackpot','purchase'].includes(kind)?.44:.34,fallback});
-}
-
-let gameAudioPrimed=false;
-function primeGameAudio(){
-  try{gameSfxContext()?.resume?.().catch(()=>{})}catch{}
-  if(gameAudioPrimed)return;gameAudioPrimed=true;
-  // Estes são os MP3 que já existem na pasta custom enviada pelo usuário.
-  ['select','move','turn','start','accept','reject','correct','wrong','draw','coins','purchase','slotSpin','pokemonEncounter','pokemonHit','defeat','notification','victory'].forEach(kind=>preloadCustomGameSound(kind).catch(()=>{}));
-}
-document.addEventListener('pointerdown',primeGameAudio,{capture:true,passive:true,once:true});
-document.addEventListener('touchstart',primeGameAudio,{capture:true,passive:true,once:true});
-document.addEventListener('keydown',primeGameAudio,{capture:true,once:true});
-
-function startGeneratedSlotSpinSound(){
-  let timer=null,step=0,stopped=false;
-  const ctx=gameSfxContext();if(!ctx)return()=>{};
-  const tick=()=>{
-    if(stopped)return;
-    try{
-      const osc=ctx.createOscillator(),gain=ctx.createGain(),t=ctx.currentTime;
-      osc.type='square';osc.frequency.value=190+(step%6)*34;
-      gain.gain.setValueAtTime(.0001,t);gain.gain.exponentialRampToValueAtTime(.022,t+.006);gain.gain.exponentialRampToValueAtTime(.0001,t+.055);
-      osc.connect(gain);gain.connect(ctx.destination);osc.start(t);osc.stop(t+.06);step++;
-    }catch{}
-  };
-  tick();timer=setInterval(tick,82);
-  return()=>{if(stopped)return;stopped=true;if(timer)clearInterval(timer)};
-}
-function startSlotSpinSound(){
-  let stopped=false,fallbackStop=null,fallbackStarted=false;
-  const startFallback=()=>{if(stopped||fallbackStarted)return;fallbackStarted=true;fallbackStop=startGeneratedSlotSpinSound()};
-  const custom=tryCustomGameSound('slotSpin',{volume:.38,loop:true,fallback:startFallback});
-  if(!custom)startFallback();
-  return()=>{if(stopped)return;stopped=true;try{custom?.pause?.()}catch{};fallbackStop?.()};
-}
+function playNotificationTone(){playSiteSound('notification',720)}
+function playVictoryTone(){playSiteSound('victory',920)}
 function playPokemonSound(kind){
   const map={
-    encounter:['pokemonEncounter','pokemon-encounter',620],
-    hit:['pokemonHit','pokemon-hit',180],
-    ball:['pokemonBall','pokemon-ball',520],
-    capture:['pokemonCapture','pokemon-capture',920]
+    encounter:['pokemon-encounter',620],
+    hit:['pokemon-hit',180],
+    ball:['pokemon-ball',520],
+    capture:['pokemon-capture',920]
   };
   const row=map[kind];if(!row)return;
-  tryCustomGameSound(row[0],{fallback:()=>playSiteSound(row[1],row[2])});
+  playSiteSound(row[0],row[1]);
 }
-
-// ======================================================
-// SLOTS — inicialização antecipada e independente do status visual de vínculo.
-// A carteira continua sendo a mesma Rupia da Charlotte via siteBridgeJobs.
-// ======================================================
-const SLOT_SYMBOLS=['♛','✦','◆','♥','☾','⚡','7'];
-let slotBusy=false;
-const slotWait=ms=>new Promise(r=>setTimeout(r,ms));
-async function runSlotsSpin(){
-  if(slotBusy)return;
-  const bet=Math.floor(Number($('slotsBetInput')?.value||0));
-  if(!Number.isFinite(bet)||bet<10||bet>5000)return toast('A aposta deve ficar entre ₹10 e ₹5.000.');
-
-  // Se já temos saldo sincronizado, validamos antes. Se o espelho ainda não carregou,
-  // deixamos a Charlotte validar a carteira real em vez de bloquear o botão.
-  const hasWalletSnapshot=!!state.charlotteSync?.account;
-  const mirroredBalance=Number(accountSnapshot().balance||0);
-  if(hasWalletSnapshot&&mirroredBalance<bet)return toast(`Saldo insuficiente. Você possui ₹${formatNumber(mirroredBalance)}.`);
-
-  slotBusy=true;
-  playGameSfx('start');
-  const btn=$('slotsSpinBtn'),els=[$('slotReel1'),$('slotReel2'),$('slotReel3')];
-  if(btn)btn.disabled=true;
-  els.forEach(e=>e?.classList.add('spinning'));
-  if($('slotsStatus'))$('slotsStatus').textContent='Girando...';
-  if($('slotsLastWin'))$('slotsLastWin').textContent=`Apostando ₹${formatNumber(bet)}...`;
-
-  const started=Date.now();
-  const stopSpinSound=startSlotSpinSound();
-  let timer=setInterval(()=>els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]}),78);
-  let visualStopped=false;
-  const stopVisual=()=>{
-    if(visualStopped)return;
-    visualStopped=true;
-    if(timer){clearInterval(timer);timer=null}
-    try{stopSpinSound()}catch{}
-    els.forEach(e=>e?.classList.remove('spinning'));
-  };
-  const visualSafety=setTimeout(()=>{
-    stopVisual();
-    if($('slotsStatus'))$('slotsStatus').textContent='Sincronizando Rupias...';
-    if($('slotsLastWin'))$('slotsLastWin').textContent='O giro terminou. Confirmando a carteira...';
-  },4200);
-
-  try{
-    // requireLink=false evita bloquear por um charlottePublic atrasado. O bridge é quem
-    // valida o UID/JID real e usa delkoin/addkoin na carteira oficial.
-    const r=await bridgeRequest('slots_spin',{bet},18000,false);
-    await slotWait(Math.max(0,1550-(Date.now()-started)));
-    clearTimeout(visualSafety);
-    stopVisual();
-
-    for(let i=0;i<6;i++){
-      els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]});
-      await slotWait(48+i*14);
-    }
-    const symbols=Array.isArray(r.symbols)&&r.symbols.length===3?r.symbols:['✦','✦','✦'];
-    for(let i=0;i<symbols.length;i++){
-      if(els[i])els[i].textContent=symbols[i];
-      playGameSfx('reelStop');
-      if(i<symbols.length-1)await slotWait(105);
-    }
-
-    const payout=Number(r.payout||0),balance=Number(r.balance??accountSnapshot().balance??0),jackpot=!!r.jackpot;
-    if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(balance)}`;
-    if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':payout>0?'Você ganhou!':'Sem prêmio';
-    if($('slotsLastWin'))$('slotsLastWin').textContent=payout>0
-      ? `${symbols.join(' ')} • prêmio ₹${formatNumber(payout)} • saldo ₹${formatNumber(balance)}`
-      : `${symbols.join(' ')} • perdeu ₹${formatNumber(bet)} • saldo ₹${formatNumber(balance)}`;
-
-    if(jackpot){
-      playGameSfx('jackpot');
-      setTimeout(()=>playGameSfx('coins'),240);
-      showGameResult({title:'JACKPOT!',text:`${symbols.join(' ')} • você ganhou ₹${formatNumber(payout)}. Saldo: ₹${formatNumber(balance)}.`,win:true,icon:'7'});
-    }else if(payout>0){
-      playVictoryTone();
-      setTimeout(()=>playGameSfx('coins'),220);
-    }else{
-      playGameSfx('debit');
-      setTimeout(()=>playDefeatTone(),180);
-    }
-    bridgeRequest('sync_account',{},25000,false).catch(()=>{});
-  }catch(e){
-    clearTimeout(visualSafety);
-    stopVisual();
-    if($('slotsStatus'))$('slotsStatus').textContent='Não concluído';
-    if($('slotsLastWin'))$('slotsLastWin').textContent=String(e?.message||'Não foi possível confirmar a aposta.');
-    bridgeRequest('sync_account',{},25000,false).catch(()=>{});
-    toast(e?.message||'Não foi possível concluir o giro.',5500);
-  }finally{
-    slotBusy=false;
-    if(btn)btn.disabled=false;
-  }
-}
-// Delegação é instalada cedo. Mesmo se outro módulo secundário falhar mais abaixo,
-// o botão do Slots e os presets continuam respondendo no mobile.
-document.addEventListener('click',ev=>{
-  const target=ev.target instanceof Element?ev.target:null;if(!target)return;
-  const betBtn=target.closest('[data-slot-bet]');
-  if(betBtn){playGameSfx('select');if($('slotsBetInput'))$('slotsBetInput').value=betBtn.dataset.slotBet||'50';return}
-  if(target.closest('#slotsSpinBtn')){ev.preventDefault();runSlotsSpin().catch(e=>toast(e?.message||'Erro no Slots.'))}
-},{passive:false});
-
 function notificationStorageKey(suffix='seen'){
   return `gremory:notif:${suffix}:${state.user?.uid||'guest'}`
 }
 function notificationLastSeen(){return Number(localStorage.getItem(notificationStorageKey('seen'))||0)}
 function notificationReadIds(){try{return new Set(JSON.parse(localStorage.getItem(notificationStorageKey('read'))||'[]'))}catch{return new Set()}}
 function saveNotificationReadIds(set){localStorage.setItem(notificationStorageKey('read'),JSON.stringify([...set].slice(-300)))}
-function notificationDismissedKeys(){try{return new Set(JSON.parse(localStorage.getItem(notificationStorageKey('dismissed'))||'[]'))}catch{return new Set()}}
-function saveNotificationDismissedKeys(set){localStorage.setItem(notificationStorageKey('dismissed'),JSON.stringify([...set].slice(-500)))}
-function notificationSignature(n){return [String(n?.type||''),String(n?.title||''),String(n?.text||''),String(n?.link||''),String(n?.imageUrl||'')].join('\u241f')}
-function notificationPersistentKey(n){
-  const type=String(n?.type||'');
-  const source=type==='game_challenge'?`game:${n?.challengeId||n?.id||''}`:notificationSignature(n);
-  let h=2166136261;
-  for(let i=0;i<source.length;i++){h^=source.charCodeAt(i);h=Math.imul(h,16777619)}
-  return `n_${(h>>>0).toString(16)}`
-}
-function notificationWasDismissed(n){
-  if(!n)return false;
-  const key=notificationPersistentKey(n);
-  return Boolean(state.notificationDismissed?.[key])||notificationDismissedKeys().has(key)
-}
-function findNotificationById(id){
-  if(!id)return null;
-  const raw=state.notifications?.[id];
-  if(raw)return{id,...raw};
-  return siteGameChallengeNotificationRows().find(n=>String(n.id)===String(id))||null
-}
-async function persistNotificationDismissed(n){
-  if(!state.user||!n)return;
-  const key=notificationPersistentKey(n),local=notificationDismissedKeys();
-  local.add(key);saveNotificationDismissedKeys(local);
-  state.notificationDismissed={...(state.notificationDismissed||{}),[key]:{seenAt:Date.now(),notificationId:String(n.id||''),type:String(n.type||'')}};
-  try{await set(ref(db,`siteNotificationDismissed/${state.user.uid}/${key}`),{seenAt:Date.now(),notificationId:String(n.id||''),type:String(n.type||'')})}catch{}
-}
-function markNotificationRead(target){
-  const n=typeof target==='object'&&target?target:findNotificationById(target);
-  const id=String(n?.id||target||'');if(!id)return;
-  const setIds=notificationReadIds();setIds.add(id);saveNotificationReadIds(setIds);
-  // Convites de jogo continuam visíveis até Aceitar/Recusar; só avisos comuns somem após abrir.
-  if(n&&n.type!=='game_challenge')persistNotificationDismissed(n).finally(()=>renderNotifications());else renderNotifications()
-}
+function markNotificationRead(id){if(!id)return;const set=notificationReadIds();set.add(String(id));saveNotificationReadIds(set);renderNotifications()}
 function markAllNotificationsSeen(){localStorage.setItem(notificationStorageKey('seen'),String(Date.now()));localStorage.removeItem(notificationStorageKey('read'));renderNotifications()}
-function isNotificationUnread(n){return !notificationWasDismissed(n)&&Number(n?.createdAt||0)>notificationLastSeen()&&!notificationReadIds().has(String(n?.id||''))}
+function isNotificationUnread(n){return Number(n?.createdAt||0)>notificationLastSeen()&&!notificationReadIds().has(String(n?.id||''))}
+function notificationSignature(n){return [String(n?.type||''),String(n?.title||''),String(n?.text||''),String(n?.link||''),String(n?.imageUrl||'')].join('\u241f')}
 function notificationCategory(n){
   const type=String(n?.type||'').toLowerCase();
-  if(['friend_request','pokemon_duel','ttt','blackjack','hangman','game_challenge','tinder_match','friend','social'].includes(type))return'social';
+  if(['friend_request','pokemon_duel','ttt','tinder_match','friend','social'].includes(type))return'social';
   return'team';
 }
 function notificationCategoryLabel(n){return notificationCategory(n)==='social'?'Amigos':'Equipe'}
@@ -838,32 +490,11 @@ function showBrowserNotification(n){
   if(!browserNotificationsEnabled()||!n)return;
   try{
     const notice=new Notification(n.title||'Gremory',{body:String(n.text||'').slice(0,180),icon:'/assets/icons/icon-192.png',badge:'/assets/icons/icon-192.png',tag:`gremory-${n.id||n.createdAt||Date.now()}`,renotify:false});
-    notice.onclick=()=>{window.focus();markNotificationRead(n);if(n.type==='game_challenge'){state.notificationFilter='social';renderNotifications();openModal('notificationModal')}else if(n.link?.startsWith('#'))navigate(n.link.slice(1));notice.close()}
+    notice.onclick=()=>{window.focus();if(n.link?.startsWith('#'))navigate(n.link.slice(1));notice.close()}
   }catch{}
 }
-function siteGameChallengeNotificationRows(){
-  return Object.entries(state.siteGameChallenges||{}).map(([challengeId,ch])=>{
-    const meta=SITE_GAME_META[ch?.type]||{};
-    return {
-      id:`game_${challengeId}`,
-      type:'game_challenge',
-      gameType:ch?.type||'',
-      challengeId,
-      title:`Convite para ${meta.label||'jogo'}`,
-      text:`${ch?.fromName||'Um amigo'} desafiou você para ${meta.label||'uma partida'}.`,
-      link:'#friends',
-      actorUid:ch?.fromUid||'',
-      createdAt:Number(ch?.createdAt||0),
-      sound:true,
-      virtual:true
-    };
-  });
-}
 function uniqueNotificationRows(source=state.notifications){
-  const rows=[
-    ...Object.entries(source||{}).map(([id,v])=>({id,...(v||{})})),
-    ...siteGameChallengeNotificationRows()
-  ].sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).filter(n=>!notificationWasDismissed(n));
+  const rows=Object.entries(source||{}).map(([id,v])=>({id,...(v||{})})).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
   const latestBySignature=new Map(),unique=[];
   for(const n of rows){const sig=notificationSignature(n),created=Number(n.createdAt||0),latest=latestBySignature.get(sig);if(latest!=null&&Math.abs(latest-created)<=30000)continue;latestBySignature.set(sig,created);unique.push(n)}
   return unique;
@@ -875,10 +506,10 @@ function ensureNotificationDetailModal(){
   document.body.appendChild(modal);modal.querySelector('.modal-backdrop')?.addEventListener('click',()=>closeModal('notificationDetailModal'));modal.querySelector('.modal-close')?.addEventListener('click',()=>closeModal('notificationDetailModal'));return modal
 }
 function openNotificationDetail(n){
-  ensureNotificationDetailModal();markNotificationRead(n);$('notificationDetailTitle').textContent=n?.title||'Notificação';$('notificationDetailText').textContent=n?.text||'';$('notificationDetailTime').textContent=shortDateTime(n?.createdAt);const img=$('notificationDetailImage'),url=String(n?.imageUrl||'').trim();if(img){if(url){img.src=url;img.hidden=false}else{img.removeAttribute('src');img.hidden=true}}closeModal('notificationModal');openModal('notificationDetailModal')
+  ensureNotificationDetailModal();markNotificationRead(n?.id);$('notificationDetailTitle').textContent=n?.title||'Notificação';$('notificationDetailText').textContent=n?.text||'';$('notificationDetailTime').textContent=shortDateTime(n?.createdAt);const img=$('notificationDetailImage'),url=String(n?.imageUrl||'').trim();if(img){if(url){img.src=url;img.hidden=false}else{img.removeAttribute('src');img.hidden=true}}closeModal('notificationModal');openModal('notificationDetailModal')
 }
-async function deleteSiteNotification(id){if(!state.user||!id)return;const n=state.notifications?.[id]?{id,...state.notifications[id]}:null;try{if(n)await persistNotificationDismissed(n);await remove(ref(db,`siteNotifications/${state.user.uid}/${id}`));const read=notificationReadIds();read.delete(String(id));saveNotificationReadIds(read);renderNotifications();toast('Notificação apagada.')}catch(e){toast(permissionMessage(e,'Não foi possível apagar a notificação.'))}}
-async function clearSiteNotifications(){if(!state.user)return;const rows=Object.entries(state.notifications||{}).map(([id,v])=>({id,...(v||{})})),ids=rows.map(n=>n.id);if(!ids.length)return toast('Sua caixa já está vazia.');try{await Promise.all(rows.map(n=>persistNotificationDismissed(n)));await Promise.all(ids.map(id=>remove(ref(db,`siteNotifications/${state.user.uid}/${id}`))));localStorage.removeItem(notificationStorageKey('read'));localStorage.setItem(notificationStorageKey('seen'),String(Date.now()));renderNotifications();toast('Notificações apagadas.')}catch(e){toast(permissionMessage(e,'Não foi possível limpar as notificações.'))}}
+async function deleteSiteNotification(id){if(!state.user||!id)return;try{await remove(ref(db,`siteNotifications/${state.user.uid}/${id}`));const read=notificationReadIds();read.delete(String(id));saveNotificationReadIds(read);toast('Notificação apagada.')}catch(e){toast(permissionMessage(e,'Não foi possível apagar a notificação.'))}}
+async function clearSiteNotifications(){if(!state.user)return;const ids=Object.keys(state.notifications||{});if(!ids.length)return toast('Sua caixa já está vazia.');try{await Promise.all(ids.map(id=>remove(ref(db,`siteNotifications/${state.user.uid}/${id}`))));localStorage.removeItem(notificationStorageKey('read'));localStorage.setItem(notificationStorageKey('seen'),String(Date.now()));toast('Notificações apagadas.')}catch(e){toast(permissionMessage(e,'Não foi possível limpar as notificações.'))}}
 function renderNotifications(){
   const all=uniqueNotificationRows(),readIds=notificationReadIds();const unseen=all.filter(x=>Number(x.createdAt||0)>notificationLastSeen()&&!readIds.has(String(x.id))).length,badge=$('notificationBadge');
   if(badge){badge.hidden=!unseen;badge.textContent=String(Math.min(99,unseen))}
@@ -886,25 +517,14 @@ function renderNotifications(){
   const rows=state.notificationFilter==='all'?all:state.notificationFilter==='social'?social:team;const box=$('notificationList');if(!box)return;box.innerHTML='';
   if(!rows.length){box.innerHTML=`<div class="empty-state small">${state.notificationFilter==='social'?'Nenhuma notificação de amigos ou jogos.':'Nenhum aviso da equipe.'}</div>`;return}
   rows.slice(0,60).forEach(n=>{
-    const row=document.createElement('div');row.className='notification-row-wrap'+(isNotificationUnread(n)?' unread':'')+(n.type==='game_challenge'?' game-challenge':'');
+    const row=document.createElement('div');row.className='notification-row-wrap'+(isNotificationUnread(n)?' unread':'');
     const d=document.createElement('button');d.type='button';d.className='notification-row';const head=document.createElement('div');head.className='notification-row-head';const st=document.createElement('strong');st.textContent=n.title||'Notificação';const kind=document.createElement('em');kind.textContent=notificationCategoryLabel(n);head.append(st,kind);const sm=document.createElement('span');sm.textContent=n.text||'';const time=document.createElement('small');time.textContent=shortDateTime(n.createdAt);d.append(head,sm,time);
-    d.onclick=()=>{markNotificationRead(n);if(n.type==='game_challenge')return;if(n.imageUrl||n.type==='admin_notice'||n.type==='site_update'){openNotificationDetail(n);return}if(n.link?.startsWith('#')){closeModal('notificationModal');navigate(n.link.slice(1));return}openNotificationDetail(n)};
-    row.appendChild(d);
-    if(n.type==='game_challenge'&&n.challengeId){
-      const actions=document.createElement('div');actions.className='notification-game-actions';
-      const yes=document.createElement('button');yes.type='button';yes.className='btn primary';yes.textContent='Aceitar';
-      yes.onclick=async ev=>{ev.stopPropagation();const ch=state.siteGameChallenges?.[n.challengeId];if(!ch)return toast('Esse convite não está mais disponível.');try{yes.disabled=true;no.disabled=true;markNotificationRead(n);await acceptSiteGameChallenge({id:n.challengeId,...ch});closeModal('notificationModal');navigate('games')}catch(e){toast(permissionMessage(e,e.message||'Não foi possível aceitar.'))}finally{yes.disabled=false;no.disabled=false}};
-      const no=document.createElement('button');no.type='button';no.className='btn';no.textContent='Recusar';
-      no.onclick=async ev=>{ev.stopPropagation();try{yes.disabled=true;no.disabled=true;markNotificationRead(n);await rejectSiteGameChallenge(n.challengeId)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível recusar.'))}finally{yes.disabled=false;no.disabled=false}};
-      actions.append(yes,no);row.appendChild(actions);
-    }else{
-      const del=document.createElement('button');del.className='notification-delete';del.type='button';del.title='Apagar';del.textContent='×';del.onclick=ev=>{ev.stopPropagation();deleteSiteNotification(n.id)};row.appendChild(del)
-    }
-    box.appendChild(row)
+    d.onclick=()=>{markNotificationRead(n.id);if(n.imageUrl||n.type==='admin_notice'||n.type==='site_update'){openNotificationDetail(n);return}if(n.link?.startsWith('#')){closeModal('notificationModal');navigate(n.link.slice(1));return}openNotificationDetail(n)};
+    const del=document.createElement('button');del.className='notification-delete';del.type='button';del.title='Apagar';del.textContent='×';del.onclick=ev=>{ev.stopPropagation();deleteSiteNotification(n.id)};row.append(d,del);box.appendChild(row)
   })
 }
 $$('[data-notification-filter]').forEach(btn=>btn.addEventListener('click',()=>{state.notificationFilter=btn.dataset.notificationFilter||'team';renderNotifications()}));
-$('notificationBtn')?.addEventListener('click',()=>{const all=uniqueNotificationRows();const hasGameInvite=all.some(n=>n.type==='game_challenge');const hasUnreadSocial=all.some(n=>notificationCategory(n)==='social'&&isNotificationUnread(n));if(hasGameInvite||hasUnreadSocial)state.notificationFilter='social';markAllNotificationsSeen();renderNotifications();openModal('notificationModal')});
+$('notificationBtn')?.addEventListener('click',()=>{markAllNotificationsSeen();openModal('notificationModal')});
 $('notificationMarkAllBtn')?.addEventListener('click',()=>{markAllNotificationsSeen();toast('Notificações marcadas como vistas.')});
 $('notificationClearAllBtn')?.addEventListener('click',()=>clearSiteNotifications());
 $('profileBrowserNotify')?.addEventListener('change',e=>setBrowserNotifications(e.target.checked));
@@ -952,20 +572,13 @@ async function submitReport(ev){
 }
 $('reportForm')?.addEventListener('submit',submitReport);
 
+
+function supportRows(){return Object.entries(state.supportMessages||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0))}
+function renderSupportChat(){const box=$('supportChatList');if(!box)return;const rows=supportRows();box.innerHTML='';if(!rows.length){box.innerHTML='<div class="empty-state small">Envie uma mensagem para iniciar o atendimento.</div>';return}rows.slice(-120).forEach(m=>{const d=document.createElement('div');d.className='support-message '+(m.role==='admin'?'admin':'user');const b=document.createElement('b');b.textContent=m.role==='admin'?'Equipe Gremory':(m.name||displayName());const p=document.createElement('p');p.textContent=m.text||'';const s=document.createElement('small');s.textContent=shortDateTime(m.createdAt);d.append(b,p,s);box.appendChild(d)});box.scrollTop=box.scrollHeight}
+$('supportChatForm')?.addEventListener('submit',async ev=>{ev.preventDefault();if(!state.user)return;const input=$('supportChatInput'),text=String(input?.value||'').trim();if(!text)return;try{const rr=push(ref(db,`siteSupportChats/${state.user.uid}/messages`));await set(rr,{id:rr.key,senderUid:state.user.uid,name:displayName(),role:'user',text:text.slice(0,500),createdAt:Date.now()});input.value=''}catch(e){toast(permissionMessage(e,'Não foi possível enviar a mensagem.'))}});
+
 // Administração do site — visível apenas para o e-mail host.
 const REPORT_LABELS={harassment:'Assédio',minor_sexual_content:'Conteúdo sexual envolvendo menores',threats:'Ameaças',gore:'Gore / violência extrema',spam_fraud:'Spam ou fraude',other:'Outro'};
-
-function supportMessagesArray(messages=state.supportChat?.messages||{}){
-  return Object.entries(messages||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0));
-}
-function renderSupportMessages(targetId,messages,viewerUid=state.user?.uid){
-  const box=$(targetId);if(!box)return;const rows=supportMessagesArray(messages);box.innerHTML='';
-  if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma mensagem.</div>';return}
-  rows.slice(-120).forEach(m=>{const row=document.createElement('div');row.className='support-msg'+(String(m.senderUid||'')===String(viewerUid||'')?' mine':'')+(m.role==='admin'?' admin':'');const name=document.createElement('strong');name.textContent=m.role==='admin'?'Equipe Gremory':(m.senderName||'Usuário');const text=document.createElement('p');text.textContent=m.text||'';const time=document.createElement('small');time.textContent=shortDateTime(m.createdAt);row.append(name,text,time);box.appendChild(row)});box.scrollTop=box.scrollHeight;
-}
-function renderSupportChat(){renderSupportMessages('supportChatList',state.supportChat?.messages||{},state.user?.uid)}
-$('supportChatForm')?.addEventListener('submit',async ev=>{ev.preventDefault();if(!state.user)return;const input=$('supportChatInput'),text=String(input?.value||'').trim().slice(0,500);if(!text)return;try{const mref=push(ref(db,`supportChats/${state.user.uid}/messages`));const createdAt=Date.now();await Promise.all([set(mref,{id:mref.key,senderUid:state.user.uid,senderName:displayName(),role:'user',text,createdAt}),update(ref(db,`supportChats/${state.user.uid}/meta`),{uid:state.user.uid,name:displayName(),username:normalizeUsername(state.profile?.username||''),updatedAt:createdAt,lastText:text.slice(0,120),status:'open'})]);input.value=''}catch(e){toast(permissionMessage(e,'Não foi possível enviar a mensagem.'))}});
-
 async function resolveAdminUid(query){
   const raw=String(query||'').trim();if(!raw)return'';
   const user=normalizeUsername(raw);
@@ -978,16 +591,15 @@ async function resolveAdminUid(query){
 async function loadAdminDashboard(){
   if(!isSiteAdmin())return;
   try{
-    const [reportsSnap,updatesSnap,directorySnap,bansSnap,supportSnap,backupSnap]=await Promise.all([
-      get(ref(db,'siteReports')),get(ref(db,'siteUpdates')),get(ref(db,'directory')),get(ref(db,'siteBans')),get(ref(db,'supportChats')),get(ref(db,'botBackupStatus'))
+    const [reportsSnap,updatesSnap,directorySnap,bansSnap,supportSnap]=await Promise.all([
+      get(ref(db,'siteReports')),get(ref(db,'siteUpdates')),get(ref(db,'directory')),get(ref(db,'siteBans')),get(ref(db,'siteSupportChats')).catch(()=>null)
     ]);
     state.admin.reports=reportsSnap.exists()?reportsSnap.val():{};
     state.admin.updates=updatesSnap.exists()?updatesSnap.val():{};
     state.admin.directory=directorySnap.exists()?directorySnap.val():{};
     state.admin.bans=bansSnap.exists()?bansSnap.val():{};
-    state.admin.supportChats=supportSnap.exists()?supportSnap.val():{};
-    state.admin.backupStatus=backupSnap.exists()?backupSnap.val():{};
-    renderAdminDashboard();renderAdminSupportConversations();renderAdminBackupStatus()
+    state.admin.supportChats=supportSnap?.exists?.()?supportSnap.val():{};
+    renderAdminDashboard();renderAdminSupportConversations()
   }catch(e){toast(permissionMessage(e,'Não foi possível carregar a administração.'),5500)}
 }
 function renderAdminDashboard(){
@@ -1057,30 +669,35 @@ async function adminLookupUser(ev){
   let p=state.admin.directory?.[uid];if(!p){const sn=await get(ref(db,`directory/${uid}`)).catch(()=>null);p=sn?.exists()?sn.val():null}
   if(box)box.innerHTML=p?`<strong>${escText(p.nome||'Usuário')}</strong><span>${p.username?'@'+escText(normalizeUsername(p.username))+' • ':''}${escText(uid)}</span>`:`<span>UID: ${escText(uid)}</span>`;
 }
+async function adminJob(type,data={},timeout=30000){if(!isSiteAdmin())throw new Error('Acesso de administrador não confirmado.');return bridgeRequest(type,data,timeout,false)}
+function requireAdminTarget(){const uid=String(state.admin.selectedUid||'');if(!uid)throw new Error('Localize um usuário primeiro.');return uid}
+async function adminSyncSelected(){try{const uid=requireAdminTarget();const r=await adminJob('admin_sync_user',{targetUid:uid},35000);toast(`Conta sincronizada${r.balance!=null?` • ₹${formatNumber(r.balance)}`:''}.`)}catch(e){toast(e.message,5500)}}
+async function adminAdjustCurrency(sign=1){try{const targetUid=requireAdminTarget(),amount=Math.max(1,Math.floor(Number($('adminCurrencyAmount')?.value||0)))*sign;const r=await adminJob('admin_currency_adjust',{targetUid,amount},35000);toast(`Saldo atualizado: ₹${formatNumber(r.balance||0)}.`)}catch(e){toast(e.message,5500)}}
+async function adminGivePremium(){try{const targetUid=requireAdminTarget(),days=Math.max(1,Math.floor(Number($('adminPremiumDays')?.value||0)));const r=await adminJob('admin_give_premium',{targetUid,days},35000);toast(`Premium liberado por ${r.days||days} dias.`)}catch(e){toast(e.message,5500)}}
+async function adminGenerateLink(){try{const targetUid=requireAdminTarget();const r=await adminJob('admin_link_code',{targetUid},30000);const box=$('adminLinkCodeBox'),code=$('adminLinkCommand');if(code)code.textContent=r.command||`/vincular ${r.code}`;if(box)box.hidden=false;toast('Código criado. Ele deve ser enviado pelo WhatsApp do próprio usuário.')}catch(e){toast(e.message,5500)}}
+async function adminSaveProfileAvatar(){try{const targetUid=requireAdminTarget(),avatar=String($('adminProfileAvatarUrl')?.value||'').trim();if(!avatar)throw new Error('Escolha uma foto ou informe a URL.');await adminJob('admin_profile_avatar',{targetUid,avatar},35000);toast('Foto do perfil atualizada.');await loadAdminDashboard()}catch(e){toast(e.message,5500)}}
+$('adminProfileAvatarFile')?.addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{const data=await imageFileToProfileDataUrl(file);$('adminProfileAvatarUrl').value=data;toast('Foto pronta para salvar.')}catch(err){toast(err.message)}});
+$('adminSyncUserBtn')?.addEventListener('click',adminSyncSelected);
+$('adminGenerateLinkBtn')?.addEventListener('click',adminGenerateLink);
+$('adminCopyLinkCommandBtn')?.addEventListener('click',async()=>{const t=$('adminLinkCommand')?.textContent||'';if(!t)return;try{await navigator.clipboard.writeText(t);toast('Comando copiado.')}catch{}});
+$('adminProfileAvatarSaveBtn')?.addEventListener('click',adminSaveProfileAvatar);
+$('adminGiveCurrencyBtn')?.addEventListener('click',()=>adminAdjustCurrency(1));
+$('adminRemoveCurrencyBtn')?.addEventListener('click',()=>adminAdjustCurrency(-1));
+$('adminGivePremiumBtn')?.addEventListener('click',adminGivePremium);
+$('adminNotificationForm')?.addEventListener('submit',async ev=>{ev.preventDefault();try{const target=String($('adminNotificationTarget')?.value||'all'),title=String($('adminNotificationTitle')?.value||'Aviso da Gremory').trim(),text=String($('adminNotificationText')?.value||'').trim(),link=String($('adminNotificationLink')?.value||'').trim();if(!text)throw new Error('Escreva a mensagem.');const targetUid=target==='selected'?requireAdminTarget():'';const r=await adminJob('admin_notify',{target,targetUid,title,text,link},35000);toast(`Notificação enviada${r.sent!=null?` para ${r.sent} usuário(s)`:''}.`);$('adminNotificationText').value=''}catch(e){toast(e.message,5500)}});
+$('adminStoreForm')?.addEventListener('submit',async ev=>{ev.preventDefault();try{const itemId=String($('adminStoreId')?.value||'').trim().toLowerCase(),name=String($('adminStoreName')?.value||'').trim(),price=Math.max(0,Number($('adminStorePrice')?.value||0)),slot=String($('adminStoreSlot')?.value||'decor'),mediaUrl=String($('adminStoreMediaUrl')?.value||'').trim();await adminJob('admin_store_upsert',{itemId,name,price,slot,mediaUrl},35000);toast('Item salvo na loja.')}catch(e){toast(e.message,5500)}});
+$('adminStoreDeleteBtn')?.addEventListener('click',async()=>{try{const itemId=String($('adminStoreId')?.value||'').trim().toLowerCase();if(!itemId)throw new Error('Informe o ID do item.');if(!confirm(`Excluir ${itemId} da loja?`))return;await adminJob('admin_store_delete',{itemId},30000);toast('Item removido da loja.')}catch(e){toast(e.message,5500)}});
+$('adminBackupNowBtn')?.addEventListener('click',async()=>{const pill=$('adminBackupStatus'),meta=$('adminBackupMeta');try{if(pill)pill.textContent='Criando...';const r=await adminJob('admin_backup_now',{reason:'site-admin'},120000);if(pill)pill.textContent='Concluído';if(meta)meta.textContent=`${r.fileCount||r.files||0} JSONs • ${formatNumber(r.bytes||0)} bytes • ${shortDateTime(r.createdAt||Date.now())}`;toast('Backup total criado no Firebase.')}catch(e){if(pill)pill.textContent='Erro';toast(e.message,6000)}});
+$('adminBackupRestoreBtn')?.addEventListener('click',async()=>{if(!confirm('Restaurar o último backup total? A Charlotte será reiniciada para recarregar os JSONs.'))return;const pill=$('adminBackupStatus');try{if(pill)pill.textContent='Restaurando...';const r=await adminJob('admin_backup_restore',{confirm:true},120000);if(pill)pill.textContent='Reiniciando';toast(`Backup restaurado: ${r.files||0} arquivos. A Charlotte será reiniciada.`,8000)}catch(e){if(pill)pill.textContent='Erro';toast(e.message,6500)}});
+function renderAdminSupportConversations(){const box=$('adminSupportConversations');if(!box)return;const chats=state.admin.supportChats||{};box.innerHTML='';const rows=Object.entries(chats).map(([uid,v])=>({uid,...v,last:Object.values(v.messages||{}).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0))[0]})).sort((a,b)=>Number(b.last?.createdAt||0)-Number(a.last?.createdAt||0));if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma conversa.</div>';return}rows.forEach(c=>{const p=state.admin.directory?.[c.uid]||{};const b=document.createElement('button');b.type='button';b.className='admin-support-conversation';b.innerHTML=`<strong>${escText(p.nome||c.last?.name||'Usuário')}</strong><small>${escText(c.last?.text||'')}</small>`;b.onclick=()=>{state.admin.supportSelectedUid=c.uid;renderAdminSupportChat()};box.appendChild(b)})}
+function renderAdminSupportChat(){const uid=state.admin.supportSelectedUid,box=$('adminSupportChat'),input=$('adminSupportReplyInput'),form=$('adminSupportReplyForm');if(!box||!input||!form)return;box.innerHTML='';if(!uid){box.innerHTML='<div class="empty-state small">Escolha uma conversa.</div>';input.disabled=true;form.querySelector('button').disabled=true;return}const msgs=Object.entries(state.admin.supportChats?.[uid]?.messages||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0));msgs.slice(-120).forEach(m=>{const d=document.createElement('div');d.className='support-message '+(m.role==='admin'?'admin':'user');d.innerHTML=`<b>${m.role==='admin'?'Equipe Gremory':escText(m.name||'Usuário')}</b><p>${escText(m.text||'')}</p><small>${shortDateTime(m.createdAt)}</small>`;box.appendChild(d)});input.disabled=false;form.querySelector('button').disabled=false;box.scrollTop=box.scrollHeight}
+$('adminSupportRefreshBtn')?.addEventListener('click',loadAdminDashboard);
+$('adminSupportReplyForm')?.addEventListener('submit',async ev=>{ev.preventDefault();const uid=state.admin.supportSelectedUid,input=$('adminSupportReplyInput'),text=String(input?.value||'').trim();if(!uid||!text)return;try{const rr=push(ref(db,`siteSupportChats/${uid}/messages`));await set(rr,{id:rr.key,senderUid:state.user.uid,name:'Equipe Gremory',role:'admin',text:text.slice(0,500),createdAt:Date.now()});input.value='';await loadAdminDashboard();renderAdminSupportChat()}catch(e){toast(permissionMessage(e),5500)}});
 $('adminRefreshBtn')?.addEventListener('click',loadAdminDashboard);
 $('adminDeletePostForm')?.addEventListener('submit',async ev=>{ev.preventDefault();await adminDeletePublication($('adminDeletePostId').value.trim())});
 $('adminUserLookupForm')?.addEventListener('submit',adminLookupUser);
 $('adminBanUserBtn')?.addEventListener('click',async()=>{if(!state.admin.selectedUid)await adminLookupUser();if(state.admin.selectedUid)await adminBanUid(state.admin.selectedUid,$('adminBanReason').value.trim()||'Violação das regras')});
 $('adminUnbanUserBtn')?.addEventListener('click',async()=>{if(!state.admin.selectedUid)await adminLookupUser();if(state.admin.selectedUid)await adminUnbanUid(state.admin.selectedUid)});
-
-
-function requireAdminSelectedUid(){const uid=String(state.admin.selectedUid||'').trim();if(!uid)throw new Error('Localize um usuário primeiro.');return uid}
-async function adminGrantCurrency(sign=1){try{const targetUid=requireAdminSelectedUid(),amount=Math.max(1,Math.floor(Number($('adminCurrencyAmount')?.value||0)))*Math.sign(sign||1);const r=await bridgeRequest('admin_grant_currency',{targetUid,amount},25000,false);toast(`Saldo atualizado: ₹${formatNumber(r.balance||0)}.`);await loadAdminDashboard()}catch(e){toast(e.message)}}
-async function adminGrantPremium(){try{const targetUid=requireAdminSelectedUid(),days=Math.max(1,Math.floor(Number($('adminPremiumDays')?.value||0)));const r=await bridgeRequest('admin_grant_premium',{targetUid,days},25000,false);toast(`Premium concedido por ${r.days||days} dias.`)}catch(e){toast(e.message)}}
-$('adminGiveCurrencyBtn')?.addEventListener('click',()=>adminGrantCurrency(1));$('adminRemoveCurrencyBtn')?.addEventListener('click',()=>adminGrantCurrency(-1));$('adminGivePremiumBtn')?.addEventListener('click',adminGrantPremium);
-
-$('adminNotificationForm')?.addEventListener('submit',async ev=>{ev.preventDefault();if(!isSiteAdmin())return;const target=$('adminNotificationTarget')?.value||'all',title=String($('adminNotificationTitle')?.value||'Aviso da Gremory').trim().slice(0,80),text=String($('adminNotificationText')?.value||'').trim().slice(0,800),link=String($('adminNotificationLink')?.value||'').trim().slice(0,300);if(!text)return toast('Escreva a mensagem.');try{let uids=target==='selected'?[requireAdminSelectedUid()]:Object.keys(state.admin.directory||{});if(!uids.length)throw new Error('Nenhum usuário encontrado.');const createdAt=Date.now(),patch={};for(const uid of uids){const id=`admin_${createdAt}_${Math.random().toString(36).slice(2,7)}`;patch[`siteNotifications/${uid}/${id}`]={id,type:'admin_notice',title,text,link,sound:true,createdAt}}await update(ref(db),patch);$('adminNotificationText').value='';toast(`Notificação enviada para ${uids.length} usuário${uids.length===1?'':'s'}.`)}catch(e){toast(permissionMessage(e,e.message))}});
-
-$('adminStoreForm')?.addEventListener('submit',async ev=>{ev.preventDefault();try{const itemId=String($('adminStoreId')?.value||'').trim().toLowerCase(),name=String($('adminStoreName')?.value||'').trim(),price=Number($('adminStorePrice')?.value||0),slot=$('adminStoreSlot')?.value||'cover',mediaUrl=String($('adminStoreMediaUrl')?.value||'').trim();await bridgeRequest('admin_store_upsert',{item:{id:itemId,name,price,slot,mediaUrl,mediaKind:slot==='decor'?'sprite':'gif'}},25000,false);toast('Personalização salva na loja.')}catch(e){toast(e.message)}});
-$('adminStoreDeleteBtn')?.addEventListener('click',async()=>{try{const itemId=String($('adminStoreId')?.value||'').trim().toLowerCase();if(!itemId)throw new Error('Informe o ID do item.');await bridgeRequest('admin_store_delete',{itemId},20000,false);toast('Item removido da loja.')}catch(e){toast(e.message)}});
-
-function renderAdminBackupStatus(){const b=state.admin.backupStatus||{};if($('adminBackupStatus'))$('adminBackupStatus').textContent=b.lastSuccessAt?'Ativo':'Aguardando';if($('adminBackupMeta'))$('adminBackupMeta').textContent=b.lastSuccessAt?`Última cópia: ${shortDateTime(b.lastSuccessAt)} • ${Number(b.files||0)} arquivo(s) • ${Number(b.skipped||0)} ignorado(s)`:'Aguardando a primeira cópia de segurança da Charlotte.'}
-$('adminBackupNowBtn')?.addEventListener('click',async()=>{try{const btn=$('adminBackupNowBtn');btn.disabled=true;const r=await bridgeRequest('admin_backup_now',{},60000,false);toast(`Backup concluído: ${r.files||0} arquivo(s).`);await loadAdminDashboard();btn.disabled=false}catch(e){if($('adminBackupNowBtn'))$('adminBackupNowBtn').disabled=false;toast(e.message)}});
-
-function renderAdminSupportConversations(){const box=$('adminSupportConversations');if(!box)return;const rows=Object.entries(state.admin.supportChats||{}).map(([uid,v])=>({uid,meta:v?.meta||{},messages:v?.messages||{}})).sort((a,b)=>Number(b.meta.updatedAt||0)-Number(a.meta.updatedAt||0));box.innerHTML='';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma conversa.</div>';return}rows.slice(0,80).forEach(r=>{const b=document.createElement('button');b.type='button';b.className='admin-support-conversation'+(state.admin.supportSelectedUid===r.uid?' active':'');b.innerHTML=`<strong>${escText(r.meta.name||state.admin.directory?.[r.uid]?.nome||'Usuário')}</strong><span>${escText(r.meta.lastText||'Abrir conversa')}</span>`;b.onclick=()=>openAdminSupportChat(r.uid);box.appendChild(b)})}
-function openAdminSupportChat(uid){state.admin.supportSelectedUid=String(uid||'');try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;renderAdminSupportConversations();if(!uid)return;state.admin.supportUnsub=onValue(query(ref(db,`supportChats/${uid}/messages`),orderByChild('createdAt'),limitToLast(150)),sn=>{renderSupportMessages('adminSupportChat',sn.exists()?sn.val():{},state.user?.uid)});if($('adminSupportReplyInput'))$('adminSupportReplyInput').disabled=false;if($('adminSupportReplyForm')?.querySelector('button'))$('adminSupportReplyForm').querySelector('button').disabled=false}
-$('adminSupportRefreshBtn')?.addEventListener('click',loadAdminDashboard);
-$('adminSupportReplyForm')?.addEventListener('submit',async ev=>{ev.preventDefault();const uid=state.admin.supportSelectedUid,input=$('adminSupportReplyInput'),text=String(input?.value||'').trim().slice(0,500);if(!uid||!text)return;try{const mref=push(ref(db,`supportChats/${uid}/messages`)),createdAt=Date.now();await Promise.all([set(mref,{id:mref.key,senderUid:state.user.uid,senderName:'Equipe Gremory',role:'admin',text,createdAt}),update(ref(db,`supportChats/${uid}/meta`),{updatedAt:createdAt,lastText:text.slice(0,120),status:'open'})]);input.value='';await set(ref(db,`siteNotifications/${uid}/support_${createdAt}`),{id:`support_${createdAt}`,type:'support_chat',title:'Nova resposta da equipe',text:text.slice(0,160),link:'#support',sound:true,createdAt}).catch(()=>{})}catch(e){toast(permissionMessage(e,e.message))}});
 
 
 // Tinder — cadastro no site + sincronização com a Charlotte/Firebase
@@ -1164,6 +781,7 @@ function renderCharlotteSync(){
   if($('syncLevel'))$('syncLevel').textContent=formatNumber(acc.level||0);
   if($('syncPremium'))$('syncPremium').textContent=acc.premium?'Premium':'Padrão';
   if($('syncAchievements'))$('syncAchievements').textContent=String(ach.unlockedCount||0);
+  renderPokemonInventory();
 }
 // Pokédex / equipe sincronizada
 async function fetchPokemon(term){const clean=String(term||'').trim().toLowerCase();if(!clean)throw new Error('Digite um Pokémon.');const r=await fetch(`https://pokeapi.co/api/v2/pokemon/${encodeURIComponent(clean)}`);if(!r.ok)throw new Error('Pokémon não encontrado.');const p=await r.json();return{id:p.id,name:p.name,sprite:p.sprites?.other?.['official-artwork']?.front_default||p.sprites?.front_default||'',types:(p.types||[]).map(x=>x.type.name),stats:Object.fromEntries((p.stats||[]).map(x=>[x.stat.name,x.base_stat]))}}
@@ -1198,10 +816,10 @@ $('pokemonSyncBtn')?.addEventListener('click',async()=>{try{await requestAccount
 $('pokemonExploreBotBtn').onclick=async()=>{try{const r=await bridgeRequest('pokemon_explore',{},30000);if(r.encounter)state.pokemonEncounter=r.encounter;renderWildEncounter();toast('Um Pokémon selvagem apareceu!')}catch(e){toast(e.message)}};
 
 // Duelo Pokémon 6x6 via bridge do bot
-function renderDuelFriendSelect(){const sel=$('duelFriendSelect');if(!sel)return;const current=sel.value;sel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';sel.appendChild(o)});if(state.friends[current])sel.value=current;renderGameFriendSelects()}
-$('sendDuelChallengeBtn').addEventListener('click',async()=>{const targetUid=$('duelFriendSelect').value;if(!targetUid)return toast('Escolha um amigo.');if(state.charlottePublic?.status!=='linked')return toast('Vincule a Charlotte primeiro.');playGameSfx('select');try{await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type:'duel_challenge',targetUid,createdAt:nowIso()});toast('Desafio 6x6 enviado.')}catch(e){toast(permissionMessage(e))}});
+function renderDuelFriendSelect(){const sel=$('duelFriendSelect');if(!sel)return;const current=sel.value;sel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';sel.appendChild(o)});if(state.friends[current])sel.value=current;renderTttFriendSelect()}
+$('sendDuelChallengeBtn').addEventListener('click',async()=>{const targetUid=$('duelFriendSelect').value;if(!targetUid)return toast('Escolha um amigo.');if(state.charlottePublic?.status!=='linked')return toast('Vincule a Charlotte primeiro.');try{await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type:'duel_challenge',targetUid,createdAt:nowIso()});toast('Desafio 6x6 enviado.')}catch(e){toast(permissionMessage(e))}});
 function renderDuelInbox(obj){const box=$('duelInbox');box.innerHTML='';const rows=Object.entries(obj||{});if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhum desafio.</div>';return}rows.forEach(([id,c])=>{const r=document.createElement('div');r.className='duel-request';const cp=document.createElement('div');const st=document.createElement('strong');st.textContent=c.fromName||'Desafiante';const sm=document.createElement('small');sm.textContent='quer batalhar 6x6';cp.append(st,sm);const acts=document.createElement('div');acts.className='person-actions';const a=document.createElement('button');a.className='mini-btn primary';a.textContent='Aceitar';a.onclick=()=>duelJob('duel_accept',{challengeId:id});const d=document.createElement('button');d.className='mini-btn';d.textContent='Recusar';d.onclick=()=>duelJob('duel_decline',{challengeId:id});acts.append(a,d);r.append(cp,acts);box.appendChild(r)})}
-async function duelJob(type,data){try{playGameSfx(type==='duel_switch'?'switch':'select');await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type,...data,createdAt:nowIso()});toast(type==='duel_move'?'Golpe enviado.':type==='duel_switch'?'Troca enviada.':'Processando...')}catch(e){toast(permissionMessage(e))}}
+async function duelJob(type,data){try{await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type,...data,createdAt:nowIso()});if(type==='duel_move')playPokemonSound('hit');toast(type==='duel_move'?'Golpe enviado.':type==='duel_switch'?'Troca enviada.':'Processando...')}catch(e){toast(permissionMessage(e))}}
 function handleDuelIndex(obj){
   const entries=Object.entries(obj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0));
   const active=entries.find(x=>x.status==='active');
@@ -1211,21 +829,10 @@ function handleDuelIndex(obj){
 }
 function subscribeDuel(id){if(state.duelUnsub){try{state.duelUnsub()}catch{}}state.duelUnsub=onValue(ref(db,`pokemonSiteDuels/${id}`),s=>setActiveDuel(s.exists()?{id,...s.val()}:null))}
 function setActiveDuel(duel){
-  const prev=state.duel;
-  if(duel?.status==='active'){
-    if(!prev||prev.id!==duel.id){playGameSfx('start');if(duel.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),190)}
-    else if(prev.status==='active'){
-      const prevMe=prev.players?.[state.user?.uid]||{},nextMe=duel.players?.[state.user?.uid]||{},prevEnemy=Object.values(prev.players||{}).find(x=>x.uid!==state.user?.uid)||{},nextEnemy=Object.values(duel.players||{}).find(x=>x.uid!==state.user?.uid)||{};
-      const prevMyMon=duelCurrent(prevMe),nextMyMon=duelCurrent(nextMe),prevEnemyMon=duelCurrent(prevEnemy),nextEnemyMon=duelCurrent(nextEnemy);
-      if(Number(nextMyMon.hp)<Number(prevMyMon.hp)||Number(nextEnemyMon.hp)<Number(prevEnemyMon.hp))playPokemonSound('hit');
-      else if(String(nextMyMon.uid)!==String(prevMyMon.uid)||String(nextEnemyMon.uid)!==String(prevEnemyMon.uid))playGameSfx('switch');
-      if(prev.turnUid!==duel.turnUid&&duel.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),100);
-    }
-  }
   state.duel=duel;const arena=$('duelArena');const lobby=$('duelLobby');
   if(!duel||duel.status!=='active'){
     arena.hidden=true;lobby.hidden=false;const won=!!duel&&duel.winnerUid===state.user?.uid;$('duelStatusPill').textContent=won?'Vitória':duel?'Encerrado':'Aguardando';
-    if(duel?.status==='finished'&&duel.id&&state.duelSeenActiveIds.has(duel.id)){state.duelSeenActiveIds.delete(duel.id);const reward=duel.reward||{};showGameResult({title:won?'Vitória Pokémon!':'Batalha encerrada',text:won?(reward.rupias?`Você ganhou ₹${reward.rupias}, ${reward.trainerXp||0} XP e ${reward.pokemonXp||0} XP Pokémon.`:'Você venceu a batalha.'):'A batalha foi encerrada.',win:won,icon:won?'⚡':'◉'});if(won&&Number(reward.rupias||0)>0)setTimeout(()=>playGameSfx('coins'),420)}
+    if(duel?.status==='finished'&&duel.id&&state.duelSeenActiveIds.has(duel.id)){state.duelSeenActiveIds.delete(duel.id);const reward=duel.reward||{};showGameResult({title:won?'Vitória Pokémon!':'Batalha encerrada',text:won?(reward.rupias?`Você ganhou ₹${reward.rupias}, ${reward.trainerXp||0} XP e ${reward.pokemonXp||0} XP Pokémon.`:'Você venceu a batalha.'):'A batalha foi encerrada.',win:won,icon:won?'⚡':'◉'})}
     return
   }
   state.duelSeenActiveIds.add(duel.id);arena.hidden=false;lobby.hidden=true;$('duelStatusPill').textContent=duel.turnUid===state.user?.uid?'Sua vez':'Vez do rival';renderDuel(duel)
@@ -1287,7 +894,6 @@ async function handleSiteAction(action){
         toast('Seu Daily ainda está em cooldown.');return;
       }
       if(box)box.innerHTML=`<div class="site-result-grid"><div><span>Recompensa</span><strong>${escText(r.rewardName||'Daily')}</strong></div><div><span>Rúpias</span><strong>+₹${formatNumber(r.rupias||0)}</strong></div><div><span>XP</span><strong>+${formatNumber(r.xp||0)}</strong></div><div><span>Saldo</span><strong>₹${formatNumber(r.balance||0)}</strong></div></div>`;
-      if(Number(r.rupias||0)>0)playGameSfx('coins');
       toast('Daily coletado.');
     }
   }catch(e){toast(e.message||'Não foi possível concluir.');const box=resultBox();if(box)box.innerHTML=`<div class="empty-state small">${escText(e.message||'Erro')}</div>`}
@@ -1368,12 +974,25 @@ const STORE_CATALOG={
   gif_profile_1:{name:'GIF Especial',price:3900,className:'fx-gif-profile-1',slot:'cover',mediaKind:'gif',assetKey:'gif_profile_1'},
   sprite_profile_1:{name:'Sprite Especial',price:4300,className:'fx-sprite-profile-1',slot:'decor',mediaKind:'sprite',assetKey:'sprite_profile_1'}
 };
-
-const STATIC_STORE_IDS=new Set(Object.keys(STORE_CATALOG));let REMOTE_STORE_IDS=new Set();
-function sanitizeRemoteStoreItem(id,item={}){id=String(id||item.id||'').trim().toLowerCase();if(!/^[a-z0-9_-]{2,40}$/.test(id))return null;const slot=['cover','decor'].includes(String(item.slot||''))?String(item.slot):'cover',mediaUrl=String(item.mediaUrl||'').trim();if(!/^https:\/\//i.test(mediaUrl))return null;return{id,name:String(item.name||id).trim().slice(0,60),price:Math.max(0,Math.floor(Number(item.price||0))),slot,className:`fx-remote-${id}`,mediaKind:slot==='decor'?'sprite':'gif',mediaUrl,remote:true}}
-function mergeRemoteStoreCatalog(raw={}){for(const id of REMOTE_STORE_IDS)if(!STATIC_STORE_IDS.has(id))delete STORE_CATALOG[id];REMOTE_STORE_IDS=new Set();for(const[id,v]of Object.entries(raw||{})){if(STATIC_STORE_IDS.has(String(id)))continue;const item=sanitizeRemoteStoreItem(id,v);if(!item)continue;STORE_CATALOG[id]=item;REMOTE_STORE_IDS.add(id)}renderDynamicStoreItems()}
-function renderDynamicStoreItems(){const grid=$('storeGrid');if(!grid)return;grid.querySelectorAll('.dynamic-store-item').forEach(x=>x.remove());for(const id of REMOTE_STORE_IDS){const item=STORE_CATALOG[id];if(!item)continue;const card=document.createElement('article');card.className='store-item external-asset-item dynamic-store-item';card.dataset.storeCategory='animated';card.dataset.storeItem=id;const prev=document.createElement('div');prev.className='store-preview external-asset-preview';prev.style.backgroundImage=`linear-gradient(180deg,rgba(5,7,12,.06),rgba(5,7,12,.46)),url("${item.mediaUrl.replace(/"/g,'%22')}")`;const copy=document.createElement('div');copy.innerHTML=`<small>${item.slot==='decor'?'SPRITE':'ANIMADO'}</small><strong>${escText(item.name)}</strong><span>₹${formatNumber(item.price)}</span>`;const b=document.createElement('button');b.className='btn';b.dataset.buyCustomization=id;b.textContent='Comprar';b.addEventListener('click',()=>handleCustomizationButton(b));card.append(prev,copy,b);grid.appendChild(card)}applyStoreFilter(currentStoreFilter)}
-function applyOwnProfileCustomization(){const card=$('accountDrawerCard'),media=$('profileOwnMedia');if(!card||!media)return;Object.values(STORE_CATALOG).forEach(x=>x?.className&&card.classList.remove(x.className));const ids=equippedCustomizationIds().filter(id=>ownedCustomization(id));ids.forEach(id=>{const item=STORE_CATALOG[id];if(item?.className)card.classList.add(item.className)});media.innerHTML='';for(const id of ids){const cfg=mediaConfigForItem(id);if(!cfg?.url)continue;const img=document.createElement('img');img.src=cfg.url;img.alt='';img.loading='eager';img.decoding='async';img.className=cfg.kind==='sprite'?'profile-media-sprite':'profile-media-gif';media.appendChild(img)}}
+function normalizeDynamicStoreItem(id,item={}){
+  const slot=String(item.slot||'decor');const mediaUrl=String(item.mediaUrl||item.url||'').trim();
+  return{name:String(item.name||id).slice(0,60),price:Math.max(0,Number(item.price||0)),slot,className:`fx-dynamic-${String(id).replace(/[^a-z0-9_-]/gi,'-')}`,mediaKind:String(item.mediaKind||item.kind||(slot==='decor'?'sprite':'gif')),mediaUrl,dynamic:true};
+}
+function hydrateDynamicStoreCatalog(){
+  const rows=state.dynamicStoreCatalog||{};for(const[id,item]of Object.entries(rows))STORE_CATALOG[id]=normalizeDynamicStoreItem(id,item);
+  const grid=$('storeGrid');if(!grid)return;grid.querySelectorAll('[data-dynamic-store="1"]').forEach(n=>n.remove());
+  for(const[id,item]of Object.entries(rows)){
+    const cfg=STORE_CATALOG[id];const art=document.createElement('article');art.className='store-item dynamic-store-item';art.dataset.dynamicStore='1';art.dataset.storeItem=id;art.dataset.storeCategory=cfg.mediaUrl?'animated':cfg.slot;
+    const prev=document.createElement('div');prev.className='store-preview dynamic-store-preview';if(cfg.mediaUrl)prev.style.backgroundImage=`linear-gradient(180deg,rgba(5,7,12,.05),rgba(5,7,12,.48)),url("${cfg.mediaUrl.replace(/"/g,'%22')}")`;else prev.textContent='✦';
+    const copy=document.createElement('div');copy.innerHTML=`<small>${escText(cfg.slot).toUpperCase()}</small><strong>${escText(cfg.name)}</strong><span>₹${formatNumber(cfg.price)}</span>`;
+    const b=document.createElement('button');b.className='btn';b.dataset.buyCustomization=id;b.textContent='Comprar';art.append(prev,copy,b);grid.appendChild(art)
+  }
+  applyStoreFilter(currentStoreFilter)
+}
+async function handleCustomizationPurchaseButton(btn){
+  const itemId=btn?.dataset?.buyCustomization;if(!itemId)return;try{btn.disabled=true;if(!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');if(ownedCustomization(itemId)){await bridgeRequest('equip_customization',{itemId});toast('Personalização equipada.')}else{const r=await bridgeRequest('buy_customization',{itemId},25000);toast(`${STORE_CATALOG[itemId]?.name||'Item'} comprado por ₹${formatNumber(r.price||0)}.`);await requestAccountSync().catch(()=>{})}}catch(e){toast(e.message)}finally{btn.disabled=false}
+}
+$('storeGrid')?.addEventListener('click',e=>{const btn=e.target.closest?.('[data-buy-customization]');if(btn?.closest?.('[data-dynamic-store="1"]'))handleCustomizationPurchaseButton(btn)});
 function ownedCustomization(id){return !!state.siteInventory?.items?.[id]}
 function equippedCustomizationIds(){
   const equipped=state.siteCustomization?.equipped||{};
@@ -1390,7 +1009,7 @@ function renderAmbientCustomization(){
 }
 function applyCustomization(){
   Object.values(STORE_CATALOG).forEach(x=>document.body.classList.remove(x.className));
-  equippedCustomizationIds().forEach(id=>{if(STORE_CATALOG[id]&&ownedCustomization(id)&&STORE_CATALOG[id].className)document.body.classList.add(STORE_CATALOG[id].className)});renderAmbientCustomization();applyOwnProfileCustomization()
+  equippedCustomizationIds().forEach(id=>{if(STORE_CATALOG[id]&&ownedCustomization(id))document.body.classList.add(STORE_CATALOG[id].className)});renderAmbientCustomization()
 }
 function externalProfileAssets(){return window.GREMORY_PROFILE_ASSETS||{}}
 function hydrateExternalCustomizationAssets(){
@@ -1427,25 +1046,39 @@ function applyPublicProfileMedia(style=[]){
   for(const id of ids){const cfg=mediaConfigForItem(String(id));if(!cfg?.url)continue;const img=document.createElement('img');img.src=cfg.url;img.alt='';img.loading='lazy';img.decoding='async';img.className=cfg.kind==='sprite'?'profile-media-sprite':'profile-media-gif';media.appendChild(img)}
 }
 function renderStore(){
-  renderDynamicStoreItems();hydrateExternalCustomizationAssets();
+  hydrateExternalCustomizationAssets();
   if($('storeBalance'))$('storeBalance').textContent=`₹ ${formatNumber(accountSnapshot().balance)}`;
   const equipped=new Set(equippedCustomizationIds());
   $$('[data-store-item]').forEach(card=>{const id=card.dataset.storeItem;const owned=ownedCustomization(id);const isEquipped=equipped.has(id);card.classList.toggle('owned',owned);card.classList.toggle('equipped',isEquipped);const b=card.querySelector('[data-buy-customization]');if(!b)return;b.textContent=isEquipped?'Equipado':owned?'Equipar':'Comprar';b.classList.toggle('primary',!owned||!isEquipped)});
   renderEquippedCustomizationSummary();applyStoreFilter(currentStoreFilter);
 }
-async function handleCustomizationButton(btn){const itemId=btn?.dataset?.buyCustomization;if(!itemId)return;try{btn.disabled=true;if(!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');if(ownedCustomization(itemId)){await bridgeRequest('equip_customization',{itemId});playGameSfx('select');toast('Personalização equipada.')}else{const r=await bridgeRequest('buy_customization',{itemId},25000);playGameSfx('purchase');setTimeout(()=>playGameSfx('coins'),170);toast(`${STORE_CATALOG[itemId]?.name||'Item'} comprado por ₹${formatNumber(r.price||0)}.`);await requestAccountSync().catch(()=>{})}}catch(e){toast(e.message)}finally{btn.disabled=false}}
-$$('[data-buy-customization]').forEach(btn=>btn.addEventListener('click',()=>handleCustomizationButton(btn)));
-
+$$('[data-buy-customization]').forEach(btn=>btn.addEventListener('click',async()=>{
+  const itemId=btn.dataset.buyCustomization;try{btn.disabled=true;if(!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');if(ownedCustomization(itemId)){await bridgeRequest('equip_customization',{itemId});toast('Personalização equipada.')}else{const r=await bridgeRequest('buy_customization',{itemId},25000);toast(`${STORE_CATALOG[itemId]?.name||'Item'} comprado por ₹${formatNumber(r.price||0)}.`);await requestAccountSync().catch(()=>{})}}catch(e){toast(e.message)}finally{btn.disabled=false}
+}));
 
 function pokemonItems(){return state.charlotteSync?.pokemon?.items||{}}
-function renderPokemonInventory(){const items=pokemonItems();if($('pokemonBallCount'))$('pokemonBallCount').textContent=formatNumber(items.pokebola||0);if($('pokemonGreatBallCount'))$('pokemonGreatBallCount').textContent=formatNumber(items.greatball||0);if($('pokemonUltraBallCount'))$('pokemonUltraBallCount').textContent=formatNumber(items.ultraball||0);if($('pokemonPremierBallCount'))$('pokemonPremierBallCount').textContent=formatNumber(items.premierball||0);if($('pokemonPotionCount'))$('pokemonPotionCount').textContent=`${formatNumber(items.potion||0)} poção${Number(items.potion||0)===1?'':'ões'}`}
-async function usePokemonPotion(monUid){try{const r=await bridgeRequest('pokemon_use_potion',{monUid},20000);toast(`${r.name||'Pokémon'} recuperou ${r.healed||0} HP.`);await requestAccountSync().catch(()=>{})}catch(e){toast(e.message)}}
-async function buyPokemonPotion(){const btn=$('pokemonBuyPotionBtn');try{if(btn)btn.disabled=true;if(!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');const r=await bridgeRequest('pokemon_buy_potion',{quantity:1},20000);toast(`Poção comprada por ₹${formatNumber(r.total||80)}.`);await requestAccountSync().catch(()=>{})}catch(e){toast(e.message)}finally{if(btn)btn.disabled=false}}
+function renderPokemonInventory(){
+  const items=pokemonItems();
+  const setText=(id,value)=>{const el=$(id);if(el)el.textContent=String(Math.max(0,Number(value||0)))};
+  setText('pokemonBallCount',items.pokebola);
+  setText('pokemonGreatBallCount',items.greatball);
+  setText('pokemonUltraBallCount',items.ultraball);
+  setText('pokemonPremierBallCount',items.premierball??items.premierBall);
+  setText('pokemonPotionCount',`${Math.max(0,Number(items.potion??items.pocao??items['poção']??0))} poções`);
+}
+async function buyPokemonPotion(){
+  const btn=$('pokemonBuyPotionBtn');
+  try{if(btn)btn.disabled=true;if(!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');const r=await bridgeRequest('pokemon_buy_potion',{},30000);await requestAccountSync().catch(()=>{});toast(`Poção comprada por ₹${formatNumber(r.cost||500)}.`)}catch(e){toast(e.message)}finally{if(btn)btn.disabled=false}
+}
+async function usePokemonPotion(monUid){
+  try{if(!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');const r=await bridgeRequest('pokemon_use_potion',{monUid},30000);await requestAccountSync().catch(()=>{});toast(`${r.name||'Pokémon'} recuperou ${formatNumber(r.healed||0)} HP.`)}catch(e){toast(e.message)}
+}
 $('pokemonBuyPotionBtn')?.addEventListener('click',buyPokemonPotion);
+
 function renderCollection(){
-  const wrap=$('pokemonCollection');if(!wrap)return;const list=state.charlotteSync?.pokemon?.collection||[];wrap.innerHTML='';$('collectionCount').textContent=String(Array.isArray(list)?list.length:Object.keys(list||{}).length);const rows=Array.isArray(list)?list:Object.values(list||{});const draftIds=new Set((state.teamDraft||[]).map(x=>String(x.uid))),items=pokemonItems();renderPokemonInventory();
+  const wrap=$('pokemonCollection');if(!wrap)return;const list=state.charlotteSync?.pokemon?.collection||[];wrap.innerHTML='';$('collectionCount').textContent=String(Array.isArray(list)?list.length:Object.keys(list||{}).length);const rows=Array.isArray(list)?list:Object.values(list||{});const draftIds=new Set((state.teamDraft||[]).map(x=>String(x.uid)));
   if(!rows.length){wrap.innerHTML='<div class="empty-state small">Nenhum Pokémon sincronizado.</div>';return}
-  rows.slice(0,160).forEach(m=>{const p=normalizeMon(m);const damaged=Number(p.hp)<Number(p.maxHp),d=document.createElement('div');d.className='collection-mon collection-mon-v5'+(p.fainted?' fainted':'');const img=document.createElement('img');img.src=p.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`;img.alt='';img.loading='lazy';img.decoding='async';const c=document.createElement('div');const st=document.createElement('strong');st.textContent=p.name;const sm=document.createElement('small');sm.textContent=`Lv.${p.level} • HP ${Math.max(0,p.hp)}/${p.maxHp}${p.fainted?' • DESMAIADO':''}`;c.append(st,sm);const acts=document.createElement('div');acts.className='collection-actions';const add=document.createElement('button');add.className='mini-btn';add.textContent=draftIds.has(String(p.uid))?'Na equipe':'Equipe';add.disabled=draftIds.has(String(p.uid));add.onclick=()=>addTeamMon(m);acts.appendChild(add);if(damaged){const heal=document.createElement('button');heal.className='mini-btn';heal.textContent='Hospital';heal.onclick=()=>startPokemonHealing(p.uid);acts.appendChild(heal)}if(damaged&&!p.fainted&&Number(items.potion||0)>0){const pot=document.createElement('button');pot.className='mini-btn primary';pot.textContent='Usar poção';pot.onclick=()=>usePokemonPotion(p.uid);acts.appendChild(pot)}d.append(img,c,acts);wrap.appendChild(d)})
+  rows.slice(0,160).forEach(m=>{const p=normalizeMon(m);const d=document.createElement('div');d.className='collection-mon collection-mon-v5'+(p.fainted?' fainted':'');const img=document.createElement('img');img.src=p.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`;img.alt='';const c=document.createElement('div');const st=document.createElement('strong');st.textContent=p.name;const sm=document.createElement('small');sm.textContent=`Lv.${p.level} • HP ${Math.max(0,p.hp)}/${p.maxHp}${p.fainted?' • DESMAIADO':''}`;c.append(st,sm);const acts=document.createElement('div');acts.className='collection-actions';const add=document.createElement('button');add.className='mini-btn';add.textContent=draftIds.has(String(p.uid))?'Na equipe':'Equipe';add.disabled=draftIds.has(String(p.uid));add.onclick=()=>addTeamMon(m);acts.appendChild(add);if(!p.fainted&&p.hp<p.maxHp){const potion=document.createElement('button');potion.className='mini-btn';potion.textContent='Usar Poção';potion.onclick=()=>usePokemonPotion(p.uid);acts.appendChild(potion)}if(p.fainted){const heal=document.createElement('button');heal.className='mini-btn primary';heal.textContent='Hospital';heal.onclick=()=>startPokemonHealing(p.uid);acts.appendChild(heal)}d.append(img,c,acts);wrap.appendChild(d)})
 }
 async function startPokemonHealing(monUid){try{const r=await bridgeRequest('pokemon_heal_start',{monUid},30000);toast(r.alreadyHealing?'Esse Pokémon já está em recuperação.':`Recuperação iniciada: ₹${formatNumber(r.cost||100)}.`);await requestAccountSync().catch(()=>{})}catch(e){toast(e.message)}}
 function renderHealingList(){const box=$('pokemonHealingList');if(!box)return;const rows=Object.values(state.pokemonHealing||{});box.innerHTML='';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhum Pokémon em recuperação.</div>';return}rows.sort((a,b)=>Number(a.readyAt||0)-Number(b.readyAt||0)).forEach(x=>{const d=document.createElement('div');d.className='healing-row';const c=document.createElement('div');const st=document.createElement('strong');st.textContent=x.name||'Pokémon';const sm=document.createElement('small');const left=Math.max(0,Number(x.readyAt||0)-Date.now());const min=Math.ceil(left/60000);sm.textContent=left?`Pronto em ~${min} min`:'Finalizando recuperação...';c.append(st,sm);const pill=document.createElement('span');pill.className='pill';pill.textContent='Hospital';d.append(c,pill);box.appendChild(d)})}
@@ -1458,15 +1091,6 @@ function renderWildEncounter(){
   const logs=Object.values(e.log||{}).sort((a,b)=>Number(a.at||0)-Number(b.at||0));
   const lastLog=logs.at(-1)?.text||'';
   if(e.status==='finished'){
-    const resultSoundId=String(e.id||`${e.mon?.uid||e.mon?.id||'wild'}:${e.finishedAt||e.updatedAt||''}:${e.result||''}`);
-    if(resultSoundId&&state.pokemonAudio.resultId!==resultSoundId){
-      state.pokemonAudio.resultId=resultSoundId;
-      if(e.result==='victory'){
-        playVictoryTone();
-        if(Number(e.reward?.rupias||0)>0)setTimeout(()=>playGameSfx('coins'),220);
-      }else if(e.result==='defeat')playDefeatTone();
-      else playGameSfx('reject');
-    }
     const labels={victory:'Vitória',defeat:'Derrota',escaped:'Você fugiu'};
     $('wildStatusPill').textContent=labels[e.result]||'Encerrado';
     box.innerHTML='';
@@ -1478,12 +1102,12 @@ function renderWildEncounter(){
   }
   const wild=normalizeMon(e.mon||{}),mine=normalizeMon(e.player||{});
   const encounterSoundId=String(e.id||`${wild.uid||wild.id}:${e.createdAt||''}`);
-  if(encounterSoundId&&state.pokemonAudio.encounterId!==encounterSoundId){state.pokemonAudio.encounterId=encounterSoundId;state.pokemonAudio.resultId='';playPokemonSound('encounter')}
+  if(encounterSoundId&&state.pokemonAudio.encounterId!==encounterSoundId){state.pokemonAudio.encounterId=encounterSoundId;playPokemonSound('encounter')}
   $('wildStatusPill').textContent='Batalha';box.innerHTML='';
   const stage=document.createElement('div');stage.className='wild-battle-stage';stage.innerHTML=`<div class="wild-mon"><img src="${escText(wild.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${wild.id}.png`)}" alt=""><strong>${escText(wild.name)}</strong><div class="pokemon-type-row">${typeBadgesHtml(wild.types)}</div><small>Lv.${wild.level} • HP ${Math.max(0,wild.hp)}/${wild.maxHp}</small></div><div class="wild-vs">VS</div><div class="wild-mon mine"><img src="${escText(mine.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${mine.id}.png`)}" alt=""><strong>${escText(mine.name||'Sua equipe')}</strong><div class="pokemon-type-row">${typeBadgesHtml(mine.types)}</div><small>${mine.uid?`HP ${Math.max(0,mine.hp)}/${mine.maxHp}`:'Escolha uma equipe saudável'}</small></div>`;
   const acts=document.createElement('div');acts.className='wild-actions';
   if(mine.uid){(mine.moves.length?mine.moves:[{name:'Ataque rápido'},{name:'Investida'}]).slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn';b.textContent=`${m.nome||m.name||`Golpe ${i+1}`} • ${typeLabel(m.type||m.tipo||'normal')}`;b.onclick=async()=>{try{await bridgeRequest('pokemon_wild_move',{moveIndex:i},30000);playPokemonSound('hit')}catch(er){toast(er.message)}};acts.appendChild(b)})}
-  ['pokebola','greatball','ultraball',...(Number(pokemonItems().premierball||0)>0?['premierball']:[])].forEach(ball=>{const b=document.createElement('button');b.className=['ultraball','premierball'].includes(ball)?'btn primary':'btn';b.textContent=ball==='pokebola'?'Pokébola':ball==='greatball'?'Great Ball':ball==='ultraball'?'Ultra Ball':'Premier Ball';b.onclick=async()=>{try{playPokemonSound('ball');const r=await bridgeRequest('pokemon_capture',{ball},30000);toast(r.captured?'Pokémon capturado!':`Escapou! Chance ${r.chance||'?'}%.`);if(r.captured){playPokemonSound('capture');await requestAccountSync().catch(()=>{})}}catch(er){toast(er.message)}};acts.appendChild(b)});
+  ['pokebola','greatball','ultraball'].forEach(ball=>{const b=document.createElement('button');b.className=ball==='ultraball'?'btn primary':'btn';b.textContent=ball==='pokebola'?'Pokébola':ball==='greatball'?'Great Ball':'Ultra Ball';b.onclick=async()=>{try{playPokemonSound('ball');const r=await bridgeRequest('pokemon_capture',{ball},30000);toast(r.captured?'Pokémon capturado!':`Escapou! Chance ${r.chance||'?'}%.`);if(r.captured){playPokemonSound('capture');await requestAccountSync().catch(()=>{})}}catch(er){toast(er.message)}};acts.appendChild(b)});
   const flee=document.createElement('button');flee.className='btn danger-ghost';flee.type='button';flee.textContent='Fugir';flee.onclick=async()=>{try{await bridgeRequest('pokemon_wild_exit',{},20000);toast('Você saiu da batalha.')}catch(er){toast(er.message)}};acts.appendChild(flee);
   box.append(stage,acts);
 }
@@ -1501,7 +1125,7 @@ function renderSiteRaid(){
   const boss=normalizeMon(raid.boss||{}),max=Math.max(1,Number(raid.maxHp||boss.maxHp||1)),hp=Math.max(0,Number(raid.hp||0)),pct=Math.max(0,Math.min(100,hp/max*100));const mine=raid.participants?.[state.user?.uid]||{};
   box.innerHTML=`<div class="site-raid-boss"><img src="${escText(boss.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${boss.id}.png`)}" alt=""><div class="site-raid-copy"><strong>${escText(boss.name)}</strong><div class="pokemon-type-row">${typeBadgesHtml(boss.types)}</div><small>Lv.${boss.level} • termina em ${raidTimeLeft(raid)}</small><div class="hpbar raid-hp"><i style="width:${pct}%"></i></div><b>${formatNumber(hp)} / ${formatNumber(max)} HP</b><small>Seu dano: ${formatNumber(mine.damage||0)} • ${Object.keys(raid.participants||{}).length} participante(s)</small></div></div>`;
   const acts=document.createElement('div');acts.className='site-raid-actions';const team=(state.charlotteSync?.pokemon?.team||[]).map(normalizeMon),active=team.find(x=>x.hp>0&&!x.fainted)||team[0];const moves=active?.moves?.length?active.moves:[{name:'Ataque rápido',power:40,type:'normal'}];
-  if(!linkedCharlotte()){const b=document.createElement('button');b.className='btn primary';b.textContent='Vincular Charlotte para atacar';b.onclick=()=>navigate('charlotte');acts.appendChild(b)}else moves.slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn'+(i===0?' primary':'');b.innerHTML=`<b>${escText(m.nome||m.name||`Golpe ${i+1}`)}</b><small>${escText(typeLabel(m.type||m.tipo||'normal'))} • ${Number(m.power||m.poder||0)}</small>`;b.onclick=async()=>{try{playGameSfx('select');b.disabled=true;const r=await bridgeRequest('site_raid_attack',{moveIndex:i},30000);if(r?.damage){playPokemonSound('hit');toast(`Ataque: ${r.damage} de dano${r.effectText?' • '+r.effectText:''}`)}}catch(e){toast(e.message)}finally{setTimeout(()=>b.disabled=false,1200)}};acts.appendChild(b)});
+  if(!linkedCharlotte()){const b=document.createElement('button');b.className='btn primary';b.textContent='Vincular Charlotte para atacar';b.onclick=()=>navigate('charlotte');acts.appendChild(b)}else moves.slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn'+(i===0?' primary':'');b.innerHTML=`<b>${escText(m.nome||m.name||`Golpe ${i+1}`)}</b><small>${escText(typeLabel(m.type||m.tipo||'normal'))} • ${Number(m.power||m.poder||0)}</small>`;b.onclick=async()=>{try{b.disabled=true;const r=await bridgeRequest('site_raid_attack',{moveIndex:i},30000);if(r?.damage)toast(`Ataque: ${r.damage} de dano${r.effectText?' • '+r.effectText:''}`)}catch(e){toast(e.message)}finally{setTimeout(()=>b.disabled=false,1200)}};acts.appendChild(b)});
   box.appendChild(acts);
 }
 $('siteRaidStartBtn')?.addEventListener('click',async()=>{try{await bridgeRequest('site_raid_start',{},30000,false);toast('Raid iniciada.')}catch(e){toast(e.message)}});
@@ -1517,7 +1141,7 @@ function applyPublicProfileStyle(style=[]){
   const card=$('publicProfileCard');if(!card)return;Object.values(STORE_CATALOG).forEach(x=>card.classList.remove(x.className));const ids=Array.isArray(style)?style:[];ids.forEach(id=>{const item=STORE_CATALOG[String(id)];if(item)card.classList.add(item.className)});applyPublicProfileMedia(ids);if($('publicProfileStyle'))$('publicProfileStyle').textContent=ids.filter(id=>STORE_CATALOG[id]).map(id=>STORE_CATALOG[id].name).join(' • ')||'Padrão'
 }
 async function openPublicProfile(uid,fallback={}){
-  if(!uid)return;let p=fallback;try{const sn=await get(ref(db,`directory/${uid}`));if(sn.exists())p=sn.val()}catch{}currentPublicProfile={uid,...p};$('publicProfileAvatar').src=p.avatar||DEFAULT_AVATAR;$('publicProfileName').textContent=p.nome||'Usuário';if($('publicProfileUsername'))$('publicProfileUsername').textContent=p.username?`@${normalizeUsername(p.username)}`:'@sem_usuario';$('publicProfileBio').textContent=p.bio||'Sem bio ainda.';$('publicProfileAnime').textContent=p.favoriteAnime||'—';$('publicProfileSince').textContent=p.createdAt?shortDate(p.createdAt):'—';const isSelf=uid===state.user?.uid,isFriend=!!state.friends?.[uid];if($('publicProfileRelation'))$('publicProfileRelation').textContent=isSelf?'Seu perfil':isFriend?'Amigo':'Visitante';applyPublicProfileStyle(p.style||[]);const btn=$('publicProfileActionBtn');btn.textContent=isSelf?'Seu perfil':isFriend?'Amigo':'Adicionar amigo';btn.disabled=isFriend||isSelf;$('publicProfileDuelBtn').disabled=!isFriend||isSelf;openModal('publicProfileModal');renderPublicBadge(uid)
+  if(!uid)return;let p=fallback;try{const sn=await get(ref(db,`directory/${uid}`));if(sn.exists())p=sn.val()}catch{}currentPublicProfile={uid,...p};$('publicProfileAvatar').src=p.avatar||DEFAULT_AVATAR;$('publicProfileName').textContent=p.nome||'Usuário';if($('publicProfileUsername'))$('publicProfileUsername').textContent=p.username?`@${normalizeUsername(p.username)}`:'@sem_usuario';$('publicProfileBio').textContent=p.bio||'Sem bio ainda.';$('publicProfileAnime').textContent=p.favoriteAnime||'—';$('publicProfileSince').textContent=p.createdAt?shortDate(p.createdAt):'—';const isSelf=uid===state.user?.uid,isFriend=!!state.friends?.[uid];if($('publicProfileRelation'))$('publicProfileRelation').textContent=isSelf?'Seu perfil':isFriend?'Amigo':'Visitante';applyPublicProfileStyle(p.style||[]);const btn=$('publicProfileActionBtn');btn.textContent=isSelf?'Seu perfil':isFriend?'Amigo':'Adicionar amigo';btn.disabled=isFriend||isSelf;$('publicProfileDuelBtn').disabled=!isFriend||isSelf;openModal('publicProfileModal')
 }
 $('publicProfileActionBtn')?.addEventListener('click',()=>{if(currentPublicProfile)sendFriendRequest(currentPublicProfile.uid,currentPublicProfile)});
 $('publicProfileDuelBtn')?.addEventListener('click',()=>{if(!currentPublicProfile)return;closeModal('publicProfileModal');navigate('pokemon');$('duelFriendSelect').value=currentPublicProfile.uid;setTimeout(()=>$('sendDuelChallengeBtn')?.scrollIntoView({behavior:'smooth',block:'center'}),80)});
@@ -1528,109 +1152,30 @@ function burstConfetti(){
   for(let i=0;i<34;i++){const bit=document.createElement('i');bit.className='confetti-piece';bit.style.setProperty('--x',`${Math.random()*100}%`);bit.style.setProperty('--delay',`${Math.random()*.45}s`);bit.style.setProperty('--spin',`${Math.round(Math.random()*720+180)}deg`);bit.style.setProperty('--dur',`${1.2+Math.random()*.9}s`);bit.style.background=`hsl(${Math.floor(Math.random()*360)} 78% 62%)`;root.appendChild(bit)}
   document.body.appendChild(root);setTimeout(()=>root.remove(),2600)
 }
-function showGameResult({title='Partida encerrada',text='',win=false,neutral=false,icon='★'}={}){
-  if($('gameResultTitle'))$('gameResultTitle').textContent=title;if($('gameResultText'))$('gameResultText').textContent=text;if($('gameResultIcon'))$('gameResultIcon').textContent=icon;openModal('gameResultModal');if(win){burstConfetti();playVictoryTone()}else if(neutral){playGameSfx('draw')}else{playDefeatTone()}
+function showGameResult({title='Partida encerrada',text='',win=false,icon='★'}={}){
+  if($('gameResultTitle'))$('gameResultTitle').textContent=title;if($('gameResultText'))$('gameResultText').textContent=text;if($('gameResultIcon'))$('gameResultIcon').textContent=icon;openModal('gameResultModal');if(win){burstConfetti();playVictoryTone()}
 }
 
-// Jogos PvP do site: convites, partidas e jogadas ficam no Firebase do próprio site.
-// A Charlotte NÃO participa de convites/turnos/resultados. Ela continua sendo usada somente onde há Rupias.
-function renderGameFriendSelect(selectId){const sel=$(selectId);if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';sel.appendChild(o)});if(state.friends[cur])sel.value=cur}
-function renderTttFriendSelect(){renderGameFriendSelect('tttFriendSelect')}
-function renderGameFriendSelects(){renderTttFriendSelect();renderGameFriendSelect('blackjackFriendSelect');renderGameFriendSelect('hangmanFriendSelect')}
-const SITE_GAME_META={
-  ttt:{label:'Jogo da Velha',icon:'◯',inviteBox:'tttInvites',games:'ticTacToeGames',index:'ticTacToeIndex'},
-  blackjack:{label:'21',icon:'21',inviteBox:'blackjackInvites',games:'blackjackGames',index:'blackjackIndex'},
-  hangman:{label:'Forca',icon:'A',inviteBox:'hangmanInvites',games:'hangmanGames',index:'hangmanIndex'}
-};
-function gameRows(obj){return Object.entries(obj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0))}
-function siteGameName(uid){return state.directory?.[uid]?.nome||state.friends?.[uid]?.nome||(uid===state.user?.uid?displayName():'Jogador')}
-async function sendSiteGameChallenge(type,targetUid){
-  if(!state.user)throw new Error('Entre na sua conta.');if(!SITE_GAME_META[type])throw new Error('Jogo inválido.');if(!targetUid||targetUid===state.user.uid)throw new Error('Escolha um amigo válido.');if(!state.friends?.[targetUid])throw new Error('Esse usuário precisa estar na sua lista de amigos.');
-  const challengeRef=push(ref(db,`siteGameChallenges/${targetUid}`));
-  await set(challengeRef,{id:challengeRef.key,type,fromUid:state.user.uid,fromName:displayName(),createdAt:Date.now()});
-  toast(`Convite de ${SITE_GAME_META[type].label} enviado pelo site.`);
+// Jogo da velha seguro pelo bridge
+function renderTttFriendSelect(){const sel=$('tttFriendSelect');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';sel.appendChild(o)});if(state.friends[cur])sel.value=cur}
+$('tttCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('tttFriendSelect').value;if(!targetUid)return toast('Escolha um amigo.');try{await bridgeRequest('ttt_create',{targetUid},25000,false);toast('Partida criada.')}catch(e){toast(e.message)}});
+function handleTttIndex(obj){
+  const rows=Object.entries(obj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0));
+  const active=rows.find(x=>x.status==='active');if(active){if(state.ttt.game?.id!==active.id)subscribeTtt(active.id);return}
+  const finished=rows.find(x=>x.status==='finished');if(finished&&state.ttt.game?.id!==finished.id)subscribeTtt(finished.id);else if(!finished)setTttGame(null)
 }
-async function rejectSiteGameChallenge(id){if(!state.user||!id)return;await remove(ref(db,`siteGameChallenges/${state.user.uid}/${id}`));playGameSfx('reject');toast('Convite recusado.')}
-function challengeRow(ch){
-  const row=document.createElement('div');row.className='person-row game-invite-row';
-  const copy=document.createElement('div');copy.className='person-copy';copy.innerHTML=`<strong>${escText(ch.fromName||'Amigo')}</strong><small>desafiou você para ${escText(SITE_GAME_META[ch.type]?.label||'uma partida')}</small>`;
-  const acts=document.createElement('div');acts.className='person-actions';
-  const yes=document.createElement('button');yes.type='button';yes.className='btn primary';yes.textContent='Aceitar';yes.onclick=async()=>{try{yes.disabled=true;await acceptSiteGameChallenge(ch)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível aceitar.'))}finally{yes.disabled=false}};
-  const no=document.createElement('button');no.type='button';no.className='btn';no.textContent='Recusar';no.onclick=()=>rejectSiteGameChallenge(ch.id).catch(e=>toast(permissionMessage(e)));
-  acts.append(yes,no);row.append(copy,acts);return row
-}
-function renderSiteGameChallenges(){
-  // Convites agora ficam centralizados no sininho > Amigos.
-  Object.values(SITE_GAME_META).forEach(m=>{const box=$(m.inviteBox);if(box){box.innerHTML='';box.hidden=true}});
-  const rows=Object.values(state.siteGameChallenges||{}).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
-  const fresh=rows.filter(ch=>ch?.id&&!state.siteGameChallengeSeen.has(ch.id));
-  rows.forEach(ch=>{if(ch?.id)state.siteGameChallengeSeen.add(ch.id)});
-  renderNotifications();
-  if(fresh.length){
-    const last=fresh[0],label=SITE_GAME_META[last.type]?.label||'jogo';
-    const notice={id:`game_${last.id}`,type:'game_challenge',gameType:last.type,challengeId:last.id,title:`Convite para ${label}`,text:`${last.fromName||'Um amigo'} desafiou você para ${label}.`,link:'#friends',createdAt:Number(last.createdAt||Date.now())};
-    toast(`${last.fromName||'Um amigo'} desafiou você para ${label}. Abra o sininho em Amigos.`,5200);playNotificationTone();showBrowserNotification(notice)
-  }
-}
-function cryptoShuffle(items){const a=[...items];const bytes=new Uint32Array(Math.max(1,a.length));crypto.getRandomValues(bytes);for(let i=a.length-1;i>0;i--){const j=bytes[i%bytes.length]%(i+1);[a[i],a[j]]=[a[j],a[i]]}return a}
-function randomPlayer(a,b){const x=new Uint8Array(1);crypto.getRandomValues(x);return x[0]%2===0?a:b}
-function appendGameLog(game,text){const k=`${Date.now()}_${Math.random().toString(36).slice(2,7)}`;game.log={...(game.log||{}),[k]:{text,at:Date.now()}}}
-function tttWinner(board){const lines=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];for(const [a,b,c] of lines)if(board[a]&&board[a]===board[b]&&board[a]===board[c])return board[a];return''}
-function buildBlackjackDeck(){const suits=['♠','♥','♦','♣'],ranks=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];return cryptoShuffle(suits.flatMap(s=>ranks.map(r=>({r,s}))))}
-function blackjackScore(cards=[]){let total=0,aces=0;for(const c of cards){if(c.r==='A'){total+=11;aces++}else if(['J','Q','K'].includes(c.r))total+=10;else total+=Number(c.r||0)}while(total>21&&aces>0){total-=10;aces--}return total}
-const HANGMAN_WORDS=['CHARLOTTE','POKEMON','GREMORY','AVENTURA','AMIZADE','DRAGAO','GALAXIA','MISTERIO','FANTASIA','ESPADA','CASTELO','MAGIA','VIAGEM','TESOURO','HEROINA','GUERREIRO','VITORIA','DESAFIO','ESTRELA','IMPERIO'];
-function pickHangmanWord(){const b=new Uint32Array(1);crypto.getRandomValues(b);return HANGMAN_WORDS[b[0]%HANGMAN_WORDS.length]}
-function hangmanMask(answer,guessed={}){return [...answer].map(ch=>ch===' '?' ':guessed[ch]?ch:'_').join('')}
-async function createSiteGame(type,opponentUid){
-  const meta=SITE_GAME_META[type];if(!meta||!state.user)throw new Error('Jogo inválido.');const me=state.user.uid,other=opponentUid;if(!state.friends?.[other])throw new Error('A amizade não está mais ativa.');const gameRef=push(ref(db,meta.games)),gameId=gameRef.key,createdAt=Date.now(),first=randomPlayer(me,other),meName=displayName(),otherName=siteGameName(other);let game;
-  if(type==='ttt'){
-    const x=randomPlayer(me,other),o=x===me?other:me;game={id:gameId,type,status:'active',createdAt,updatedAt:createdAt,createdBy:me,turnUid:x,board:['','','','','','','','',''],players:{[x]:{uid:x,name:x===me?meName:otherName,symbol:'X'},[o]:{uid:o,name:o===me?meName:otherName,symbol:'O'}},log:{}};appendGameLog(game,'Partida iniciada pelo site.');
-  }else if(type==='blackjack'){
-    const deck=buildBlackjackDeck(),cardsA=[deck.pop(),deck.pop()],cardsB=[deck.pop(),deck.pop()];game={id:gameId,type,status:'active',createdAt,updatedAt:createdAt,createdBy:me,turnUid:first,deck,players:{[me]:{uid:me,name:meName,cards:cardsA,score:blackjackScore(cardsA),stood:false,busted:false},[other]:{uid:other,name:otherName,cards:cardsB,score:blackjackScore(cardsB),stood:false,busted:false}},log:{}};appendGameLog(game,'As cartas foram distribuídas.');
-  }else{
-    const answer=pickHangmanWord();game={id:gameId,type,status:'active',createdAt,updatedAt:createdAt,createdBy:me,turnUid:first,answer,mask:hangmanMask(answer,{}),guessed:{},misses:[],maxMisses:6,players:{[me]:{uid:me,name:meName,score:0},[other]:{uid:other,name:otherName,score:0}},log:{}};appendGameLog(game,'A palavra secreta foi escolhida pelo site.');
-  }
-  const idx={id:gameId,type,status:'active',createdAt,updatedAt:createdAt,createdBy:me,opponentUid:other};
-  const updates={};updates[`${meta.games}/${gameId}`]=game;updates[`${meta.index}/${me}/${gameId}`]=idx;updates[`${meta.index}/${other}/${gameId}`]={...idx,opponentUid:me};await update(ref(db),updates);return gameId
-}
-async function acceptSiteGameChallenge(ch){if(!state.user||!ch?.id||!ch?.fromUid)throw new Error('Convite inválido.');const gameId=await createSiteGame(ch.type,ch.fromUid);if(ch.type==='ttt')subscribeTtt(gameId);else if(ch.type==='blackjack')subscribeBlackjack(gameId);else if(ch.type==='hangman')subscribeHangman(gameId);await remove(ref(db,`siteGameChallenges/${state.user.uid}/${ch.id}`));scheduleGameRealtimeSync(100);navigate('games');playGameSfx('accept');toast(`${SITE_GAME_META[ch.type]?.label||'Partida'} iniciada.`);return gameId}
-async function finishIndexes(type,game){if(!game?.id)return;const meta=SITE_GAME_META[type];if(!meta)return;const updates={};const now=Number(game.updatedAt||game.finishedAt||Date.now());for(const uid of Object.keys(game.players||{})){const base=`${meta.index}/${uid}/${game.id}`;updates[`${base}/status`]=game.status||'finished';updates[`${base}/updatedAt`]=now;updates[`${base}/finishedAt`]=Number(game.finishedAt||now);if(game.winnerUid!=null)updates[`${base}/winnerUid`]=game.winnerUid;if(game.finishReason)updates[`${base}/finishReason`]=game.finishReason;if(game.leftUid)updates[`${base}/leftUid`]=game.leftUid}try{await update(ref(db),updates)}catch(e){console.warn('[GAME EXIT] Não foi possível sincronizar os índices:',e?.message||e)}}
-function applyFinishedGameLocally(type,game){if(!game?.id)return;if(type==='ttt'&&state.ttt.game?.id===game.id)setTttGame(game);else if(type==='blackjack'&&state.blackjack.game?.id===game.id)setBlackjackGame(game);else if(type==='hangman'&&state.hangman.game?.id===game.id)setHangmanGame(game)}
-async function directGameExit(type,game){if(!state.user||!game?.id)return;const meta=SITE_GAME_META[type],uid=state.user.uid;if(!meta)throw new Error('Jogo inválido.');let failReason='';const gameRef=ref(db,`${meta.games}/${game.id}`);const tx=await runTransaction(gameRef,g=>{if(!g){failReason='Partida não encontrada.';return}if(!g.players?.[uid]){failReason='Você não participa desta partida.';return}if(g.status!=='active'){failReason='Partida já encerrada.';return}const other=Object.keys(g.players).find(x=>x!==uid)||null,now=Date.now();g.status='finished';g.winnerUid=other;g.leftUid=uid;g.finishReason='exit';g.finishedAt=now;g.updatedAt=now;g.turnUid=null;appendGameLog(g,`${g.players[uid]?.name||'Jogador'} saiu da partida. ${other?`${g.players[other]?.name||'Adversário'} venceu por desistência.`:'Partida encerrada.'}`);return g});if(!tx.committed){const current=await get(gameRef).catch(()=>null);if(current?.exists()){const value={id:game.id,...current.val()};if(value.status!=='active'){applyFinishedGameLocally(type,value);return value}}throw new Error(failReason||'Não foi possível encerrar a partida.')}const final={id:game.id,...tx.snapshot.val()};await finishIndexes(type,final);applyFinishedGameLocally(type,final);toast('Você saiu. A partida foi encerrada para os dois jogadores.');return final}
-
-$('tttCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('tttFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('ttt',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
-function focusNewSiteGame(type,id){if(!id)return;if(state.route!=='games')navigate('games');const label=SITE_GAME_META[type]?.label||'Partida';toast(`${label} iniciada.`,2600)}
-function handleTttIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.ttt.game?.id!==active.id){subscribeTtt(active.id);focusNewSiteGame('ttt',active.id)}return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.ttt.game?.id!==finished.id)subscribeTtt(finished.id);else if(!finished)setTttGame(null)}
 function subscribeTtt(id){if(state.ttt.unsub){try{state.ttt.unsub()}catch{}}state.ttt.unsub=onValue(ref(db,`ticTacToeGames/${id}`),sn=>setTttGame(sn.exists()?{id,...sn.val()}:null))}
 function setTttGame(g){
-  const prev=state.ttt.game;
-  if(g?.status==='active'){
-    if(!prev||prev.id!==g.id){playGameSfx('start');if(g.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),180)}
-    else if(prev.status==='active'){
-      const before=Array.isArray(prev.board)?prev.board:Array.from({length:9},(_,i)=>prev.board?.[i]||'');
-      const after=Array.isArray(g.board)?g.board:Array.from({length:9},(_,i)=>g.board?.[i]||'');
-      if(after.some((v,i)=>v&&v!==before[i]))playGameSfx('move');
-      if(prev.turnUid!==g.turnUid&&g.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),90);
-    }
-  }
   state.ttt.game=g;const panel=$('tttGamePanel');
   if(!g||g.status!=='active'){
-    if(panel)panel.hidden=true;
-    const uid=state.user?.uid,exit=!!g&&g.finishReason==='exit'&&!!g.leftUid,iLeft=exit&&g.leftUid===uid,won=!!g&&g.winnerUid===uid,draw=!!g&&!g.winnerUid&&!exit;
-    const leftName=exit?(g.players?.[g.leftUid]?.name||'O adversário'):'';
-    if($('tttStatus'))$('tttStatus').textContent=exit?(iLeft?'Você saiu':'Vitória por desistência'):won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';
-    if(g?.status==='finished'&&g.id&&state.ttt.seenActiveIds.has(g.id)){
-      state.ttt.seenActiveIds.delete(g.id);state.ttt.lastResultId=g.id;if(state.user)localStorage.setItem(`gremory:tttSeen:${state.user.uid}`,g.id);
-      if(exit)showGameResult({title:iLeft?'Você saiu da partida':'Vitória por desistência!',text:iLeft?'A partida foi encerrada para os dois jogadores. Seu adversário venceu por desistência.':`${leftName} saiu da partida. Você venceu por desistência.`,win:!iLeft,neutral:false,icon:iLeft?'↩':'✦'});
-      else showGameResult({title:draw?'Empate!':won?'Vitória!':'Partida encerrada',text:draw?'Ninguém venceu essa rodada.':won?'Você venceu esta rodada.':'Seu amigo venceu esta rodada.',win:won,neutral:draw,icon:draw?'＝':won?'✦':'✕'});
-    }
-    return;
+    panel.hidden=true;const won=!!g&&g.winnerUid===state.user?.uid;const draw=!!g&&!g.winnerUid;$('tttStatus').textContent=won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';
+    if(g?.status==='finished'&&g.id&&state.ttt.seenActiveIds.has(g.id)){state.ttt.seenActiveIds.delete(g.id);state.ttt.lastResultId=g.id;if(state.user)localStorage.setItem(`gremory:tttSeen:${state.user.uid}`,g.id);const reward=g.reward||{};showGameResult({title:draw?'Empate!':won?'Vitória!':'Partida encerrada',text:draw?'Ninguém venceu essa rodada.':won?(reward.rupias?`Você ganhou ₹${reward.rupias}.`:'Você venceu. O limite diário de recompensa pode ter sido atingido.'):'Seu amigo venceu esta rodada.',win:won,icon:draw?'＝':won?'✦':'✕'})}
+    return
   }
-  state.ttt.seenActiveIds.add(g.id);if(panel)panel.hidden=false;$('tttStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderTtt(g)
+  state.ttt.seenActiveIds.add(g.id);panel.hidden=false;$('tttStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderTtt(g)
 }
-function renderTtt(g){const me=g.players?.[state.user.uid],other=Object.values(g.players||{}).find(x=>x.uid!==state.user.uid);$('tttTitle').textContent=`${me?.name||'Você'} × ${other?.name||'Amigo'}`;$('tttTurnText').textContent=g.turnUid===state.user.uid?`Sua vez • você é ${me?.symbol||'X'}`:`Vez de ${other?.name||'amigo'}`;const board=$('tttBoard');board.innerHTML='';const cells=Array.isArray(g.board)?g.board:Array.from({length:9},(_,i)=>g.board?.[i]||'');cells.forEach((v,i)=>{const b=document.createElement('button');b.type='button';b.className='ttt-cell';b.textContent=v||'';b.disabled=!!v||g.turnUid!==state.user.uid||g.status!=='active';b.onclick=()=>{playGameSfx('select');directTttMove(g.id,i).catch(e=>toast(permissionMessage(e,e.message)))};board.appendChild(b)});const log=$('tttLog');log.innerHTML=Object.values(g.log||{}).slice(-8).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
-async function directTttMove(gameId,index){const uid=state.user?.uid;if(!uid)return;let reason='';const tx=await runTransaction(ref(db,`ticTacToeGames/${gameId}`),g=>{if(!g||g.status!=='active'){reason='Partida encerrada.';return}if(g.turnUid!==uid){reason='Aguarde sua vez.';return}const board=Array.isArray(g.board)?[...g.board]:Array.from({length:9},(_,i)=>g.board?.[i]||'');if(board[index]){reason='Essa casa já foi usada.';return}const me=g.players?.[uid],other=Object.keys(g.players||{}).find(x=>x!==uid);board[index]=me?.symbol||'X';g.board=board;g.updatedAt=Date.now();appendGameLog(g,`${me?.name||'Jogador'} marcou ${me?.symbol||'X'}.`);const win=tttWinner(board);if(win){g.status='finished';g.winnerUid=uid;g.finishedAt=Date.now()}else if(board.every(Boolean)){g.status='finished';g.winnerUid=null;g.finishedAt=Date.now()}else g.turnUid=other;return g});if(!tx.committed){if(reason)throw new Error(reason);return}const final={id:gameId,...tx.snapshot.val()};if(final.status==='finished')await finishIndexes('ttt',final)}
-$('tttExitBtn')?.addEventListener('click',async()=>{if(!state.ttt.game)return;playGameSfx('reject');try{await directGameExit('ttt',state.ttt.game)}catch(e){toast(permissionMessage(e,e.message))}});
+function renderTtt(g){const me=g.players?.[state.user.uid],other=Object.values(g.players||{}).find(x=>x.uid!==state.user.uid);$('tttTitle').textContent=`${me?.name||'Você'} × ${other?.name||'Amigo'}`;$('tttTurnText').textContent=g.turnUid===state.user.uid?`Sua vez • você é ${me?.symbol||'X'}`:`Vez de ${other?.name||'amigo'}`;const board=$('tttBoard');board.innerHTML='';const cells=Array.isArray(g.board)?g.board:Array.from({length:9},(_,i)=>g.board?.[i]||'');cells.forEach((v,i)=>{const b=document.createElement('button');b.type='button';b.className='ttt-cell';b.textContent=v||'';b.disabled=!!v||g.turnUid!==state.user.uid||g.status!=='active';b.onclick=async()=>{try{await bridgeRequest('ttt_move',{gameId:g.id,index:i},20000,false)}catch(e){toast(e.message)}};board.appendChild(b)});const log=$('tttLog');log.innerHTML=Object.values(g.log||{}).slice(-8).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
+$('tttExitBtn')?.addEventListener('click',async()=>{if(!state.ttt.game)return;try{await bridgeRequest('ttt_exit',{gameId:state.ttt.game.id},20000,false)}catch(e){toast(e.message)}});
 
 // Watch Party independente do RPG
 $('watchCreateBtn')?.addEventListener('click',()=>openModal('watchCreateModal'));
@@ -1643,18 +1188,16 @@ $('watchCopyBtn')?.addEventListener('click',()=>{const code=state.watchCode||'';
 $('watchMediaForm')?.addEventListener('submit',setWatchMedia);
 $('watchPlayBtn')?.addEventListener('click',toggleWatchPlayback);
 $('watchSyncBtn')?.addEventListener('click',syncWatchPlayer);
-$('watchLocalFileBtn')?.addEventListener('click',()=>{if(!isWatchHost())return toast('Somente o host pode transmitir um arquivo.');$('watchLocalFileInput')?.click()});
-$('watchLocalFileInput')?.addEventListener('change',async ev=>{const file=ev.target.files?.[0];ev.target.value='';if(file)await startWatchLocalFile(file)});
 async function uniqueWatchCode(){for(let i=0;i<8;i++){const c=randomCode();const sn=await get(ref(db,`watchRooms/${c}`));if(!sn.exists())return c}throw new Error('Não foi possível gerar código.')}
 async function createWatchRoom(ev){ev.preventDefault();if(!state.user)return;try{const code=await uniqueWatchCode(),createdAt=nowIso(),name=$('watchNameInput').value.trim()||'Watch Party';const room={meta:{code,name,ownerUid:state.user.uid,createdAt},members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Host',joinedAt:createdAt}},media:{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}};await set(ref(db,`watchRooms/${code}`),room);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name,role:'Host',joinedAt:createdAt});closeModal('watchCreateModal');$('watchCreateForm').reset();await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível criar a sala.'),6000)}}
 async function loadWatchRooms(){if(!state.user)return;const box=$('watchRoomsList');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await get(ref(db,`watchUserRooms/${state.user.uid}`));box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];$('homeWatchRecent').textContent=rows.length?`${rows.length} sala${rows.length===1?'':'s'}`:'Assistir e conversar';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala.</div>';return}rows.forEach(r=>{const item=document.createElement('div');item.className='room-item';const c=document.createElement('div');c.innerHTML=`<strong>${escText(r.name||r.code)}</strong><small>${escText(r.code)} • ${escText(r.role||'Participante')}</small>`;const acts=document.createElement('div');acts.className='room-item-actions';const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=()=>openWatchRoom(r.code);acts.appendChild(b);if(r.role==='Host'){const del=document.createElement('button');del.className='btn danger-ghost';del.textContent='Apagar';del.onclick=()=>deleteWatchRoom(r.code,r.name);acts.appendChild(del)}item.append(c,acts);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
 async function joinWatchRoom(code){if(!state.user)return;try{const sn=await get(ref(db,`watchRooms/${code}`));if(!sn.exists())throw new Error('Sala não encontrada.');const room=sn.val(),member={uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:room.meta?.ownerUid===state.user.uid?'Host':'Participante',joinedAt:nowIso()};await set(ref(db,`watchRooms/${code}/members/${state.user.uid}`),member);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name:room.meta?.name||code,role:member.role,joinedAt:nowIso()});$('watchJoinCode').value='';await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível entrar.'))}}
-async function openWatchRoom(code){if(state.watchCode&&state.watchCode!==code)await leaveWatchVoice(true);clearUnsubs(state.watchUnsubs);state.watchCode=code;$('watchLobby').hidden=true;$('watchRoom').hidden=false;if($('watchCreateBtn'))$('watchCreateBtn').hidden=true;state.watchUnsubs.push(onValue(ref(db,`watchRooms/${code}`),sn=>{if(!sn.exists()){toast('Essa sala não existe mais.');closeWatchRoom(false);return}state.watchRoom=sn.val();renderWatchRoom()}));navigate('watch')}
+async function openWatchRoom(code){clearUnsubs(state.watchUnsubs);state.watchCode=code;$('watchLobby').hidden=true;$('watchRoom').hidden=false;if($('watchCreateBtn'))$('watchCreateBtn').hidden=true;state.watchUnsubs.push(onValue(ref(db,`watchRooms/${code}`),sn=>{if(!sn.exists()){toast('Essa sala não existe mais.');closeWatchRoom(false);return}state.watchRoom=sn.val();renderWatchRoom()}));navigate('watch')}
 function isWatchHost(){return !!state.user&&state.watchRoom?.meta?.ownerUid===state.user.uid}
 function renderWatchRoom(){
   const r=state.watchRoom||{},m=r.meta||{};$('watchRoomName').textContent=m.name||'Watch Party';$('watchCode').textContent=state.watchCode||'------';$('watchHostPill').textContent=isWatchHost()?'Host':'Participante';$('watchMemberCount').textContent=String(Object.keys(r.members||{}).length);
   const list=$('watchMemberList');list.innerHTML='';Object.values(r.members||{}).forEach(x=>{const d=document.createElement('div');d.className='member-item watch-member-item';const img=document.createElement('img');img.src=x.avatar||DEFAULT_AVATAR;const c=document.createElement('div');c.innerHTML=`<strong>${escText(x.name||'Usuário')}</strong><small>${escText(x.role||'Participante')}</small>`;d.append(img,c);list.appendChild(d)});
-  $('watchMediaInput').disabled=!isWatchHost();$('watchMediaForm').querySelector('button').disabled=!isWatchHost();$('watchPlayBtn').disabled=!isWatchHost();if($('watchLocalFileBtn'))$('watchLocalFileBtn').disabled=!isWatchHost();if($('watchMusicSkipBtn'))$('watchMusicSkipBtn').disabled=!isWatchHost();
+  $('watchMediaInput').disabled=!isWatchHost();$('watchMediaForm').querySelector('button').disabled=!isWatchHost();$('watchPlayBtn').disabled=!isWatchHost();if($('watchMusicSkipBtn'))$('watchMusicSkipBtn').disabled=!isWatchHost();
   renderWatchMedia(r.media||{});renderWatchMusic(r.musicQueue||{},r.musicAccess||{},r.musicPlan||{},r.musicPlayback||{});watchVoiceUi();if(!state.watchRtc.joined)ensureWatchRtcSession().catch(()=>{})
 }
 function youtubeEmbed(url,viewerLocked=false){
@@ -1675,14 +1218,10 @@ function googleDriveFileId(url){
   try{
     const u=new URL(url);if(!/(^|\.)drive\.google\.com$/i.test(u.hostname))return'';
     const byPath=u.pathname.match(/\/file\/d\/([^/]+)/i)?.[1];
-    const id=byPath||u.searchParams.get('id')||'';return /^[a-zA-Z0-9_-]{10,200}$/.test(id)?id:'';
+    return byPath||u.searchParams.get('id')||'';
   }catch{return''}
 }
-function googleDriveEmbed(url){const id=googleDriveFileId(url);if(!id)return '';const key=new URL(url).searchParams.get('resourcekey');return `https://drive.google.com/file/d/${encodeURIComponent(id)}/preview${key?'?resourcekey='+encodeURIComponent(key):''}`}
-function googleDriveDirect(url){
-  const id=googleDriveFileId(url);if(!id)return '';
-  try{const key=new URL(url).searchParams.get('resourcekey')||'';return `https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download&confirm=t${key?'&resourcekey='+encodeURIComponent(key):''}`}catch{return''}
-}
+function googleDriveEmbed(url){const id=googleDriveFileId(url);return id?`https://drive.google.com/file/d/${encodeURIComponent(id)}/preview`:''}
 function watchMediaPosition(media={}){return Number(media.position||0)+(media.playing?Math.max(0,(Date.now()-Number(media.updatedAt||Date.now()))/1000):0)}
 function youtubeCommand(iframe,func,args=[]){try{iframe?.contentWindow?.postMessage(JSON.stringify({event:'command',func,args}),'*')}catch{}}
 function startYoutubeListening(iframe){
@@ -1736,16 +1275,8 @@ function renderWatchMedia(media){
   const stage=$('watchMediaStage'),url=String(media.url||'');if(!stage)return;
   const playBtn=$('watchPlayBtn'),syncBtn=$('watchSyncBtn'),host=isWatchHost();
   if(playBtn)playBtn.textContent=media.playing?'Pausar':'Reproduzir';
-  if(media.type==='local'){
-    const local=host?state.watchRtc.localFileVideo:null;
-    if(playBtn){playBtn.disabled=!local;playBtn.textContent=local&&!local.paused?'Pausar':'Reproduzir'}
-    if(syncBtn)syncBtn.disabled=true;
-    if(local){stage.hidden=false;return}
-    if(!state.watchRtc.activeScreenUid&&!state.watchRtc.screenStream){stage.innerHTML=`<div class="empty-state">${host?'Escolha novamente o filme do dispositivo para iniciar a transmissão.':'O host está preparando um filme do dispositivo. Aguarde a transmissão ao vivo.'}</div>`}
-    return
-  }
-  if(!url){delete stage.dataset.url;if(!state.watchRtc.activeScreenUid&&!state.watchRtc.screenStream)stage.innerHTML='<div class="empty-state">Cole um link do YouTube, Google Drive ou vídeo direto; ou transmita um filme do dispositivo.</div>';if(playBtn)playBtn.disabled=true;if(syncBtn)syncBtn.disabled=true;return}
-  const yt=youtubeEmbed(url,!host),drive=googleDriveEmbed(url),driveDirect=googleDriveDirect(url);
+  if(!url){if(!state.watchRtc.activeScreenUid&&!state.watchRtc.screenStream)stage.innerHTML='<div class="empty-state">Cole um link do YouTube, Google Drive ou vídeo direto; ou compartilhe sua tela.</div>';if(playBtn)playBtn.disabled=true;if(syncBtn)syncBtn.disabled=true;return}
+  const yt=youtubeEmbed(url,!host),drive=googleDriveEmbed(url);
   if(yt){
     if(playBtn)playBtn.disabled=!host;if(syncBtn)syncBtn.disabled=false;
     let f=stage.querySelector('iframe[data-watch-youtube="1"]');
@@ -1754,29 +1285,11 @@ function renderWatchMedia(media){
     return
   }
   if(drive){
-    if(playBtn)playBtn.disabled=!host;if(syncBtn)syncBtn.disabled=false;
-    const fallbackDrive=()=>{
-      if(stage.dataset.driveFallback==='1'&&stage.dataset.url===url)return;
-      stage.dataset.driveFallback='1';stage.innerHTML='';
-      const f=document.createElement('iframe');f.className='watch-iframe drive-iframe';f.dataset.watchDrive='1';f.src=drive;f.allow='autoplay; fullscreen';f.allowFullscreen=true;f.title='Vídeo do Google Drive';stage.appendChild(f);
-      const help=document.createElement('div');help.className='drive-help';const note=document.createElement('p');note.textContent='O Google não liberou este arquivo como vídeo direto. Se o iframe pedir login mesmo com o link público, use “Filme do dispositivo” ou compartilhe a aba/tela com áudio.';const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.className='btn';link.textContent='Abrir no Drive';const retry=document.createElement('button');retry.className='btn';retry.type='button';retry.textContent='Tentar vídeo direto';retry.onclick=()=>{delete stage.dataset.driveFallback;delete stage.dataset.url;renderWatchMedia(state.watchRoom?.media||media)};help.append(note,link,retry);stage.appendChild(help);stage.dataset.url=url;
-      if(playBtn){playBtn.disabled=true;playBtn.textContent='Controles no Drive'}if(syncBtn)syncBtn.disabled=true
-    };
-    let v=stage.querySelector('video[data-watch-drive-direct="1"]');
-    if(!v||stage.dataset.url!==url||stage.dataset.driveFallback==='1'){
-      delete stage.dataset.driveFallback;stage.innerHTML='';v=document.createElement('video');v.className='watch-video';v.dataset.watchDriveDirect='1';v.src=driveDirect;v.controls=host;v.playsInline=true;v.preload='metadata';
-      v.addEventListener('error',fallbackDrive,{once:true});
-      v.addEventListener('play',()=>{if(host&&!state.watchApplying)publishWatchPlayer(true)});v.addEventListener('pause',()=>{if(host&&!state.watchApplying)publishWatchPlayer(false)});v.addEventListener('seeked',()=>{if(host&&!state.watchApplying)publishWatchPlayer(!v.paused)});
-      stage.appendChild(v);stage.dataset.url=url
-    }
-    v.controls=host;v.classList.toggle('watch-viewer-locked',!host);const target=watchMediaPosition(media);
-    if(Number.isFinite(v.duration)&&Math.abs((v.currentTime||0)-target)>2){state.watchApplying=true;try{v.currentTime=target}catch{}setTimeout(()=>state.watchApplying=false,250)}
-    if(media.playing&&v.paused){state.watchApplying=true;v.play().catch(()=>{}).finally(()=>setTimeout(()=>state.watchApplying=false,250))}
-    if(!media.playing&&!v.paused){state.watchApplying=true;v.pause();setTimeout(()=>state.watchApplying=false,250)}
-    return
+    if(playBtn){playBtn.disabled=true;playBtn.textContent='Controles no Drive'}if(syncBtn)syncBtn.disabled=true;
+    let f=stage.querySelector('iframe[data-watch-drive="1"]');if(!f||stage.dataset.url!==url){stage.innerHTML='';f=document.createElement('iframe');f.className='watch-iframe drive-iframe';f.dataset.watchDrive='1';f.src=drive;f.allow='autoplay; fullscreen';f.allowFullscreen=true;stage.appendChild(f);stage.dataset.url=url}return
   }
   if(playBtn)playBtn.disabled=!host;if(syncBtn)syncBtn.disabled=false;
-  let v=stage.querySelector('video');if(!v||stage.dataset.url!==url){stage.innerHTML='';v=document.createElement('video');v.className='watch-video';v.src=url;v.controls=host;v.playsInline=true;v.addEventListener('error',()=>toast('Este link não abriu como vídeo. Use um MP4/WebM acessível, Google Drive público ou filme do dispositivo.',6000));stage.appendChild(v);stage.dataset.url=url;v.addEventListener('play',()=>{if(host&&!state.watchApplying)publishWatchPlayer(true)});v.addEventListener('pause',()=>{if(host&&!state.watchApplying)publishWatchPlayer(false)});v.addEventListener('seeked',()=>{if(host&&!state.watchApplying)publishWatchPlayer(!v.paused)})}
+  let v=stage.querySelector('video');if(!v||stage.dataset.url!==url){stage.innerHTML='';v=document.createElement('video');v.className='watch-video';v.src=url;v.controls=host;v.playsInline=true;stage.appendChild(v);stage.dataset.url=url;v.addEventListener('play',()=>{if(host&&!state.watchApplying)publishWatchPlayer(true)});v.addEventListener('pause',()=>{if(host&&!state.watchApplying)publishWatchPlayer(false)});v.addEventListener('seeked',()=>{if(host&&!state.watchApplying)publishWatchPlayer(!v.paused)})}
   v.controls=host;v.classList.toggle('watch-viewer-locked',!host);const target=watchMediaPosition(media);
   if(Math.abs((v.currentTime||0)-target)>2){state.watchApplying=true;try{v.currentTime=target}catch{}setTimeout(()=>state.watchApplying=false,250)}
   if(media.playing&&v.paused){state.watchApplying=true;v.play().catch(()=>{}).finally(()=>setTimeout(()=>state.watchApplying=false,250))}
@@ -1785,10 +1298,9 @@ function renderWatchMedia(media){
 
 async function setWatchMedia(ev){
   ev.preventDefault();if(!isWatchHost())return;const url=$('watchMediaInput').value.trim();if(!/^https?:\/\//i.test(url))return toast('Use um link http/https.');
-  if(state.watchRtc.screenSource==='file'&&state.watchRtc.screenStream)await stopWatchPublishedStream({clearLocalMedia:false,silent:true});
   const type=youtubeEmbed(url)?'youtube':googleDriveEmbed(url)?'drive':'video';
   await set(ref(db,`watchRooms/${state.watchCode}/media`),{url,type,playing:false,position:0,updatedAt:Date.now()}).catch(e=>toast(permissionMessage(e)));
-  if(type==='drive')toast('Drive carregado. O Gremory vai tentar o arquivo público direto e sincronizado; se o Google bloquear, cai no player do Drive.');
+  if(type==='drive')toast('Google Drive carregado. O Drive não permite sincronizar Play/Pause por API; cada pessoa usa os controles do player.');
 }
 async function publishWatchPlayer(playing){
   if(!isWatchHost())return;const shell=$('watchMediaStage'),v=shell?.querySelector('video'),media=state.watchRoom?.media||{};
@@ -1796,17 +1308,16 @@ async function publishWatchPlayer(playing){
   await update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:!!playing,position,updatedAt:Date.now()}).catch(()=>{})
 }
 async function toggleWatchPlayback(){
-  if(!isWatchHost())return;const shell=$('watchMediaStage'),media=state.watchRoom?.media||{};
-  const local=state.watchRtc.localFileVideo;if(media.type==='local'&&local){if(local.paused)await local.play().catch(()=>{});else local.pause();return}
-  const v=shell?.querySelector('video');if(v){if(v.paused)v.play().catch(()=>{});else v.pause();return}
-  const iframe=shell?.querySelector('iframe[data-watch-youtube="1"]');
+  if(!isWatchHost())return;const shell=$('watchMediaStage'),v=shell?.querySelector('video'),media=state.watchRoom?.media||{};
+  if(media.type==='drive')return toast('No Google Drive, Play/Pause usa os controles do próprio player.');
+  if(v){if(v.paused)v.play().catch(()=>{});else v.pause();return}
+  const iframe=shell.querySelector('iframe[data-watch-youtube="1"]');
   if(iframe){const next=!media.playing;const position=Number(state.watchYoutube.lastTime||watchMediaPosition(media));state.watchApplying=true;youtubeCommand(iframe,next?'playVideo':'pauseVideo',[]);setTimeout(()=>state.watchApplying=false,500);await update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:next,position,updatedAt:Date.now()}).catch(()=>{});return}
-  if(media.type==='drive'&&shell?.querySelector('iframe[data-watch-drive="1"]'))return toast('O Google bloqueou o vídeo direto. Neste modo o Play/Pause fica no player do Drive.');
   toast('Carregue um vídeo primeiro.')
 }
 function syncWatchPlayer(){
-  const media=state.watchRoom?.media||{};if(media.type==='local')return toast('O filme do dispositivo já é transmitido ao vivo para todos.');
-  const shell=$('watchMediaStage'),iframe=shell?.querySelector('iframe[data-watch-youtube="1"]');if(iframe)applyYoutubeWatchState(iframe,media);else if(media.type==='drive'&&shell?.querySelector('iframe[data-watch-drive="1"]'))return toast('O Google bloqueou a sincronização direta deste arquivo.');else renderWatchMedia(media);toast('Player sincronizado.')
+  const media=state.watchRoom?.media||{};if(media.type==='drive')return toast('Google Drive não expõe sincronização de reprodução.');
+  const iframe=$('watchMediaStage')?.querySelector('iframe[data-watch-youtube="1"]');if(iframe)applyYoutubeWatchState(iframe,media);else renderWatchMedia(media);toast('Player sincronizado.')
 }
 function watchMusicRows(queueObj={}){
   const rows=Object.entries(queueObj||{}).map(([id,v])=>({id,...(v||{})})).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0));
@@ -1996,14 +1507,14 @@ function watchVoiceUi(){
   const rtc=state.watchRtc,audio=rtc.audioJoined;
   if($('watchJoinVoiceBtn'))$('watchJoinVoiceBtn').hidden=audio;
   if($('watchMicBtn')){$('watchMicBtn').hidden=!audio;$('watchMicBtn').textContent=rtc.micEnabled?'Silenciar':'Ativar microfone'}
-  if($('watchShareBtn')){$('watchShareBtn').hidden=!state.watchCode;$('watchShareBtn').textContent=rtc.screenStream?(rtc.screenSource==='file'?'Parar filme local':'Parar compartilhamento'):'Compartilhar tela';$('watchShareBtn').classList.toggle('active',!!rtc.screenStream)}
+  if($('watchShareBtn')){$('watchShareBtn').hidden=!state.watchCode;$('watchShareBtn').textContent=rtc.screenStream?'Parar compartilhamento':'Compartilhar tela';$('watchShareBtn').classList.toggle('active',!!rtc.screenStream)}
   if($('watchLeaveVoiceBtn'))$('watchLeaveVoiceBtn').hidden=!audio;
   if(state.watchRoom)renderWatchMusic(state.watchRoom.musicQueue||{},state.watchRoom.musicAccess||{},state.watchRoom.musicPlan||{},state.watchRoom.musicPlayback||{})
 }
 function setWatchRtcStatus(text,tone=''){
   const el=$('watchRtcStatus');if(!el)return;el.textContent=String(text||'');el.dataset.tone=tone||''
 }
-function watchPeerName(uid){return state.watchRtc.presence?.[uid]?.name||state.watchRoom?.members?.[uid]?.name||'Participante'}
+function watchPeerName(uid){return state.watchRoom?.members?.[uid]?.name||'Participante'}
 function watchPcSender(pc,kind,role='voice'){
   if(!pc)return null;
   if(kind==='video')return pc.__watchVideoSender||pc.getTransceivers?.().find(t=>t.receiver?.track?.kind==='video')?.sender||null;
@@ -2029,92 +1540,8 @@ function ensureWatchCallCard(uid){
   }
   return card
 }
-function watchRemoteHasScreen(uid,stream=watchScreenStreamFor(uid)){return state.watchRtc.screenSharers.has(String(uid||''))&&!!stream?.getVideoTracks?.().some(t=>t.readyState==='live')}
-function watchRemoteScreenFlowing(uid,stream=watchScreenStreamFor(uid)){return state.watchRtc.screenSharers.has(String(uid||''))&&!!stream?.getVideoTracks?.().some(t=>t.readyState==='live'&&!t.muted)}
+function watchRemoteHasScreen(uid,stream=watchScreenStreamFor(uid)){return state.watchRtc.screenSharers.has(String(uid||''))&&!!stream?.getVideoTracks?.().some(t=>t.readyState==='live'&&!t.muted)}
 async function sendWatchRtc(targetUid,payload){if(!state.user||!state.watchCode)return;await push(ref(db,`watchRtc/${state.watchCode}/${targetUid}`),{fromUid:state.user.uid,at:Date.now(),...payload})}
-function closeWatchDedicatedScreen(map,key){
-  const pc=map.get(String(key||''));if(!pc)return;
-  try{pc.ontrack=null;pc.onicecandidate=null;pc.onconnectionstatechange=null;pc.oniceconnectionstatechange=null;pc.close()}catch{}
-  map.delete(String(key||''))
-}
-async function flushWatchDedicatedCandidates(kind,key,pc){
-  const map=kind==='out'?state.watchRtc.screenOutCandidates:state.watchRtc.screenInCandidates,q=map.get(String(key||''))||[];map.delete(String(key||''));
-  for(const c of q){try{await pc.addIceCandidate(c)}catch{}}
-}
-function setupWatchDedicatedScreenPc(pc,peerUid,ownerUid,mode){
-  const targetUid=String(peerUid||''),owner=String(ownerUid||'');
-  pc.onicecandidate=ev=>{if(ev.candidate)sendWatchRtc(targetUid,{type:'screen_candidate',ownerUid:owner,candidate:ev.candidate.toJSON()}).catch(()=>{})};
-  if(mode==='in'){
-    const remote=new MediaStream();state.watchRtc.remoteScreenStreams.set(owner,remote);state.watchRtc.remoteStreams.set(owner,remote);
-    pc.ontrack=ev=>{
-      if(!remote.getTracks().some(t=>t.id===ev.track.id))remote.addTrack(ev.track);
-      state.watchRtc.screenSharers.add(owner);if(ev.track.kind==='video')state.watchRtc.activeScreenUid=owner;
-      ev.track.onunmute=()=>{if(ev.track.kind==='video')state.watchRtc.activeScreenUid=owner;attachWatchRemote(owner);refreshWatchScreenStage();setWatchRtcStatus(`${watchPeerName(owner)} está transmitindo`,'ok')};
-      ev.track.onended=()=>{attachWatchRemote(owner);refreshWatchScreenStage()};
-      attachWatchRemote(owner);refreshWatchScreenStage();
-      if(ev.track.kind==='video')setWatchRtcStatus('Vídeo recebido. Preparando reprodução...','ok')
-    };
-  }
-  pc.oniceconnectionstatechange=()=>{
-    const st=pc.iceConnectionState;
-    if(['connected','completed'].includes(st)){setWatchRtcStatus('Transmissão conectada','ok');state.watchRtc.screenRetry.delete(owner)}
-    if(st==='failed'){
-      if(mode==='in'){setWatchRtcStatus('Reconectando transmissão...','warn');setTimeout(()=>requestWatchScreenFrom(owner,true).catch(()=>{}),500)}
-      else if(state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live'))setTimeout(()=>offerWatchScreenToPeer(targetUid,'ice-restart',true).catch(()=>{}),700)
-    }
-  };
-  pc.onconnectionstatechange=()=>{
-    if(pc.connectionState==='connected'){setWatchRtcStatus('Transmissão conectada','ok');return}
-    if(['failed','disconnected'].includes(pc.connectionState)){
-      if(mode==='in')setTimeout(()=>{if(['failed','disconnected'].includes(pc.connectionState))requestWatchScreenFrom(owner,true).catch(()=>{})},1200);
-      else if(state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live'))setTimeout(()=>offerWatchScreenToPeer(targetUid,'connection-retry',true).catch(()=>{}),1400)
-    }
-  }
-}
-async function offerWatchScreenToPeer(peerUid,reason='screen-sync',force=false){
-  peerUid=String(peerUid||'');if(!peerUid||peerUid===state.user?.uid)return false;
-  const videoTrack=state.watchRtc.screenStream?.getVideoTracks?.().find(t=>t.readyState==='live');if(!videoTrack)return false;
-  const lock=state.watchRtc.screenOfferLocks;if(lock.has(peerUid))return false;
-  const existing=state.watchRtc.screenOutPeers.get(peerUid),now=Date.now(),last=Number(state.watchRtc.screenOfferAt.get(peerUid)||0);
-  if(!force&&existing&&['new','connecting','connected'].includes(existing.connectionState)&&now-last<4500)return true;
-  if(!force&&now-last<900)return false;
-  lock.add(peerUid);state.watchRtc.screenOfferAt.set(peerUid,now);
-  try{
-    closeWatchDedicatedScreen(state.watchRtc.screenOutPeers,peerUid);state.watchRtc.screenOutCandidates.delete(peerUid);
-    const pc=new RTCPeerConnection({...RTC_CONFIG,iceCandidatePoolSize:8});state.watchRtc.screenOutPeers.set(peerUid,pc);
-    setupWatchDedicatedScreenPc(pc,peerUid,String(state.user.uid),'out');
-    pc.addTrack(videoTrack,state.watchRtc.screenStream);
-    const audioTrack=state.watchRtc.screenStream?.getAudioTracks?.().find(t=>t.readyState==='live');if(audioTrack)pc.addTrack(audioTrack,state.watchRtc.screenStream);
-    const offer=await pc.createOffer();await pc.setLocalDescription(offer);
-    await sendWatchRtc(peerUid,{type:'screen_offer',ownerUid:String(state.user.uid),sdp:pc.localDescription?.sdp||offer.sdp,reason});
-    return true
-  }catch(e){closeWatchDedicatedScreen(state.watchRtc.screenOutPeers,peerUid);console.warn('[WATCH SCREEN OFFER]',e);return false}
-  finally{lock.delete(peerUid)}
-}
-async function acceptWatchScreenOffer(from,msg){
-  const owner=String(msg.ownerUid||from||'');if(!owner||owner!==String(from||''))return false;
-  closeWatchDedicatedScreen(state.watchRtc.screenInPeers,owner);
-  const pc=new RTCPeerConnection({...RTC_CONFIG,iceCandidatePoolSize:8});state.watchRtc.screenInPeers.set(owner,pc);
-  setupWatchDedicatedScreenPc(pc,owner,owner,'in');
-  await pc.setRemoteDescription({type:'offer',sdp:msg.sdp});await flushWatchDedicatedCandidates('in',owner,pc);
-  const answer=await pc.createAnswer();await pc.setLocalDescription(answer);
-  await sendWatchRtc(owner,{type:'screen_answer',ownerUid:owner,sdp:pc.localDescription?.sdp||answer.sdp});return true
-}
-async function acceptWatchScreenAnswer(from,msg){
-  if(String(msg.ownerUid||'')!==String(state.user?.uid||''))return false;
-  const pc=state.watchRtc.screenOutPeers.get(String(from||''));if(!pc||pc.signalingState==='closed')return false;
-  if(pc.signalingState==='have-local-offer'){await pc.setRemoteDescription({type:'answer',sdp:msg.sdp});await flushWatchDedicatedCandidates('out',String(from),pc);return true}return false
-}
-async function acceptWatchScreenCandidate(from,msg){
-  const owner=String(msg.ownerUid||'');if(!owner||!msg.candidate)return false;
-  if(owner===String(state.user?.uid||'')){
-    const key=String(from||''),pc=state.watchRtc.screenOutPeers.get(key);if(pc?.remoteDescription)try{await pc.addIceCandidate(msg.candidate)}catch{}else{const q=state.watchRtc.screenOutCandidates.get(key)||[];q.push(msg.candidate);state.watchRtc.screenOutCandidates.set(key,q)};return true
-  }
-  if(owner===String(from||'')){
-    const key=owner,pc=state.watchRtc.screenInPeers.get(key);if(pc?.remoteDescription)try{await pc.addIceCandidate(msg.candidate)}catch{}else{const q=state.watchRtc.screenInCandidates.get(key)||[];q.push(msg.candidate);state.watchRtc.screenInCandidates.set(key,q)};return true
-  }
-  return false
-}
 async function negotiateWatchPeer(peerUid,{iceRestart=false,reason='update'}={}){
   const pc=state.watchRtc.peers.get(peerUid);if(!pc||pc.signalingState==='closed'||pc.signalingState!=='stable'||state.watchRtc.makingOffer.has(peerUid))return false;
   state.watchRtc.makingOffer.add(peerUid);
@@ -2123,19 +1550,12 @@ async function negotiateWatchPeer(peerUid,{iceRestart=false,reason='update'}={})
     await sendWatchRtc(peerUid,{type:'offer',sdp:pc.localDescription?.sdp||offer.sdp,reason,iceRestart:!!iceRestart});return true
   }finally{state.watchRtc.makingOffer.delete(peerUid)}
 }
-
-async function scheduleWatchRenegotiation(peerUid,reason='screen-sync',attempt=0){
-  const pc=state.watchRtc.peers.get(String(peerUid||''));if(!pc||pc.signalingState==='closed')return false;
-  if(pc.signalingState!=='stable'||state.watchRtc.makingOffer.has(String(peerUid||''))){if(attempt<8)setTimeout(()=>scheduleWatchRenegotiation(peerUid,reason,attempt+1).catch(()=>{}),260+attempt*180);return false}
-  return negotiateWatchPeer(String(peerUid),{iceRestart:false,reason}).catch(()=>false)
-}
-async function syncLocalScreenToPeer(peerUid,reason='late-join'){return offerWatchScreenToPeer(String(peerUid||''),reason,/request|retry|ice|reconnect/i.test(String(reason||'')))}
 async function tuneWatchScreenSender(pc){
   const sender=watchPcSender(pc,'video');if(!sender)return;
   try{
     const p=sender.getParameters();p.encodings=p.encodings?.length?p.encodings:[{}];
-    
-    p.encodings[0].maxBitrate=Math.max(600000,Math.floor(3600000/Math.max(1,state.watchRtc.peers.size))); 
+    const mobile=matchMedia('(max-width:820px)').matches;
+    p.encodings[0].maxBitrate=mobile?2500000:5000000;
     p.encodings[0].maxFramerate=30;
     try{p.encodings[0].priority='high'}catch{}
     try{p.encodings[0].networkPriority='high'}catch{}
@@ -2143,78 +1563,39 @@ async function tuneWatchScreenSender(pc){
     await sender.setParameters(p)
   }catch{}
 }
-async function tuneWatchScreenAudioSender(pc){
-  const sender=watchPcSender(pc,'audio','screen');if(!sender)return;
-  try{const p=sender.getParameters();p.encodings=p.encodings?.length?p.encodings:[{}];p.encodings[0].maxBitrate=192000;try{p.encodings[0].priority='high'}catch{};await sender.setParameters(p)}catch{}
-}
 async function requestWatchScreenFrom(uid,force=false){
   uid=String(uid||'');if(!uid||uid===state.user?.uid||!state.watchRtc.screenSharers.has(uid))return;
   const last=Number(state.watchRtc.screenRetry.get(uid)||0);if(!force&&Date.now()-last<3500)return;
   state.watchRtc.screenRetry.set(uid,Date.now());await sendWatchRtc(uid,{type:'screen_request'}).catch(()=>{})
 }
-
-let watchScreenAudioGraph=null;
-function clampWatchVolume(v,min=0,max=300){return Math.max(min,Math.min(max,Number(v)||0))}
-function ensureWatchScreenAudioGraph(){
-  if(watchScreenAudioGraph)return watchScreenAudioGraph;
-  const audio=$('watchScreenAudio'),AudioCtx=window.AudioContext||window.webkitAudioContext;if(!audio||!AudioCtx)return null;
-  try{
-    const ctx=new AudioCtx({latencyHint:'playback'}),source=ctx.createMediaElementSource(audio),gain=ctx.createGain(),limiter=ctx.createDynamicsCompressor();
-    limiter.threshold.value=-5;limiter.knee.value=8;limiter.ratio.value=12;limiter.attack.value=.003;limiter.release.value=.22;
-    source.connect(gain);gain.connect(limiter);limiter.connect(ctx.destination);
-    watchScreenAudioGraph={ctx,source,gain,limiter};return watchScreenAudioGraph
-  }catch(e){console.warn('[WATCH SCREEN VOLUME]',e);return null}
-}
-function applyWatchScreenVolume({resume=false}={}){
-  const pct=clampWatchVolume(state.watchRtc.screenVolume,0,300);state.watchRtc.screenVolume=pct;localStorage.setItem('gremory:watchScreenVolume',String(pct));
-  if($('watchScreenVolumeRange'))$('watchScreenVolumeRange').value=String(pct);if($('watchScreenVolumeValue'))$('watchScreenVolumeValue').textContent=`${Math.round(pct)}%`;
-  const audio=$('watchScreenAudio'),graph=ensureWatchScreenAudioGraph(),level=state.watchRtc.screenSoundMuted?0:pct/100;
-  if(graph){try{graph.gain.gain.setTargetAtTime(level,graph.ctx.currentTime,.015)}catch{graph.gain.gain.value=level}if(resume&&!state.watchRtc.screenSoundMuted)graph.ctx.resume?.().catch(()=>{})}
-  else if(audio){audio.volume=Math.min(1,pct/100);audio.muted=state.watchRtc.screenSoundMuted}
-  return graph
-}
-function applyWatchTransmitGain(){
-  const pct=clampWatchVolume(state.watchRtc.localFileTransmitGainPct,50,300);state.watchRtc.localFileTransmitGainPct=pct;localStorage.setItem('gremory:watchTransmitGain',String(pct));
-  if($('watchTransmitVolumeRange'))$('watchTransmitVolumeRange').value=String(pct);if($('watchTransmitVolumeValue'))$('watchTransmitVolumeValue').textContent=`${Math.round(pct)}%`;
-  const node=state.watchRtc.localFileAudioGain;if(node){const ctx=state.watchRtc.localFileAudioCtx;try{node.gain.setTargetAtTime(pct/100,ctx?.currentTime||0,.02)}catch{node.gain.value=pct/100}}
-}
-function refreshWatchVolumeUi(){
-  const remoteControl=$('watchScreenVolumeControl'),txControl=$('watchTransmitVolumeControl');
-  const activeRemote=!!(state.watchRtc.activeScreenUid&&state.watchRtc.activeScreenUid!==String(state.user?.uid||'')&&watchScreenStreamFor(state.watchRtc.activeScreenUid)?.getAudioTracks?.().some(t=>t.readyState==='live'));
-  if(remoteControl)remoteControl.hidden=!activeRemote;
-  const txActive=!!(isWatchHost()&&state.watchRtc.screenSource==='file'&&state.watchRtc.screenStream?.getAudioTracks?.().some(t=>t.readyState==='live'));
-  if(txControl)txControl.hidden=!txActive;
-  applyWatchScreenVolume();applyWatchTransmitGain()
-}
 function updateWatchPeerScreenButton(uid){
   const card=ensureWatchCallCard(uid),btn=card?.querySelector('.watch-view-screen'),stream=watchScreenStreamFor(uid),sharing=state.watchRtc.screenSharers.has(String(uid)),ready=watchRemoteHasScreen(uid,stream);
   if(btn){
     btn.hidden=!sharing;btn.textContent=ready?'Assistir tela':'Reconectar tela';
-    btn.onclick=async()=>{if(ready){state.watchRtc.activeScreenUid=uid;refreshWatchScreenStage();const a=$('watchScreenAudio');if(a?.srcObject){try{a.muted=false;state.watchRtc.screenSoundMuted=false;await a.play()}catch{}}}else{setWatchRtcStatus('Reconectando compartilhamento...','warn');await requestWatchScreenFrom(uid,true)}}
+    btn.onclick=()=>{if(ready){state.watchRtc.activeScreenUid=uid;refreshWatchScreenStage()}else{setWatchRtcStatus('Reconectando compartilhamento...','warn');requestWatchScreenFrom(uid,true)}}
   }
   const status=card?.querySelector('small');if(status)status.textContent=sharing?(ready?'Compartilhando tela':'Conectando tela...'):'Conectado'
 }
+function destroyWatchScreenAudioBoost(){try{state.watchRtc.screenAudioSource?.disconnect()}catch{}try{state.watchRtc.screenAudioGain?.disconnect()}catch{}try{state.watchRtc.screenAudioCtx?.close?.()}catch{}state.watchRtc.screenAudioSource=null;state.watchRtc.screenAudioGain=null;state.watchRtc.screenAudioCtx=null;state.watchRtc.screenAudioTrackId=''}
+async function ensureWatchScreenAudioBoost(track,isLocal=false){
+  if(!track||isLocal){destroyWatchScreenAudioBoost();return false}
+  const id=String(track.id||'');if(state.watchRtc.screenAudioTrackId===id&&state.watchRtc.screenAudioGain)return true;
+  destroyWatchScreenAudioBoost();try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return false;const ctx=new Ctx(),stream=new MediaStream([track]),source=ctx.createMediaStreamSource(stream),gain=ctx.createGain();gain.gain.value=Math.max(0,Math.min(2.5,Number(state.watchRtc.screenVolume||100)/100));source.connect(gain);gain.connect(ctx.destination);state.watchRtc.screenAudioCtx=ctx;state.watchRtc.screenAudioSource=source;state.watchRtc.screenAudioGain=gain;state.watchRtc.screenAudioTrackId=id;if(!state.watchRtc.screenSoundMuted)await ctx.resume().catch(()=>{});return true}catch{return false}
+}
+function applyWatchScreenVolume(){const value=Math.max(0,Math.min(250,Number($('watchScreenVolume')?.value??state.watchRtc.screenVolume??100)));state.watchRtc.screenVolume=value;localStorage.setItem('gremory:watchScreenVolume',String(value));if($('watchScreenVolumeLabel'))$('watchScreenVolumeLabel').textContent=`${value}%`;if(state.watchRtc.screenAudioGain)state.watchRtc.screenAudioGain.gain.value=value/100;const a=$('watchScreenAudio');if(a&&!state.watchRtc.screenAudioGain)a.volume=Math.min(1,value/100)}
 function refreshWatchScreenStage(){
   const stage=$('watchScreenStage'),video=$('watchScreenVideo'),audio=$('watchScreenAudio'),label=$('watchScreenLabel'),mediaStage=$('watchMediaStage'),soundBtn=$('watchScreenSoundBtn');if(!stage||!video)return;
   let stream=null,uid=null,isLocal=false;const localUid=String(state.user?.uid||''),localVideo=state.watchRtc.screenStream?.getVideoTracks?.()[0];
   if(state.watchRtc.activeScreenUid&&state.watchRtc.activeScreenUid!==localUid){const remote=watchScreenStreamFor(state.watchRtc.activeScreenUid);if(watchRemoteHasScreen(state.watchRtc.activeScreenUid,remote)){stream=remote;uid=state.watchRtc.activeScreenUid}}
   if(!stream&&localVideo&&localVideo.readyState==='live'){stream=state.watchRtc.screenStream;uid=localUid;isLocal=true}
   if(!stream){for(const peerUid of state.watchRtc.screenSharers){if(peerUid===localUid)continue;const remote=watchScreenStreamFor(peerUid);if(watchRemoteHasScreen(peerUid,remote)){stream=remote;uid=peerUid;break}}}
-  if(!stream){state.watchRtc.activeScreenUid=null;try{video.pause()}catch{}try{audio?.pause()}catch{}video.srcObject=null;if(audio)audio.srcObject=null;stage.hidden=true;if(mediaStage)mediaStage.hidden=false;refreshWatchVolumeUi();return}
-  state.watchRtc.activeScreenUid=uid;
-  const localFile=isLocal&&state.watchRtc.screenSource==='file'&&state.watchRtc.localFileVideo;
-  if(localFile){stage.hidden=true;if(mediaStage)mediaStage.hidden=false;return}
-  stage.hidden=false;if(mediaStage)mediaStage.hidden=true;
+  if(!stream){state.watchRtc.activeScreenUid=null;try{video.pause()}catch{}try{audio?.pause()}catch{}video.srcObject=null;if(audio)audio.srcObject=null;stage.hidden=true;if(mediaStage)mediaStage.hidden=false;return}
+  state.watchRtc.activeScreenUid=uid;stage.hidden=false;if(mediaStage)mediaStage.hidden=true;
   const vtrack=stream.getVideoTracks?.().find(t=>t.readyState==='live'),atrack=stream.getAudioTracks?.().find(t=>t.readyState==='live');
   const videoStream=new MediaStream();if(vtrack)videoStream.addTrack(vtrack);if(video.srcObject?.getVideoTracks?.()[0]?.id!==vtrack?.id)video.srcObject=videoStream;video.muted=true;video.playsInline=true;video.play?.().catch(()=>{});
-  if(audio){
-    const audioStream=new MediaStream();if(atrack)audioStream.addTrack(atrack);if(audio.srcObject?.getAudioTracks?.()[0]?.id!==atrack?.id)audio.srcObject=atrack?audioStream:null;audio.volume=1;audio.muted=false;
-    if(atrack&&!isLocal){const graph=applyWatchScreenVolume();if(!state.watchRtc.screenSoundMuted){graph?.ctx?.resume?.().catch(()=>{});audio.play?.().catch(()=>{state.watchRtc.screenSoundMuted=true;applyWatchScreenVolume();if(soundBtn)soundBtn.textContent='Toque para ativar som'})}}
-    else if(!atrack){try{audio.pause()}catch{}}
-  }
+  if(audio){const audioStream=new MediaStream();if(atrack)audioStream.addTrack(atrack);if(audio.srcObject?.getAudioTracks?.()[0]?.id!==atrack?.id)audio.srcObject=atrack?audioStream:null;ensureWatchScreenAudioBoost(atrack,isLocal).then(boosted=>{audio.muted=isLocal||state.watchRtc.screenSoundMuted||boosted;if(!boosted){audio.volume=Math.min(1,Math.max(0,Number(state.watchRtc.screenVolume||100)/100));if(atrack&&!audio.muted)audio.play?.().catch(()=>{})}});}
   if(label)label.textContent=isLocal?'Sua tela compartilhada':`${watchPeerName(uid)} está compartilhando`;
   if(soundBtn){const hasAudio=!!atrack;soundBtn.hidden=isLocal;soundBtn.disabled=!hasAudio;soundBtn.textContent=!hasAudio?'Sem áudio':(state.watchRtc.screenSoundMuted?'Ativar som':'Som ligado')}
-  refreshWatchVolumeUi()
 }
 function attachWatchRemote(uid){
   const voice=watchVoiceStreamFor(uid),screen=watchScreenStreamFor(uid),card=ensureWatchCallCard(uid),audio=card?.querySelector('audio');
@@ -2237,7 +1618,7 @@ function attachWatchRemote(uid){
   refreshWatchScreenStage()
 }
 function removeWatchPeer(uid){
-  const pc=state.watchRtc.peers.get(uid);try{pc?.close()}catch{}state.watchRtc.peers.delete(uid);closeWatchDedicatedScreen(state.watchRtc.screenOutPeers,uid);closeWatchDedicatedScreen(state.watchRtc.screenInPeers,uid);state.watchRtc.screenOutCandidates.delete(uid);state.watchRtc.screenInCandidates.delete(uid);state.watchRtc.screenOfferAt.delete(uid);state.watchRtc.remoteStreams.delete(uid);state.watchRtc.remoteVoiceStreams.delete(uid);state.watchRtc.remoteScreenStreams.delete(uid);state.watchRtc.pendingCandidates.delete(uid);state.watchRtc.screenRetry.delete(uid);
+  const pc=state.watchRtc.peers.get(uid);try{pc?.close()}catch{}state.watchRtc.peers.delete(uid);state.watchRtc.remoteStreams.delete(uid);state.watchRtc.remoteVoiceStreams.delete(uid);state.watchRtc.remoteScreenStreams.delete(uid);state.watchRtc.pendingCandidates.delete(uid);state.watchRtc.screenRetry.delete(uid);
   $('watchRemoteMedia')?.querySelector(`[data-watch-peer="${CSS.escape(uid)}"]`)?.remove();refreshWatchScreenStage()
 }
 async function createWatchPeer(peerUid,initiator=false){
@@ -2264,23 +1645,26 @@ async function createWatchPeer(peerUid,initiator=false){
   pc.__watchScreenAudioTr=screenAudioTr;
 
   const micTrack=state.watchRtc.localStream?.getAudioTracks?.()[0];
+  const screenVideo=state.watchRtc.screenStream?.getVideoTracks?.()[0];
+  const screenAudio=state.watchRtc.screenStream?.getAudioTracks?.()[0];
   if(micTrack)await voiceAudioTr.sender.replaceTrack(micTrack);
+  if(screenVideo)await videoTr.sender.replaceTrack(screenVideo);
+  if(screenAudio)await screenAudioTr.sender.replaceTrack(screenAudio);
 
   pc.ontrack=ev=>{
     const isScreenVideo=ev.transceiver===pc.__watchVideoTr||ev.track.kind==='video';
     const isScreenAudio=ev.transceiver===pc.__watchScreenAudioTr;
     const target=(isScreenVideo||isScreenAudio)?screenRemote:voiceRemote;
     if(!target.getTracks().some(t=>t.id===ev.track.id))target.addTrack(ev.track);
-    if(isScreenVideo){state.watchRtc.activeScreenUid=peerUid;setWatchRtcStatus('Vídeo recebido. Preparando reprodução...','ok')}
-    ev.track.onunmute=()=>{if(isScreenVideo)state.watchRtc.activeScreenUid=peerUid;attachWatchRemote(peerUid);refreshWatchScreenStage();if(isScreenVideo)setWatchRtcStatus(`${watchPeerName(peerUid)} está transmitindo`,'ok')};
+    ev.track.onunmute=()=>attachWatchRemote(peerUid);
     ev.track.onended=()=>attachWatchRemote(peerUid);
-    attachWatchRemote(peerUid);refreshWatchScreenStage()
+    attachWatchRemote(peerUid)
   };
 
   pc.onicecandidate=ev=>{if(ev.candidate)sendWatchRtc(peerUid,{type:'candidate',candidate:ev.candidate.toJSON()}).catch(()=>{})};
   pc.oniceconnectionstatechange=()=>{
     const st=pc.iceConnectionState;
-    if(['connected','completed'].includes(st)){setWatchRtcStatus('Mídia conectada','ok');state.watchRtc.screenRetry.delete(peerUid)}
+    if(['connected','completed'].includes(st)){setWatchRtcStatus('Chamada conectada','ok');state.watchRtc.screenRetry.delete(peerUid)}
     if(st==='failed'){
       setWatchRtcStatus('Reconectando mídia...','warn');
       if(String(state.user?.uid).localeCompare(peerUid)<0)negotiateWatchPeer(peerUid,{iceRestart:true,reason:'ice-failed'}).catch(()=>{});
@@ -2288,7 +1672,7 @@ async function createWatchPeer(peerUid,initiator=false){
     }
   };
   pc.onconnectionstatechange=()=>{
-    if(pc.connectionState==='connected'){setWatchRtcStatus('Chamada conectada','ok');return}
+    if(pc.connectionState==='connected'){setWatchRtcStatus('Chamada conectada','ok');if(state.watchRtc.screenSharers.has(peerUid)&&!watchRemoteHasScreen(peerUid,watchScreenStreamFor(peerUid)))setTimeout(()=>requestWatchScreenFrom(peerUid,true).catch(()=>{}),350);return}
     if(pc.connectionState==='disconnected'){
       setWatchRtcStatus('Conexão instável, recuperando...','warn');
       setTimeout(()=>{if(pc.connectionState==='disconnected'){if(String(state.user?.uid).localeCompare(peerUid)<0)negotiateWatchPeer(peerUid,{iceRestart:true,reason:'disconnected'}).catch(()=>{});else if(state.watchRtc.screenSharers.has(peerUid))requestWatchScreenFrom(peerUid,true)}},2200)
@@ -2303,33 +1687,28 @@ async function handleWatchRtc(id,msg){
   if(!msg||state.watchRtc.processed.has(id)||!state.watchRtc.joined||!state.user)return;
   state.watchRtc.processed.add(id);const from=String(msg.fromUid||'');if(!from||from===state.user.uid)return;
   try{
-    if(msg.type==='screen_offer'&&msg.sdp){await acceptWatchScreenOffer(from,msg);return}
-    if(msg.type==='screen_answer'&&msg.sdp){await acceptWatchScreenAnswer(from,msg);return}
-    if(msg.type==='screen_candidate'&&msg.candidate){await acceptWatchScreenCandidate(from,msg);return}
-    if(msg.type==='screen_stop'){
-      const owner=String(msg.ownerUid||from);closeWatchDedicatedScreen(state.watchRtc.screenInPeers,owner);state.watchRtc.screenInCandidates.delete(owner);state.watchRtc.remoteScreenStreams.delete(owner);state.watchRtc.remoteStreams.delete(owner);if(state.watchRtc.activeScreenUid===owner)state.watchRtc.activeScreenUid=null;refreshWatchScreenStage();updateWatchPeerScreenButton(owner);return
-    }
-    if(msg.type==='screen_request'){
-      const videoTrack=state.watchRtc.screenStream?.getVideoTracks?.()[0];if(videoTrack&&videoTrack.readyState==='live'){await offerWatchScreenToPeer(from,'screen-request',true)}return
-    }
     const pc=await createWatchPeer(from,false);if(!pc)return;
     if(msg.type==='offer'){
-      const collision=state.watchRtc.makingOffer.has(from)||pc.signalingState!=='stable';
-      const polite=String(state.user.uid).localeCompare(from)>0;
-      pc.__ignoreOffer=collision&&!polite;if(pc.__ignoreOffer)return;
-      if(collision){try{await pc.setLocalDescription({type:'rollback'})}catch{}}
+      if(pc.signalingState==='have-local-offer'){try{await pc.setLocalDescription({type:'rollback'})}catch{}}
       if(pc.signalingState!=='stable')return;
       await pc.setRemoteDescription({type:'offer',sdp:msg.sdp});await flushWatchCandidates(from,pc);
       const ans=await pc.createAnswer();await pc.setLocalDescription(ans);await sendWatchRtc(from,{type:'answer',sdp:pc.localDescription?.sdp||ans.sdp,reason:msg.reason||''})
     }else if(msg.type==='answer'){
-      if(pc.signalingState==='have-local-offer'){pc.__ignoreOffer=false;await pc.setRemoteDescription({type:'answer',sdp:msg.sdp});await flushWatchCandidates(from,pc)}
+      if(pc.signalingState==='have-local-offer'){await pc.setRemoteDescription({type:'answer',sdp:msg.sdp});await flushWatchCandidates(from,pc)}
     }else if(msg.type==='candidate'&&msg.candidate){
-      if(pc.__ignoreOffer)return;
       if(pc.remoteDescription)try{await pc.addIceCandidate(msg.candidate)}catch{}else{const q=state.watchRtc.pendingCandidates.get(from)||[];q.push(msg.candidate);state.watchRtc.pendingCandidates.set(from,q)}
+    }else if(msg.type==='screen_request'){
+      const videoTrack=state.watchRtc.screenStream?.getVideoTracks?.()[0];
+      const audioTrack=state.watchRtc.screenStream?.getAudioTracks?.()[0];
+      if(videoTrack&&videoTrack.readyState==='live'){
+        const videoSender=watchPcSender(pc,'video');if(videoSender)await videoSender.replaceTrack(videoTrack);
+        const audioSender=watchPcSender(pc,'audio','screen');if(audioSender)await audioSender.replaceTrack(audioTrack&&audioTrack.readyState==='live'?audioTrack:null);
+        await tuneWatchScreenSender(pc);await negotiateWatchPeer(from,{iceRestart:false,reason:'screen-request'})
+      }
     }
   }finally{remove(ref(db,`watchRtc/${state.watchCode}/${state.user.uid}/${id}`)).catch(()=>{})}
 }
-function watchWatchRtcInbox(){try{state.watchRtc.inboxUnsub?.()}catch{}state.watchRtc.inboxUnsub=onValue(ref(db,`watchRtc/${state.watchCode}/${state.user.uid}`),sn=>{const all=sn.exists()?sn.val():{};Object.entries(all).sort((a,b)=>(a[1]?.at||0)-(b[1]?.at||0)).forEach(([id,msg])=>{state.watchRtc.signalQueue=(state.watchRtc.signalQueue||Promise.resolve()).then(()=>handleWatchRtc(id,msg)).catch(e=>setWatchRtcStatus('Falha na conexão: '+e.message,'warn'))})})}
+function watchWatchRtcInbox(){try{state.watchRtc.inboxUnsub?.()}catch{}state.watchRtc.inboxUnsub=onValue(ref(db,`watchRtc/${state.watchCode}/${state.user.uid}`),sn=>{const all=sn.exists()?sn.val():{};Object.entries(all).sort((a,b)=>(a[1]?.at||0)-(b[1]?.at||0)).forEach(([id,msg])=>handleWatchRtc(id,msg).catch(()=>{}))})}
 function watchWatchPresence(){
   try{state.watchRtc.presenceUnsub?.()}catch{}
   state.watchRtc.presenceUnsub=onValue(ref(db,`watchVoice/${state.watchCode}`),sn=>{
@@ -2339,38 +1718,25 @@ function watchWatchPresence(){
     state.watchRtc.screenSharers=new Set(Object.entries(p).filter(([,x])=>x?.screen===true).map(([uid])=>String(uid)));
     for(const uid of ids){if(!state.watchRtc.peers.has(uid)&&String(state.user.uid).localeCompare(uid)<0)createWatchPeer(uid,true).catch(()=>{})}
     for(const uid of [...state.watchRtc.peers.keys()])if(!p[uid])removeWatchPeer(uid);
-    const localSharing=!!state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live');
     for(const uid of ids){
       updateWatchPeerScreenButton(uid);
-      if(localSharing){[250,1100,3000].forEach((delay,idx)=>setTimeout(()=>{if(state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live'))syncLocalScreenToPeer(uid,idx?'late-join-retry':'late-join').catch(()=>{})},delay))}
       if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteHasScreen(uid,watchScreenStreamFor(uid))){
-        [350,1200,2800,5200].forEach((delay,idx)=>setTimeout(()=>{if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteHasScreen(uid,watchScreenStreamFor(uid)))requestWatchScreenFrom(uid,idx>0).catch(()=>{})},delay))
+        setTimeout(()=>{if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteHasScreen(uid,watchScreenStreamFor(uid)))requestWatchScreenFrom(uid,false)},800)
       }
     }
-    const remoteSharingUid=ids.find(uid=>state.watchRtc.screenSharers.has(uid));
-    const remoteScreenReady=remoteSharingUid?watchRemoteHasScreen(remoteSharingUid,watchScreenStreamFor(remoteSharingUid)):false;
-    if(remoteSharingUid&&!remoteScreenReady)setWatchRtcStatus('Recebendo compartilhamento de tela...','warn');
-    else if(remoteSharingUid&&remoteScreenReady)setWatchRtcStatus(`${watchPeerName(remoteSharingUid)} está transmitindo`,'ok');
-    else if(ids.length&&!Array.from(state.watchRtc.peers.values()).some(pc=>pc.connectionState==='connected'))setWatchRtcStatus('Conectando mídia...','warn');else setWatchRtcStatus('Aguardando outras pessoas','');
-    for(const [uid,person] of Object.entries(p)){const card=ensureWatchCallCard(uid);if(card){card.querySelector('strong').textContent=watchPeerName(uid)+(uid===state.user.uid?' (você)':'');card.querySelector('small').textContent=person.screen?(person.screenKind==='file'?`Transmitindo ${person.screenLabel||'filme local'}`:'Compartilhando tela'):person.audio?(person.muted?'Microfone silenciado':'Na chamada de voz'):'Assistindo';card.querySelector('img').src=person.avatar||state.watchRoom?.members?.[uid]?.avatar||DEFAULT_AVATAR}}
-    refreshWatchScreenStage();
-    for(const uid of ids){if(state.watchRtc.screenSharers.has(uid))setTimeout(()=>{
-      if(!state.watchRtc.screenSharers.has(uid)||watchRemoteHasScreen(uid,watchScreenStreamFor(uid)))return;
-      const pc=state.watchRtc.peers.get(uid),st=pc?.connectionState||pc?.iceConnectionState||'';
-      if(['failed','disconnected','closed'].includes(st))setWatchRtcStatus('A rede bloqueou a transmissão P2P. Tente a mesma rede Wi-Fi ou configure TURN.','warn');
-      else if(watchRemoteHasScreen(uid,watchScreenStreamFor(uid)))setWatchRtcStatus('Transmissão recebida; aguardando quadros do vídeo...','warn');
-    },9000)}
+    if(ids.some(uid=>state.watchRtc.screenSharers.has(uid))&&!state.watchRtc.screenStream)setWatchRtcStatus('Recebendo compartilhamento de tela...','warn');
+    else if(ids.length)setWatchRtcStatus('Chamada conectada','ok');else setWatchRtcStatus('Aguardando outras pessoas','');
+    refreshWatchScreenStage()
   })
 }
 async function ensureWatchRtcSession(){
   if(state.watchRtc.joined)return true;if(!state.user||!state.watchCode)return false;
   state.watchRtc.joined=true;
-  await loadRtcConfig();
   try{
     const presenceRef=ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`);
-    await set(presenceRef,{uid:state.user.uid,name:displayName(),avatar:avatarFor(),joinedAt:Date.now(),audio:false,screen:false});
+    await set(presenceRef,{uid:state.user.uid,name:displayName(),joinedAt:Date.now(),audio:false,screen:false});
     try{state.watchRtc.disconnectRef=onDisconnect(presenceRef);await state.watchRtc.disconnectRef.remove()}catch{}
-    watchWatchRtcInbox();watchWatchPresence();setWatchRtcStatus('Preparando conexão...','warn');watchVoiceUi();return true
+    watchWatchRtcInbox();watchWatchPresence();if(state.watchRtc.screenRecoveryTimer)clearInterval(state.watchRtc.screenRecoveryTimer);state.watchRtc.screenRecoveryTimer=setInterval(()=>{if(!state.watchRtc.joined)return;for(const uid of state.watchRtc.screenSharers){if(uid!==state.user?.uid&&!watchRemoteHasScreen(uid,watchScreenStreamFor(uid)))requestWatchScreenFrom(uid,false).catch(()=>{})}},3000);setWatchRtcStatus('Preparando conexão...','warn');watchVoiceUi();return true
   }catch(e){state.watchRtc.joined=false;toast(permissionMessage(e,'Não foi possível iniciar a chamada.'));return false}
 }
 async function joinWatchVoice(){
@@ -2384,110 +1750,33 @@ async function joinWatchVoice(){
     $$('.watch-call-card audio').forEach(a=>{a.muted=false;a.play?.().catch(()=>{})});watchVoiceUi();toast('Você entrou na voz.')
   }catch(e){toast(e?.name==='NotAllowedError'?'Permissão do microfone negada.':'Não foi possível abrir o microfone.')}
 }
-function toggleWatchMic(){const track=state.watchRtc.localStream?.getAudioTracks?.()[0];if(!track)return;track.enabled=!track.enabled;state.watchRtc.micEnabled=track.enabled;update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{muted:!track.enabled}).catch(()=>{});watchVoiceUi()}
+function toggleWatchMic(){const track=state.watchRtc.localStream?.getAudioTracks?.()[0];if(!track)return;track.enabled=!track.enabled;state.watchRtc.micEnabled=track.enabled;watchVoiceUi()}
 async function leaveWatchAudio(silent=false){
   const track=state.watchRtc.localStream?.getAudioTracks?.()[0];if(track)track.stop();state.watchRtc.localStream=null;state.watchRtc.audioJoined=false;state.watchRtc.micEnabled=true;
   for(const pc of state.watchRtc.peers.values()){const sender=watchPcSender(pc,'audio','voice');if(sender)await sender.replaceTrack(null)}
   if(state.watchCode&&state.user)await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:false}).catch(()=>{});
   $$('.watch-call-card audio').forEach(a=>a.muted=true);destroyWatchMusicPlayback();watchVoiceUi();if(!silent)toast('Você saiu da voz.')
 }
-function cleanupWatchLocalFilePlayer(){
-  const rtc=state.watchRtc,v=rtc.localFileVideo,url=rtc.localFileUrl;
-  if(v){try{v.onended=null;v.onvolumechange=null;v.pause()}catch{}try{v.removeAttribute('src');v.load?.()}catch{}try{v.remove()}catch{}}
-  try{rtc.localFileAudioSource?.disconnect?.()}catch{}
-  try{rtc.localFileAudioGain?.disconnect?.()}catch{}
-  try{rtc.localFileAudioLimiter?.disconnect?.()}catch{}
-  try{rtc.localFileAudioDest?.disconnect?.()}catch{}
-  try{rtc.localFileAudioCtx?.close?.()}catch{}
-  if(url)try{URL.revokeObjectURL(url)}catch{}
-  rtc.localFileVideo=null;rtc.localFileUrl='';rtc.localFileName='';rtc.localFileAudioCtx=null;rtc.localFileAudioSource=null;rtc.localFileAudioDest=null;rtc.localFileAudioGain=null;rtc.localFileAudioLimiter=null;refreshWatchVolumeUi()
-}
-async function buildWatchLocalFileStream(video,captured,preparedCtx=null){
-  const videoTrack=captured?.getVideoTracks?.().find(t=>t.readyState==='live');
-  if(!videoTrack)throw new Error('O navegador não liberou a faixa de vídeo para transmissão.');
-  let audioTrack=captured?.getAudioTracks?.().find(t=>t.readyState==='live')||null;
-  const AudioCtx=window.AudioContext||window.webkitAudioContext;
-  if(AudioCtx){
-    let ctx=preparedCtx;
-    try{
-      if(!ctx||ctx.state==='closed')ctx=new AudioCtx({latencyHint:'playback'});
-      const source=ctx.createMediaElementSource(video),dest=ctx.createMediaStreamDestination(),txGain=ctx.createGain(),limiter=ctx.createDynamicsCompressor();
-      limiter.threshold.value=-5;limiter.knee.value=8;limiter.ratio.value=12;limiter.attack.value=.003;limiter.release.value=.22;txGain.gain.value=clampWatchVolume(state.watchRtc.localFileTransmitGainPct,50,300)/100;
-      source.connect(ctx.destination);source.connect(txGain);txGain.connect(limiter);limiter.connect(dest);
-      await ctx.resume?.().catch(()=>{});
-      const routed=dest.stream.getAudioTracks?.().find(t=>t.readyState==='live')||dest.stream.getAudioTracks?.()[0]||null;
-      if(routed){audioTrack=routed;state.watchRtc.localFileAudioCtx=ctx;state.watchRtc.localFileAudioSource=source;state.watchRtc.localFileAudioDest=dest;state.watchRtc.localFileAudioGain=txGain;state.watchRtc.localFileAudioLimiter=limiter;applyWatchTransmitGain()}
-      else try{await ctx.close?.()}catch{}
-    }catch(e){console.warn('[WATCH LOCAL AUDIO]',e);if(ctx&&ctx!==state.watchRtc.localFileAudioCtx)try{await ctx.close?.()}catch{}}
-  }
-  const out=new MediaStream();out.addTrack(videoTrack);if(audioTrack){audioTrack.enabled=true;try{audioTrack.contentHint='music'}catch{}out.addTrack(audioTrack)}
-  return {stream:out,videoTrack,audioTrack}
-}
-async function stopWatchPublishedStream({clearLocalMedia=true,silent=false}={}){
-  document.body.classList.remove('watch-pseudo-fullscreen');clearWatchFullscreenUiTimer();$('watchScreenStage')?.classList.remove('watch-fullscreen-ui-hidden');updateWatchFullscreenButton();
-  const rtc=state.watchRtc,source=rtc.screenSource,old=rtc.screenStream;
-  const ownerUid=String(state.user?.uid||'');
-  for(const peerUid of [...rtc.screenOutPeers.keys()]){sendWatchRtc(peerUid,{type:'screen_stop',ownerUid}).catch(()=>{});closeWatchDedicatedScreen(rtc.screenOutPeers,peerUid)}
-  rtc.screenOutCandidates.clear();rtc.screenOfferAt.clear();rtc.screenOfferLocks.clear();
-  rtc.screenStream=null;rtc.screenSource='';
-  if(old)old.getTracks().forEach(t=>{t.onended=null;try{t.stop()}catch{}});
-  for(const [uid,pc] of rtc.peers){
-    const videoSender=watchPcSender(pc,'video');if(videoSender)await videoSender.replaceTrack(null);
-    const screenAudioSender=watchPcSender(pc,'audio','screen');if(screenAudioSender)await screenAudioSender.replaceTrack(null);
-    if(pc.signalingState==='stable')await negotiateWatchPeer(uid,{reason:'screen-stop'}).catch(()=>{})
-  }
-  rtc.screenSharers.delete(String(state.user?.uid||''));rtc.activeScreenUid=null;
-  if(source==='file')cleanupWatchLocalFilePlayer();
-  if(state.watchCode&&state.user)await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:false,screenAt:null,screenAudio:false,screenKind:null,screenLabel:null}).catch(()=>{});
-  if(source==='file'&&clearLocalMedia&&state.watchCode&&isWatchHost())await set(ref(db,`watchRooms/${state.watchCode}/media`),{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}).catch(()=>{});
-  if(!silent)setWatchRtcStatus(source==='file'?'Filme do dispositivo encerrado':'Compartilhamento encerrado','');
-  refreshWatchScreenStage();refreshWatchVolumeUi();watchVoiceUi()
-}
-async function startWatchLocalFile(file){
-  if(!isWatchHost())return toast('Somente o host pode transmitir um filme do dispositivo.');
-  if(!file)return;
-  if(!String(file.type||'').startsWith('video/'))return toast('Escolha um arquivo de vídeo. MP4 (H.264/AAC) costuma ter a melhor compatibilidade.',6000);
-  if(!HTMLMediaElement.prototype.captureStream&&!HTMLMediaElement.prototype.mozCaptureStream)return toast('Seu navegador não permite transmitir um vídeo local diretamente. Use Chrome/Edge no computador ou “Compartilhar tela”.',7000);
-  const AudioCtx=window.AudioContext||window.webkitAudioContext;let preparedAudioCtx=null;
-  if(AudioCtx){try{preparedAudioCtx=new AudioCtx({latencyHint:'playback'});preparedAudioCtx.resume?.().catch(()=>{})}catch{preparedAudioCtx=null}}
-  if(!await ensureWatchRtcSession()){try{await preparedAudioCtx?.close?.()}catch{}return}
-  if(state.watchRtc.screenStream)await stopWatchPublishedStream({clearLocalMedia:true,silent:true});
-  const stage=$('watchMediaStage');if(!stage)return;
-  cleanupWatchLocalFilePlayer();
-  const objectUrl=URL.createObjectURL(file),v=document.createElement('video');
-  v.className='watch-video watch-local-file-video';v.src=objectUrl;v.controls=true;v.playsInline=true;v.preload='auto';v.autoplay=false;
-  stage.innerHTML='';stage.appendChild(v);delete stage.dataset.url;stage.hidden=false;
-  state.watchRtc.localFileVideo=v;state.watchRtc.localFileUrl=objectUrl;state.watchRtc.localFileName=file.name||'Filme do dispositivo';
-  await set(ref(db,`watchRooms/${state.watchCode}/media`),{url:'',type:'local',label:state.watchRtc.localFileName,playing:false,position:0,updatedAt:Date.now()}).catch(()=>{});
-  try{
-    await new Promise((resolve,reject)=>{if(v.readyState>=2)return resolve();const ok=()=>{cleanup();resolve()},bad=()=>{cleanup();reject(new Error('O navegador não conseguiu abrir este formato de vídeo.'))},cleanup=()=>{v.removeEventListener('canplay',ok);v.removeEventListener('error',bad)};v.addEventListener('canplay',ok,{once:true});v.addEventListener('error',bad,{once:true})});
-    await v.play();
-    const capture=(v.captureStream?.()||v.mozCaptureStream?.());
-    const built=await buildWatchLocalFileStream(v,capture,preparedAudioCtx);preparedAudioCtx=null;
-    const {stream:publishStream,videoTrack,audioTrack}=built;
-    try{videoTrack.contentHint='motion'}catch{}
-    state.watchRtc.screenStream=publishStream;state.watchRtc.screenSource='file';state.watchRtc.activeScreenUid=String(state.user.uid);state.watchRtc.screenSharers.add(String(state.user.uid));
-    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:true,screenAt:Date.now(),screenAudio:!!audioTrack,screenKind:'file',screenLabel:state.watchRtc.localFileName});
-    await update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:true,updatedAt:Date.now()}).catch(()=>{});
-    const ids=Object.keys(state.watchRtc.presence||{}).filter(uid=>uid!==state.user.uid);
-    for(const uid of ids){
-      let pc=state.watchRtc.peers.get(uid);if(!pc)pc=await createWatchPeer(uid,false);
-      await syncLocalScreenToPeer(uid,'local-file-start').catch(()=>{});
-      [900,2400,5000].forEach((delay,idx)=>setTimeout(()=>{if(state.watchRtc.screenSource==='file'&&state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live'))syncLocalScreenToPeer(uid,`local-file-retry-${idx+1}`).catch(()=>{})},delay))
-    }
-    v.addEventListener('play',()=>{if(isWatchHost()&&state.watchRtc.screenSource==='file')update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:true,updatedAt:Date.now()}).catch(()=>{})});
-    v.addEventListener('pause',()=>{if(isWatchHost()&&state.watchRtc.screenSource==='file'&&!v.ended)update(ref(db,`watchRooms/${state.watchCode}/media`),{playing:false,updatedAt:Date.now()}).catch(()=>{})});
-    v.onended=()=>stopWatchPublishedStream({clearLocalMedia:false,silent:true}).then(()=>set(ref(db,`watchRooms/${state.watchCode}/media`),{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}).catch(()=>{})).then(()=>toast('Filme finalizado.')).catch(()=>{});
-    videoTrack.onended=()=>{if(state.watchRtc.screenSource==='file'&&!v.ended)stopWatchPublishedStream().catch(()=>{})};
-    setWatchRtcStatus(audioTrack?'Filme do dispositivo transmitindo com áudio':'Filme transmitindo sem faixa de áudio','ok');refreshWatchScreenStage();refreshWatchVolumeUi();watchVoiceUi();toast(`Transmitindo “${state.watchRtc.localFileName}” para a sala.`)
-  }catch(e){try{await preparedAudioCtx?.close?.()}catch{}await stopWatchPublishedStream({clearLocalMedia:true,silent:true}).catch(()=>{});toast(e?.message||'Não foi possível transmitir este vídeo.',7000)}
-}
 async function toggleWatchScreen(){
   if(!state.user||!state.watchCode)return toast('Entre numa sala primeiro.');
 
-  if(state.watchRtc.screenStream){await stopWatchPublishedStream();return}
+  if(state.watchRtc.screenStream){
+    const old=state.watchRtc.screenStream;state.watchRtc.screenStream=null;
+    old.getTracks().forEach(t=>{t.onended=null;t.stop()});
 
-  if(!navigator.mediaDevices?.getDisplayMedia)return toast('Este navegador não oferece captura de tela. Você pode assistir aqui e compartilhar pelo Chrome ou Edge no computador.');
+    for(const [uid,pc] of state.watchRtc.peers){
+      const videoSender=watchPcSender(pc,'video');if(videoSender)await videoSender.replaceTrack(null);
+      const screenAudioSender=watchPcSender(pc,'audio','screen');if(screenAudioSender)await screenAudioSender.replaceTrack(null);
+      if(pc.signalingState==='stable')await negotiateWatchPeer(uid,{reason:'screen-stop'}).catch(()=>{})
+    }
+
+    state.watchRtc.screenSharers.delete(String(state.user.uid));state.watchRtc.activeScreenUid=null;
+    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:false,screenAt:null,screenAudio:false}).catch(()=>{});
+    setWatchRtcStatus('Compartilhamento encerrado','');
+    refreshWatchScreenStage();watchVoiceUi();return
+  }
+
+  if(!navigator.mediaDevices?.getDisplayMedia)return toast('Seu navegador não permite compartilhar a tela.');
   if(!await ensureWatchRtcSession())return;
 
   try{
@@ -2496,7 +1785,7 @@ async function toggleWatchScreen(){
     // audio:true solicita o áudio da aba/tela quando o navegador/SO oferece suporte.
     // Em Chrome/Edge, ao compartilhar uma aba, marque "Compartilhar áudio".
     const stream=await navigator.mediaDevices.getDisplayMedia({
-      video:{frameRate:{ideal:24,max:30},width:{ideal:1280,max:1920},height:{ideal:720,max:1080}},
+      video:{frameRate:{ideal:30,max:30},width:{ideal:1920,max:1920},height:{ideal:1080,max:1080}},
       audio:{suppressLocalAudioPlayback:false},
       systemAudio:'include',
       windowAudio:'system',
@@ -2509,7 +1798,7 @@ async function toggleWatchScreen(){
     if(screenAudioTrack){screenAudioTrack.enabled=true;try{screenAudioTrack.contentHint='music'}catch{}}
     if(!videoTrack)throw new Error('Nenhuma tela selecionada.');
 
-    state.watchRtc.screenStream=stream;state.watchRtc.screenSource='screen';
+    state.watchRtc.screenStream=stream;
     state.watchRtc.activeScreenUid=String(state.user.uid);
     state.watchRtc.screenSharers.add(String(state.user.uid));
 
@@ -2520,7 +1809,10 @@ async function toggleWatchScreen(){
     const ids=Object.keys(state.watchRtc.presence||{}).filter(uid=>uid!==state.user.uid);
     for(const uid of ids){
       let pc=state.watchRtc.peers.get(uid);if(!pc)pc=await createWatchPeer(uid,false);
-      await syncLocalScreenToPeer(uid,'screen-start').catch(()=>{})
+      const videoSender=watchPcSender(pc,'video');if(videoSender)await videoSender.replaceTrack(videoTrack);
+      const screenAudioSender=watchPcSender(pc,'audio','screen');
+      if(screenAudioSender)await screenAudioSender.replaceTrack(screenAudioTrack&&screenAudioTrack.readyState==='live'?screenAudioTrack:null);
+      await tuneWatchScreenSender(pc);if(pc.signalingState==='stable')await negotiateWatchPeer(uid,{iceRestart:false,reason:'screen-start'}).catch(()=>{})
     }
 
     videoTrack.onended=()=>{if(state.watchRtc.screenStream)toggleWatchScreen().catch(()=>{})};
@@ -2532,69 +1824,52 @@ async function toggleWatchScreen(){
     if(screenAudioTrack)toast('Tela + áudio compartilhados com a sala.');
     else toast('Tela compartilhada. Para transmitir som, no seletor do navegador marque “Compartilhar áudio”.',6000)
   }catch(e){
-    state.watchRtc.screenStream=null;state.watchRtc.screenSource='';state.watchRtc.screenSharers.delete(String(state.user?.uid||''));
+    state.watchRtc.screenStream=null;state.watchRtc.screenSharers.delete(String(state.user?.uid||''));
     if(state.watchCode&&state.user)await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:false,screenAt:null,screenAudio:false}).catch(()=>{});
     setWatchRtcStatus('Compartilhamento não iniciado','');
     if(e?.name!=='NotAllowedError')toast(`Não foi possível compartilhar a tela${e?.message?`: ${e.message}`:'.'}`);
     watchVoiceUi()
   }
 }
-function watchFullscreenIsActive(){const stage=$('watchScreenStage');return !!stage&&(document.fullscreenElement===stage||document.webkitFullscreenElement===stage||document.body.classList.contains('watch-pseudo-fullscreen'))}
-function clearWatchFullscreenUiTimer(){if(state.watchRtc.fullscreenUiTimer){clearTimeout(state.watchRtc.fullscreenUiTimer);state.watchRtc.fullscreenUiTimer=null}}
-function showWatchFullscreenUi(autoHide=true){
-  const stage=$('watchScreenStage');if(!stage)return;stage.classList.remove('watch-fullscreen-ui-hidden');clearWatchFullscreenUiTimer();
-  if(autoHide&&watchFullscreenIsActive())state.watchRtc.fullscreenUiTimer=setTimeout(()=>{if(watchFullscreenIsActive())stage.classList.add('watch-fullscreen-ui-hidden')},2800)
-}
 function updateWatchFullscreenButton(){
-  const btn=$('watchScreenFullscreenBtn'),stage=$('watchScreenStage');if(btn)btn.textContent=watchFullscreenIsActive()?'Sair da tela cheia':'Tela cheia';
-  if(!watchFullscreenIsActive()){stage?.classList.remove('watch-fullscreen-ui-hidden');clearWatchFullscreenUiTimer()}else showWatchFullscreenUi(true)
+  const btn=$('watchScreenFullscreenBtn'),stage=$('watchScreenStage');if(!btn||!stage)return;
+  const active=document.fullscreenElement===stage||document.webkitFullscreenElement===stage;
+  btn.textContent=active?'Sair da tela cheia':'Tela cheia'
 }
 async function fullscreenWatchScreen(){
-  const stage=$('watchScreenStage'),video=$('watchScreenVideo');if(!stage||stage.hidden)return toast('Nenhuma transmissão está disponível.');
+  const stage=$('watchScreenStage'),video=$('watchScreenVideo');if(!stage||stage.hidden)return toast('Nenhuma tela está sendo compartilhada.');
   try{
-    if(document.body.classList.contains('watch-pseudo-fullscreen')){document.body.classList.remove('watch-pseudo-fullscreen');updateWatchFullscreenButton();return}
-    const nativeActive=document.fullscreenElement===stage||document.webkitFullscreenElement===stage;
-    if(nativeActive){
+    const active=document.fullscreenElement===stage||document.webkitFullscreenElement===stage;
+    if(active){
       if(document.exitFullscreen)await document.exitFullscreen();
       else if(document.webkitExitFullscreen)document.webkitExitFullscreen();
       updateWatchFullscreenButton();return
     }
-    if(stage.requestFullscreen){await stage.requestFullscreen();updateWatchFullscreenButton();return}
-    if(stage.webkitRequestFullscreen){stage.webkitRequestFullscreen();updateWatchFullscreenButton();return}
-    if(video?.webkitEnterFullscreen){
-      const hadControls=video.controls;video.controls=true;
-      const restore=()=>{video.controls=hadControls;updateWatchFullscreenButton()};
-      video.addEventListener('webkitendfullscreen',restore,{once:true});
-      video.webkitEnterFullscreen();return
-    }
-    document.body.classList.add('watch-pseudo-fullscreen');updateWatchFullscreenButton()
-  }catch{
-    document.body.classList.add('watch-pseudo-fullscreen');updateWatchFullscreenButton()
-  }
+
+    if(stage.requestFullscreen)await stage.requestFullscreen();
+    else if(stage.webkitRequestFullscreen)stage.webkitRequestFullscreen();
+    else if(video?.webkitEnterFullscreen)video.webkitEnterFullscreen();
+    else return toast('Tela cheia não é suportada neste navegador.');
+
+    updateWatchFullscreenButton()
+  }catch{toast('Não foi possível alternar a tela cheia.')}
 }
 document.addEventListener('fullscreenchange',updateWatchFullscreenButton);
 document.addEventListener('webkitfullscreenchange',updateWatchFullscreenButton);
 $('watchScreenSoundBtn')?.addEventListener('click',async()=>{
-  showWatchFullscreenUi(true);const audio=$('watchScreenAudio'),turnOn=state.watchRtc.screenSoundMuted||audio?.paused;state.watchRtc.screenSoundMuted=!turnOn;
-  const graph=applyWatchScreenVolume({resume:turnOn});refreshWatchScreenStage();
-  if(turnOn&&audio?.srcObject){try{audio.muted=false;audio.volume=1;await graph?.ctx?.resume?.();await audio.play();state.watchRtc.screenSoundMuted=false;applyWatchScreenVolume();refreshWatchScreenStage();toast(`Som ativado em ${Math.round(state.watchRtc.screenVolume)}%.`)}catch{state.watchRtc.screenSoundMuted=true;applyWatchScreenVolume();refreshWatchScreenStage();toast('Toque novamente em Som para liberar o áudio da transmissão.')}}
+  const audio=$('watchScreenAudio');state.watchRtc.screenSoundMuted=!state.watchRtc.screenSoundMuted;if(state.watchRtc.screenAudioCtx){if(state.watchRtc.screenSoundMuted)await state.watchRtc.screenAudioCtx.suspend().catch(()=>{});else await state.watchRtc.screenAudioCtx.resume().catch(()=>{})}refreshWatchScreenStage();
+  if(!state.watchRtc.screenSoundMuted&&audio?.srcObject&&!state.watchRtc.screenAudioGain){try{audio.muted=false;await audio.play()}catch{toast('Toque novamente em Som para liberar o áudio da transmissão.')}}
 });
-$('watchScreenVolumeRange')?.addEventListener('input',async e=>{showWatchFullscreenUi(true);state.watchRtc.screenVolume=clampWatchVolume(e.target.value,0,300);if(state.watchRtc.screenVolume>0)state.watchRtc.screenSoundMuted=false;const graph=applyWatchScreenVolume({resume:true});const audio=$('watchScreenAudio');try{await graph?.ctx?.resume?.();if(audio?.srcObject){audio.muted=false;await audio.play()}}catch{};refreshWatchScreenStage()});
-$('watchTransmitVolumeRange')?.addEventListener('input',e=>{state.watchRtc.localFileTransmitGainPct=clampWatchVolume(e.target.value,50,300);applyWatchTransmitGain()});
-refreshWatchVolumeUi();
-const watchFsStage=$('watchScreenStage');
-['pointermove','pointerdown','touchstart'].forEach(type=>watchFsStage?.addEventListener(type,()=>{if(watchFullscreenIsActive())showWatchFullscreenUi(true)},{passive:true}));
+$('watchScreenVolume')?.addEventListener('input',applyWatchScreenVolume);if($('watchScreenVolume')){$('watchScreenVolume').value=String(state.watchRtc.screenVolume||100);applyWatchScreenVolume()}
 async function leaveWatchVoice(silent=false){
-  document.body.classList.remove('watch-pseudo-fullscreen');clearWatchFullscreenUiTimer();$('watchScreenStage')?.classList.remove('watch-fullscreen-ui-hidden');updateWatchFullscreenButton();
-  if(!state.watchRtc.joined&&!state.watchRtc.localStream&&!state.watchRtc.peers.size&&!state.watchRtc.screenOutPeers.size&&!state.watchRtc.screenInPeers.size)return;
+  if(!state.watchRtc.joined&&!state.watchRtc.localStream&&!state.watchRtc.peers.size)return;
   const code=state.watchCode,uid=state.user?.uid;
   try{state.watchRtc.presenceUnsub?.()}catch{}try{state.watchRtc.inboxUnsub?.()}catch{}try{await state.watchRtc.disconnectRef?.cancel?.()}catch{}
   state.watchRtc.presenceUnsub=null;state.watchRtc.inboxUnsub=null;state.watchRtc.disconnectRef=null;
   for(const pc of state.watchRtc.peers.values()){try{pc.close()}catch{}}
-  for(const pc of state.watchRtc.screenOutPeers.values()){try{pc.close()}catch{}}for(const pc of state.watchRtc.screenInPeers.values()){try{pc.close()}catch{}}
-  state.watchRtc.peers.clear();state.watchRtc.screenOutPeers.clear();state.watchRtc.screenInPeers.clear();state.watchRtc.remoteStreams.clear();state.watchRtc.remoteVoiceStreams.clear();state.watchRtc.remoteScreenStreams.clear();state.watchRtc.localStream?.getTracks?.().forEach(t=>t.stop());state.watchRtc.screenStream?.getTracks?.().forEach(t=>t.stop());
-  cleanupWatchLocalFilePlayer();state.watchRtc.localStream=null;state.watchRtc.screenStream=null;state.watchRtc.screenSource='';state.watchRtc.joined=false;state.watchRtc.audioJoined=false;state.watchRtc.activeScreenUid=null;state.watchRtc.micEnabled=true;
-  state.watchRtc.processed.clear();state.watchRtc.pendingCandidates.clear();state.watchRtc.screenOutCandidates.clear();state.watchRtc.screenInCandidates.clear();state.watchRtc.screenOfferAt.clear();state.watchRtc.screenOfferLocks.clear();state.watchRtc.screenSharers.clear();state.watchRtc.presence={};state.watchRtc.screenRetry.clear();state.watchRtc.makingOffer.clear();
+  state.watchRtc.peers.clear();state.watchRtc.remoteStreams.clear();state.watchRtc.remoteVoiceStreams.clear();state.watchRtc.remoteScreenStreams.clear();state.watchRtc.localStream?.getTracks?.().forEach(t=>t.stop());state.watchRtc.screenStream?.getTracks?.().forEach(t=>t.stop());
+  state.watchRtc.localStream=null;state.watchRtc.screenStream=null;state.watchRtc.joined=false;state.watchRtc.audioJoined=false;state.watchRtc.activeScreenUid=null;state.watchRtc.micEnabled=true;
+  state.watchRtc.processed.clear();state.watchRtc.pendingCandidates.clear();state.watchRtc.screenSharers.clear();state.watchRtc.presence={};state.watchRtc.screenRetry.clear();state.watchRtc.makingOffer.clear();if(state.watchRtc.screenRecoveryTimer){clearInterval(state.watchRtc.screenRecoveryTimer);state.watchRtc.screenRecoveryTimer=null;}destroyWatchScreenAudioBoost();
   if(code&&uid){await remove(ref(db,`watchVoice/${code}/${uid}`)).catch(()=>{});await remove(ref(db,`watchRtc/${code}/${uid}`)).catch(()=>{})}
   if($('watchRemoteMedia'))$('watchRemoteMedia').innerHTML='';if($('watchVoiceCount'))$('watchVoiceCount').textContent='0';
   destroyWatchMusicPlayback();refreshWatchScreenStage();watchVoiceUi();if(!silent)toast('Você saiu da chamada.')
@@ -2906,96 +2181,12 @@ window.addEventListener('resize',()=>{if(designCanvasApp&&state.route==='studio'
 $('studioCanvasShortcut')?.addEventListener('click',()=>{$('canvasStudio')?.scrollIntoView({behavior:'smooth',block:'start'});initGremoryDesignStudio().catch(()=>{})});
 $$('[data-studio-scroll]').forEach(btn=>btn.addEventListener('click',()=>$(btn.dataset.studioScroll)?.scrollIntoView({behavior:'smooth',block:'start'})));
 
-// 21 e Forca PvP: lógica e sincronização 100% no Firebase do site.
-function cardHtml(c){if(!c)return'';const red=c.s==='♥'||c.s==='♦';return `<i class="playing-card ${red?'red':''}"><b>${escText(c.r||'?')}</b><span>${escText(c.s||'')}</span></i>`}
-
-// 21 PvP
-$('blackjackCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('blackjackFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('blackjack',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
-function handleBlackjackIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.blackjack.game?.id!==active.id){subscribeBlackjack(active.id);focusNewSiteGame('blackjack',active.id)}return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.blackjack.game?.id!==finished.id)subscribeBlackjack(finished.id);else if(!finished)setBlackjackGame(null)}
-function subscribeBlackjack(id){if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}}state.blackjack.unsub=onValue(ref(db,`blackjackGames/${id}`),sn=>setBlackjackGame(sn.exists()?{id,...sn.val()}:null))}
-function blackjackCardLabel(c={}){return `${c.r||'?'}${c.s||''}`}
-function blackjackHandLabel(p={}){const cards=Array.isArray(p.cards)?p.cards:[];return `${cards.map(blackjackCardLabel).join(' + ')||'—'} = ${Number(p.score||0)}`}
-function blackjackResultReason(g,me,other){const my=Number(me.score||0),op=Number(other.score||0);if(me.busted&&other.busted)return `As duas mãos estouraram (${my} × ${op}).`;if(me.busted)return `Sua mão estourou com ${my}; ${other.name||'o adversário'} venceu com ${op}.`;if(other.busted)return `${other.name||'O adversário'} estourou com ${op}; sua mão venceu com ${my}.`;if(my===21&&op!==21)return `Você fechou 21 exato contra ${op}.`;if(op===21&&my!==21)return `${other.name||'O adversário'} fechou 21 exato contra ${my}.`;if(my===op)return `As duas mãos terminaram com ${my} pontos.`;const high=Math.max(my,op),low=Math.min(my,op);return `${high} venceu ${low} por ficar mais perto de 21 sem estourar.`}
-function setBlackjackGame(g){
-  const prev=state.blackjack.game;
-  if(g?.status==='active'){
-    if(!prev||prev.id!==g.id){playGameSfx('start');setTimeout(()=>playGameSfx('card'),80);if(g.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),220)}
-    else if(prev.status==='active'){
-      const prevPlayers=prev.players||{},nextPlayers=g.players||{},ids=new Set([...Object.keys(prevPlayers),...Object.keys(nextPlayers)]);let cardsAdded=0,stoodNow=false;
-      ids.forEach(uid=>{cardsAdded+=Math.max(0,(nextPlayers[uid]?.cards?.length||0)-(prevPlayers[uid]?.cards?.length||0));if(!prevPlayers[uid]?.stood&&nextPlayers[uid]?.stood)stoodNow=true});
-      if(cardsAdded)playGameSfx('card');else if(stoodNow)playGameSfx('stand');
-      if(prev.turnUid!==g.turnUid&&g.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),100);
-    }
-  }
-  state.blackjack.game=g;const panel=$('blackjackGamePanel'),lobby=$('blackjackLobby');
-  if(!g||g.status!=='active'){
-    if(panel)panel.hidden=true;if(lobby)lobby.hidden=false;
-    const uid=state.user?.uid,exit=!!g&&g.finishReason==='exit'&&!!g.leftUid,iLeft=exit&&g.leftUid===uid,won=!!g&&g.winnerUid===uid,draw=!!g&&!g.winnerUid&&!exit;
-    const leftName=exit?(g.players?.[g.leftUid]?.name||'O adversário'):'';
-    if($('blackjackStatus'))$('blackjackStatus').textContent=exit?(iLeft?'Você saiu':'Vitória por desistência'):won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';
-    if(g?.status==='finished'&&g.id&&state.blackjack.seenActiveIds.has(g.id)){
-      state.blackjack.seenActiveIds.delete(g.id);
-      if(exit){showGameResult({title:iLeft?'Você saiu do 21':'Vitória por desistência no 21!',text:iLeft?'A partida foi encerrada para os dois jogadores. Seu adversário venceu por desistência.':`${leftName} saiu da partida. Você venceu por desistência.`,win:!iLeft,neutral:false,icon:iLeft?'↩':'21'});return}
-      const me=g.players?.[uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==uid)||{};const reason=blackjackResultReason(g,me,other);const winner=draw?'Nenhuma mão venceu':won?`Mão vencedora: ${blackjackHandLabel(me)}`:`Mão vencedora: ${blackjackHandLabel(other)}`;const detail=`Sua mão: ${blackjackHandLabel(me)} • ${other.name||'Adversário'}: ${blackjackHandLabel(other)} • ${winner} • ${reason}`;showGameResult({title:draw?'Empate no 21!':won?'Você venceu no 21!':`${other.name||'Adversário'} venceu no 21`,text:detail,win:won,neutral:draw,icon:draw?'＝':won?'21':'✕'})
-    }
-    return;
-  }
-  state.blackjack.seenActiveIds.add(g.id);if(panel)panel.hidden=false;if(lobby)lobby.hidden=true;if($('blackjackStatus'))$('blackjackStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderBlackjackGame(g)
-}
-function renderBlackjackGame(g){const me=g.players?.[state.user?.uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==state.user?.uid)||{};if($('blackjackTitle'))$('blackjackTitle').textContent=`${me.name||'Você'} × ${other.name||'Amigo'}`;if($('blackjackTurnText'))$('blackjackTurnText').textContent=g.turnUid===state.user?.uid?'Sua vez de jogar':`Vez de ${other.name||'seu amigo'}`;if($('blackjackOpponentName'))$('blackjackOpponentName').textContent=other.name||'Adversário';if($('blackjackPlayer'))$('blackjackPlayer').innerHTML=(me.cards||[]).map(cardHtml).join('');if($('blackjackDealer'))$('blackjackDealer').innerHTML=(other.cards||[]).map(cardHtml).join('');if($('blackjackPlayerScore'))$('blackjackPlayerScore').textContent=String(me.score??0);if($('blackjackDealerScore'))$('blackjackDealerScore').textContent=String(other.score??0);if($('blackjackMyState'))$('blackjackMyState').textContent=me.busted?'Estourou':me.stood?'Parou':'Jogando';if($('blackjackOpponentState'))$('blackjackOpponentState').textContent=other.busted?'Estourou':other.stood?'Parou':'Jogando';const myTurn=g.turnUid===state.user?.uid&&g.status==='active'&&!me.stood&&!me.busted;if($('blackjackHitBtn'))$('blackjackHitBtn').disabled=!myTurn;if($('blackjackStandBtn'))$('blackjackStandBtn').disabled=!myTurn;const log=$('blackjackLog');if(log)log.innerHTML=Object.values(g.log||{}).slice(-10).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
-function blackjackWinner(g){const rows=Object.values(g.players||{}),alive=rows.filter(p=>!p.busted),best=alive.length?Math.max(...alive.map(p=>Number(p.score||0))):-1,winners=alive.filter(p=>Number(p.score||0)===best);return winners.length===1?winners[0].uid:null}
-async function directBlackjackMove(gameId,action){const uid=state.user?.uid;if(!uid)return;let reason='';const tx=await runTransaction(ref(db,`blackjackGames/${gameId}`),g=>{if(!g||g.status!=='active'){reason='Partida encerrada.';return}if(g.turnUid!==uid){reason='Aguarde sua vez.';return}const me=g.players?.[uid],otherUid=Object.keys(g.players||{}).find(x=>x!==uid),other=g.players?.[otherUid];if(!me||!other){reason='Partida inválida.';return}g.deck=Array.isArray(g.deck)?g.deck:[];if(action==='hit'){const card=g.deck.pop();if(!card){reason='O baralho acabou.';return}me.cards=[...(me.cards||[]),card];me.score=blackjackScore(me.cards);if(me.score>21)me.busted=true;if(me.score===21)me.stood=true;appendGameLog(g,`${me.name||'Jogador'} pediu uma carta.`)}else if(action==='stand'){me.stood=true;appendGameLog(g,`${me.name||'Jogador'} parou com ${me.score||0}.`)}else{reason='Jogada inválida.';return}g.updatedAt=Date.now();const meDone=me.stood||me.busted,otherDone=other.stood||other.busted;if(me.busted||(meDone&&otherDone)){g.status='finished';g.winnerUid=blackjackWinner(g);g.finishedAt=Date.now()}else if(!otherDone)g.turnUid=otherUid;else g.turnUid=uid;return g});if(!tx.committed){if(reason)throw new Error(reason);return}const final={id:gameId,...tx.snapshot.val()};if(final.status==='finished')await finishIndexes('blackjack',final)}
-$('blackjackHitBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;playGameSfx('select');try{await directBlackjackMove(g.id,'hit')}catch(e){toast(permissionMessage(e,e.message))}});
-$('blackjackStandBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;playGameSfx('select');try{await directBlackjackMove(g.id,'stand')}catch(e){toast(permissionMessage(e,e.message))}});
-$('blackjackExitBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;playGameSfx('reject');try{await directGameExit('blackjack',g)}catch(e){toast(permissionMessage(e,e.message))}});
-
-// Forca PvP
-$('hangmanCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('hangmanFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('hangman',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
-function handleHangmanIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.hangman.game?.id!==active.id){subscribeHangman(active.id);focusNewSiteGame('hangman',active.id)}return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.hangman.game?.id!==finished.id)subscribeHangman(finished.id);else if(!finished)setHangmanGame(null)}
-function subscribeHangman(id){if(state.hangman.unsub){try{state.hangman.unsub()}catch{}}state.hangman.unsub=onValue(ref(db,`hangmanGames/${id}`),sn=>setHangmanGame(sn.exists()?{id,...sn.val()}:null))}
-function setHangmanGame(g){
-  const prev=state.hangman.game;
-  if(g?.status==='active'){
-    if(!prev||prev.id!==g.id){playGameSfx('start');if(g.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),180)}
-    else if(prev.status==='active'){
-      const before=prev.guessed||{},after=g.guessed||{},fresh=Object.keys(after).find(k=>!before[k]);
-      if(fresh)playGameSfx(after[fresh]==='hit'?'correct':'wrong');
-      if(prev.turnUid!==g.turnUid&&g.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),100);
-    }
-  }
-  state.hangman.game=g;const panel=$('hangmanGamePanel'),lobby=$('hangmanLobby');
-  if(!g||g.status!=='active'){
-    if(panel)panel.hidden=true;if(lobby)lobby.hidden=false;
-    const uid=state.user?.uid,exit=!!g&&g.finishReason==='exit'&&!!g.leftUid,iLeft=exit&&g.leftUid===uid,won=!!g&&g.winnerUid===uid,draw=!!g&&!g.winnerUid&&!exit;
-    const leftName=exit?(g.players?.[g.leftUid]?.name||'O adversário'):'';
-    if($('hangmanLives'))$('hangmanLives').textContent=exit?(iLeft?'Você saiu':'Vitória por desistência'):won?'Você venceu':g?(draw?'Empate':'Encerrada'):'Livre';
-    if(g?.status==='finished'&&g.id&&state.hangman.seenActiveIds.has(g.id)){
-      state.hangman.seenActiveIds.delete(g.id);
-      if(exit)showGameResult({title:iLeft?'Você saiu da Forca':'Vitória por desistência na Forca!',text:iLeft?'A partida foi encerrada para os dois jogadores. Seu adversário venceu por desistência.':`${leftName} saiu da partida. Você venceu por desistência.`,win:!iLeft,neutral:false,icon:iLeft?'↩':'A'});
-      else showGameResult({title:draw?'Empate na Forca!':won?'Você venceu a Forca!':'Você perdeu a Forca',text:`A palavra era ${g.answer||'a palavra secreta'}.`,win:won,neutral:draw,icon:draw?'＝':won?'A':'✕'});
-    }
-    return;
-  }
-  state.hangman.seenActiveIds.add(g.id);if(panel)panel.hidden=false;if(lobby)lobby.hidden=true;renderHangmanGame(g)
-}
-function renderHangmanGame(g){const me=g.players?.[state.user?.uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==state.user?.uid)||{},misses=Array.isArray(g.misses)?g.misses:Object.values(g.misses||{}),max=Number(g.maxMisses||6),guessed=g.guessed||{};if($('hangmanTitle'))$('hangmanTitle').textContent=`${me.name||'Você'} × ${other.name||'Amigo'}`;if($('hangmanTurnText'))$('hangmanTurnText').textContent=g.turnUid===state.user?.uid?'Sua vez de escolher uma letra':`Vez de ${other.name||'seu amigo'}`;if($('hangmanLives'))$('hangmanLives').textContent=`${Math.max(0,max-misses.length)} erros restantes`;if($('hangmanWord'))$('hangmanWord').textContent=String(g.mask||'').split('').map(ch=>ch===' '?'  ':ch).join(' ');if($('hangmanMeName'))$('hangmanMeName').textContent=me.name||'Você';if($('hangmanOpponentName'))$('hangmanOpponentName').textContent=other.name||'Adversário';if($('hangmanMeScore'))$('hangmanMeScore').textContent=String(me.score||0);if($('hangmanOpponentScore'))$('hangmanOpponentScore').textContent=String(other.score||0);const kb=$('hangmanKeyboard');if(kb){kb.innerHTML='';'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(ch=>{const b=document.createElement('button');b.type='button';b.textContent=ch;const used=guessed[ch];if(used)b.classList.add(used==='hit'?'correct':'wrong');b.disabled=!!used||g.turnUid!==state.user?.uid||g.status!=='active';b.onclick=()=>{playGameSfx('select');directHangmanGuess(g.id,ch).catch(e=>toast(permissionMessage(e,e.message)))};kb.appendChild(b)})}const log=$('hangmanLog');if(log)log.innerHTML=Object.values(g.log||{}).slice(-10).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
-async function directHangmanGuess(gameId,letter){const uid=state.user?.uid;if(!uid)return;let reason='';const tx=await runTransaction(ref(db,`hangmanGames/${gameId}`),g=>{if(!g||g.status!=='active'){reason='Partida encerrada.';return}if(g.turnUid!==uid){reason='Aguarde sua vez.';return}letter=String(letter||'').toUpperCase().replace(/[^A-Z]/g,'').slice(0,1);if(!letter){reason='Letra inválida.';return}g.guessed=g.guessed||{};if(g.guessed[letter]){reason='Essa letra já foi usada.';return}const answer=String(g.answer||'').toUpperCase(),hits=[...answer].filter(ch=>ch===letter).length,me=g.players?.[uid],otherUid=Object.keys(g.players||{}).find(x=>x!==uid);g.guessed[letter]=hits?'hit':'miss';g.misses=Array.isArray(g.misses)?g.misses:[];if(hits){me.score=Number(me.score||0)+hits;appendGameLog(g,`${me.name||'Jogador'} acertou ${letter}.`)}else{g.misses=[...g.misses,letter];appendGameLog(g,`${me.name||'Jogador'} errou ${letter}.`)}g.mask=hangmanMask(answer,g.guessed);g.updatedAt=Date.now();const solved=!g.mask.includes('_'),over=g.misses.length>=Number(g.maxMisses||6);if(solved||over){g.status='finished';const ps=Object.values(g.players||{}),top=Math.max(...ps.map(p=>Number(p.score||0))),wins=ps.filter(p=>Number(p.score||0)===top);g.winnerUid=wins.length===1?wins[0].uid:null;g.finishedAt=Date.now()}else g.turnUid=otherUid;return g});if(!tx.committed){if(reason)throw new Error(reason);return}const final={id:gameId,...tx.snapshot.val()};if(final.status==='finished')await finishIndexes('hangman',final)}
-$('hangmanExitBtn')?.addEventListener('click',async()=>{const g=state.hangman.game;if(!g)return;playGameSfx('reject');try{await directGameExit('hangman',g)}catch(e){toast(permissionMessage(e,e.message))}});
-
-// Slots solo — usa a carteira de Rupias já sincronizada com a Charlotte.
-// O site controla toda a experiência visual: aposta, giro, som e exibição do resultado.
+// Arcade local
+const HANGMAN_WORDS=['CHARLOTTE','POKEMON','GREMORY','DRAGAO','MAGIA','ANIME','AVENTURA','MISTERIO','AMIZADE','BATALHA','ESTRELA','VITORIA','CASTELO','DEMONIO','TREINADOR'];let hangman={word:'',hits:new Set(),misses:new Set()};
+function normalizeLetter(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase()}
+function renderHangman(){const w=hangman.word,done=[...w].every(ch=>!/[A-Z]/.test(ch)||hangman.hits.has(ch)),lost=hangman.misses.size>=6;if($('hangmanWord'))$('hangmanWord').textContent=[...w].map(ch=>/[A-Z]/.test(ch)?(hangman.hits.has(ch)||lost?ch:'_'):ch).join(' ');if($('hangmanLives'))$('hangmanLives').textContent=done?'Você venceu':lost?'Fim de jogo':`${6-hangman.misses.size} vidas`;const kb=$('hangmanKeyboard');if(!kb)return;kb.innerHTML='';'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(ch=>{const b=document.createElement('button');b.type='button';b.textContent=ch;b.disabled=done||lost||hangman.hits.has(ch)||hangman.misses.has(ch);b.onclick=()=>{if(w.includes(ch))hangman.hits.add(ch);else hangman.misses.add(ch);renderHangman()};kb.appendChild(b)})}
+function newHangman(){hangman={word:HANGMAN_WORDS[Math.floor(Math.random()*HANGMAN_WORDS.length)],hits:new Set(),misses:new Set()};renderHangman()}$('hangmanNewBtn')?.addEventListener('click',newHangman);newHangman();
+let bjDeck=[],bjPlayer=[],bjDealer=[],bjDone=true;const SUITS=['♠','♥','♦','♣'],RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];function makeDeck(){return SUITS.flatMap(s=>RANKS.map(r=>({s,r}))).sort(()=>Math.random()-.5)}function bjScore(cards){let n=cards.reduce((t,c)=>t+(c.r==='A'?11:['J','Q','K'].includes(c.r)?10:Number(c.r)),0),aces=cards.filter(c=>c.r==='A').length;while(n>21&&aces--){n-=10}return n}function cardHtml(c){const red=c.s==='♥'||c.s==='♦';return `<i class="playing-card ${red?'red':''}"><b>${c.r}</b><span>${c.s}</span></i>`}function renderBlackjack(){const ps=bjScore(bjPlayer),ds=bjScore(bjDealer);$('blackjackPlayer').innerHTML=bjPlayer.map(cardHtml).join('');$('blackjackDealer').innerHTML=bjDealer.map(cardHtml).join('');$('blackjackPlayerScore').textContent=String(ps);$('blackjackDealerScore').textContent=String(ds);$('blackjackHitBtn').disabled=bjDone;$('blackjackStandBtn').disabled=bjDone;if(!bjDone)$('blackjackStatus').textContent=ps===21?'21!':'Sua vez'}function finishBlackjack(){while(bjScore(bjDealer)<17)bjDealer.push(bjDeck.pop());bjDone=true;const p=bjScore(bjPlayer),d=bjScore(bjDealer);$('blackjackStatus').textContent=p>21?'Estourou':d>21||p>d?'Você venceu':p===d?'Empate':'Mesa venceu';renderBlackjack()}function newBlackjack(){bjDeck=makeDeck();bjPlayer=[bjDeck.pop(),bjDeck.pop()];bjDealer=[bjDeck.pop(),bjDeck.pop()];bjDone=false;renderBlackjack();if(bjScore(bjPlayer)===21)finishBlackjack()}$('blackjackNewBtn')?.addEventListener('click',newBlackjack);$('blackjackHitBtn')?.addEventListener('click',()=>{if(bjDone)return;bjPlayer.push(bjDeck.pop());renderBlackjack();if(bjScore(bjPlayer)>=21)finishBlackjack()});$('blackjackStandBtn')?.addEventListener('click',()=>{if(!bjDone)finishBlackjack()});newBlackjack();
+const SLOT_SYMBOLS=['♛','✦','◆','♥','☾','⚡','7'];let slotBusy=false;$('slotsSpinBtn')?.addEventListener('click',async()=>{if(slotBusy)return;slotBusy=true;const btn=$('slotsSpinBtn'),els=[$('slotReel1'),$('slotReel2'),$('slotReel3')];btn.disabled=true;els.forEach(e=>e?.classList.add('spinning'));for(let i=0;i<18;i++){els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]});await new Promise(r=>setTimeout(r,45+i*4))}const result=els.map(e=>e.textContent);els.forEach(e=>e?.classList.remove('spinning'));$('slotsStatus').textContent=result.every(x=>x===result[0])?'Trinca!':new Set(result).size===2?'Dupla':'Tente outra vez';btn.disabled=false;slotBusy=false});
 
 const initialRoute=(location.hash||'#home').slice(1);navigate(routeMeta[initialRoute]?initialRoute:'home');
-
-initCommunity({app, db, getUser:()=>state.user, isAdmin:isSiteAdmin, toast, getSelectedUid:()=>state.admin.selectedUid, bridgeRequest});
-$('watchYoutubeSearch')?.addEventListener('submit',async ev=>{
- ev.preventDefault();const box=$('watchYoutubeResults');box.textContent='Pesquisando...';
- try{const r=await fetch('/api/main?action=youtube_search&q='+encodeURIComponent($('watchYoutubeQuery').value.trim()));const data=await r.json();if(!r.ok)throw new Error(data.erro||'Busca indisponível');box.replaceChildren();for(const item of data.items||[]){const b=document.createElement('button');b.type='button';b.className='youtube-result';const im=document.createElement('img');im.src=item.thumbnail;im.alt='';im.loading='lazy';const title=document.createElement('span');title.textContent=item.title;b.append(im,title);b.onclick=()=>{if(!isWatchHost())return toast('Somente o host pode escolher o vídeo.');$('watchMediaInput').value='https://www.youtube.com/watch?v='+item.id;$('watchMediaForm').requestSubmit()};box.append(b)}if(!box.children.length)box.textContent='Nenhum vídeo encontrado.'}catch(e){box.textContent=e.message}
-});
-
-const watchEnable=document.createElement('button');watchEnable.type='button';watchEnable.className='btn';watchEnable.textContent='Ativar reprodução e som';$('watchMediaForm')?.after(watchEnable);
-watchEnable.addEventListener('click',async()=>{primeGameAudio();const stage=$('watchMediaStage'),f=stage?.querySelector('iframe[data-watch-youtube="1"]'),v=stage?.querySelector('video');if(f){youtubeCommand(f,'unMute',[]);applyYoutubeWatchState(f,state.watchRoom?.media||{})}if(v){try{v.muted=false;if(state.watchRoom?.media?.playing)await v.play()}catch{toast('Não foi possível reproduzir. Verifique se o link aponta para um vídeo compatível.')}}state.watchRtc.screenSoundMuted=false;refreshWatchScreenStage();try{await $('watchScreenAudio')?.play()}catch{}if(stage?.querySelector('iframe[data-watch-drive]'))toast('No Drive, toque em Play dentro do vídeo.');});
-
-async function renderPublicBadge(uid){let badge=$('publicEarnedBadge');if(!badge){badge=document.createElement('p');badge.id='publicEarnedBadge';badge.className='profile-badge';$('publicProfileName')?.after(badge)}badge.hidden=true;try{const id=(await get(ref(db,`profileEquippedBadge/${uid}`))).val();if(!id)return;const b=(await get(ref(db,`profileBadges/${uid}/${id}`))).val();if(b&&currentPublicProfile?.uid===uid){badge.textContent=`${b.icon} ${b.name}`;badge.hidden=false}}catch{}}
-
-$('adminVerifyEmail')?.addEventListener('click',async()=>{try{if(auth.currentUser?.emailVerified)return toast('Seu e-mail já está confirmado.');await sendEmailVerification(auth.currentUser);toast('Confirme o e-mail pelo link recebido; depois saia e entre novamente.')}catch(e){toast(e.message)}});

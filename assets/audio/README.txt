@@ -1,12 +1,9 @@
-Sons do site
-============
+Sons opcionais do site
+======================
 
-Arquivos usados pelo site:
+Você pode colocar aqui os seus próprios arquivos:
 
 - notification.mp3  -> toca quando chega uma notificação nova
-- victory.mp3       -> toca ao vencer partidas e ao ganhar nos Slots
-- defeat.mp3        -> toca ao perder partidas e quando o giro dos Slots não paga prêmio
+- victory.mp3       -> toca ao mostrar uma vitória
 
-O pacote já inclui um defeat.mp3 simples como padrão. Você pode substituir esse arquivo pelo seu próprio som mantendo exatamente o nome defeat.mp3.
-
-Se algum arquivo não existir ou falhar, o site usa um tom curto gerado pelo navegador como fallback.
+Se os arquivos não existirem, o site usa um som curto gerado pelo navegador como fallback.

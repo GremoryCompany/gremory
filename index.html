@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261023-v13-11-games-realtime">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261024-v12-1-admin">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -100,7 +100,6 @@
           <span class="nav-section-label">Ferramentas</span>
           <button class="nav-item" data-route="studio"><span>▤</span><b>PDF & Canvas</b></button>
           <button class="nav-item" data-route="downloads"><span>↓</span><b>Downloads</b></button>
-          <button class="nav-item" data-route="feed"><span>▧</span><b>Comunidade</b></button>
           <button class="nav-item" data-route="updates"><span>◌</span><b>Atualizações</b></button>
           <button class="nav-item" data-route="support"><span>?</span><b>Suporte</b></button>
         </div>
@@ -282,17 +281,14 @@
           </article>
 
           <article class="panel site-raid-panel" id="siteRaidPanel">
-            <div class="panel-head">
-              <div><span class="tag">RAID GLOBAL</span><h3>Raid Pokémon</h3></div>
-              <span class="pill" id="siteRaidStatus">Aguardando</span>
-            </div>
-            <p class="panel-help">Quando uma Raid Global estiver ativa, o boss aparece aqui em tempo real. Ataque com sua equipe vinculada à Charlotte e participe das recompensas.</p>
-            <div class="site-raid-stage" id="siteRaidStage"><div class="empty-state small">Nenhuma raid ativa. O modo automático pode iniciar uma nova raid a cada hora.</div></div>
+            <div class="panel-head"><div><span class="tag">RAID GLOBAL</span><h3>Raid Pokémon</h3></div><span class="pill" id="siteRaidStatus">Aguardando</span></div>
+            <p class="panel-help">Entre com sua equipe ativa, cause dano junto com outros treinadores e receba recompensas ao derrotar o boss.</p>
+            <div class="site-raid-stage" id="siteRaidStage"><div class="empty-state small">Nenhuma raid ativa.</div></div>
             <div class="site-raid-prefs">
-              <label class="check-row"><input id="raidWhatsappNotify" type="checkbox"><span>Receber avisos de Raid no WhatsApp</span></label>
+              <label class="check-row"><input id="raidWhatsappNotify" type="checkbox"><span>Receber aviso de novas raids pela Charlotte</span></label>
               <div class="site-raid-admin" id="siteRaidAdmin" hidden>
-                <label class="check-row"><input id="siteRaidAutoToggle" type="checkbox"><span>Raid automática</span></label>
-                <button class="btn primary" id="siteRaidStartBtn" type="button">Iniciar Raid Global</button>
+                <button class="btn primary" id="siteRaidStartBtn" type="button">Iniciar raid agora</button>
+                <label class="check-row"><input id="siteRaidAutoToggle" type="checkbox"><span>Raids automáticas</span></label>
               </div>
             </div>
           </article>
@@ -306,8 +302,8 @@
               <div class="premier-item"><span>⚪ Premier Ball</span><strong id="pokemonPremierBallCount">0</strong><small>Recompensa de raids</small></div>
             </div>
             <div class="pokemon-item-shop">
-              <div><strong>🧪 Poção</strong><small>Recupera 35% do HP máximo sem precisar sair da coleção.</small></div>
-              <div class="pokemon-item-shop-actions"><span>₹80</span><button class="btn" id="pokemonBuyPotionBtn" type="button">Comprar Poção</button></div>
+              <div><strong>🧪 Poção</strong><small>Recupera 50% do HP máximo de um Pokémon machucado.</small></div>
+              <div class="pokemon-item-shop-actions"><span>₹500</span><button class="btn" id="pokemonBuyPotionBtn" type="button">Comprar Poção</button></div>
             </div>
           </article>
 
@@ -333,9 +329,9 @@
             </div>
             <div id="duelArena" class="duel-arena duel-arena-v5" hidden>
               <div class="duel-team-strip" id="duelEnemyTeam"></div>
-              <div class="duel-player enemy"><div class="duel-pokemon-copy"><strong id="duelEnemyName">Pokémon</strong><span id="duelEnemyOwner">Adversário</span></div><div class="hpbar"><i id="duelEnemyHpBar"></i></div><small id="duelEnemyHp">0 / 0</small><img id="duelEnemySprite" alt=""></div>
+              <div class="duel-player enemy"><div class="duel-pokemon-copy"><strong id="duelEnemyName">Pokémon</strong><div class="pokemon-type-row" id="duelEnemyTypes"></div><span id="duelEnemyOwner">Adversário</span></div><div class="hpbar"><i id="duelEnemyHpBar"></i></div><small id="duelEnemyHp">0 / 0</small><img id="duelEnemySprite" alt=""></div>
               <div class="duel-vs">VS</div>
-              <div class="duel-player mine"><img id="duelMySprite" alt=""><div class="duel-pokemon-copy"><strong id="duelMyName">Pokémon</strong><span id="duelMyOwner">Você</span></div><div class="hpbar"><i id="duelMyHpBar"></i></div><small id="duelMyHp">0 / 0</small></div>
+              <div class="duel-player mine"><img id="duelMySprite" alt=""><div class="duel-pokemon-copy"><strong id="duelMyName">Pokémon</strong><div class="pokemon-type-row" id="duelMyTypes"></div><span id="duelMyOwner">Você</span></div><div class="hpbar"><i id="duelMyHpBar"></i></div><small id="duelMyHp">0 / 0</small></div>
               <div class="duel-team-strip mine" id="duelMyTeam"></div>
               <div class="duel-actions" id="duelMoveButtons"></div>
               <div class="duel-secondary-actions"><button class="btn" id="duelSwitchBtn" type="button">Trocar Pokémon</button><button class="btn danger-ghost" id="duelExitBtn" type="button">Sair da luta</button></div>
@@ -555,75 +551,42 @@
           </article>
         </section>
 
-        <section class="view games-view-pro" data-view="games">
-          <div class="section-head games-page-head">
-            <div><span class="tag">JOGOS</span><h2>Salão de jogos</h2><p class="muted">Partidas maiores e multiplayer em tempo real direto pelo site. A Charlotte é usada nos jogos apenas para a carteira de Rupias do Slots.</p></div>
-          </div>
-
-          <div class="studio-section-label game-section-label"><span>CLÁSSICO</span><h3>Jogo da velha</h3></div>
+        <section class="view" data-view="games">
+          <div class="section-head"><div><span class="tag">JOGOS</span><h2>Jogo da velha</h2></div></div>
           <div class="games-grid">
             <article class="panel ttt-lobby" id="tttLobby">
               <div class="panel-head"><div><h3>Desafiar um amigo</h3><small class="muted">Partida sincronizada em tempo real</small></div><span class="pill" id="tttStatus">Livre</span></div>
               <div class="duel-create"><label>Amigo<select id="tttFriendSelect"><option value="">Escolha um amigo</option></select></label><button class="btn primary" id="tttCreateBtn" type="button">Jogar</button></div>
-              <div id="tttInvites" class="people-list" hidden></div>
+              <div id="tttInvites" class="people-list"></div>
             </article>
-            <article class="panel ttt-game game-arena-large" id="tttGamePanel" hidden>
+            <article class="panel ttt-game" id="tttGamePanel" hidden>
               <div class="panel-head"><div><h3 id="tttTitle">Partida</h3><small id="tttTurnText">Aguardando...</small></div><button class="btn danger-ghost" id="tttExitBtn" type="button">Sair</button></div>
               <div class="ttt-board" id="tttBoard"></div>
               <div class="duel-log" id="tttLog"></div>
             </article>
           </div>
 
-          <div class="studio-section-label game-section-label"><span>MULTIPLAYER</span><h3>21 e Forca contra amigos</h3></div>
-          <div class="multiplayer-games-grid">
-            <article class="panel game-arena-large blackjack-card" id="blackjackCard">
-              <div class="panel-head"><div><span class="tag">21 PVP</span><h3>Vinte e um</h3><small class="muted">Chegue o mais perto de 21 sem estourar.</small></div><span class="pill" id="blackjackStatus">Livre</span></div>
-              <div class="game-lobby-row" id="blackjackLobby">
-                <label>Adversário<select id="blackjackFriendSelect"><option value="">Escolha um amigo</option></select></label>
-                <button class="btn primary" id="blackjackCreateBtn" type="button">Desafiar</button>
-              </div>
-              <div id="blackjackInvites" class="people-list game-invites" hidden></div>
-              <div class="big-game-stage" id="blackjackGamePanel" hidden>
-                <div class="big-game-title"><div><strong id="blackjackTitle">Partida de 21</strong><span id="blackjackTurnText">Aguardando...</span></div><button class="btn danger-ghost" id="blackjackExitBtn" type="button">Sair</button></div>
-                <div class="card-table card-table-pvp">
-                  <div class="card-seat opponent-seat"><small id="blackjackOpponentName">Adversário</small><div class="playing-cards" id="blackjackDealer"></div><strong id="blackjackDealerScore">0</strong><span id="blackjackOpponentState">Jogando</span></div>
-                  <div class="card-seat my-seat"><small>Você</small><div class="playing-cards" id="blackjackPlayer"></div><strong id="blackjackPlayerScore">0</strong><span id="blackjackMyState">Jogando</span></div>
-                </div>
-                <div class="arcade-actions game-primary-actions"><button class="btn primary" id="blackjackHitBtn" type="button">Pedir carta</button><button class="btn" id="blackjackStandBtn" type="button">Parar</button></div>
-                <div class="duel-log" id="blackjackLog"></div>
-              </div>
+          <div class="studio-section-label game-section-label"><span>ARCADE</span><h3>Jogos rápidos</h3></div>
+          <div class="arcade-grid">
+            <article class="panel arcade-card hangman-card">
+              <div class="panel-head"><div><span class="tag">FORCA</span><h3>Forca</h3></div><span class="pill" id="hangmanLives">6 vidas</span></div>
+              <div class="hangman-word" id="hangmanWord">—</div>
+              <div class="hangman-keyboard" id="hangmanKeyboard"></div>
+              <div class="arcade-actions"><button class="btn primary" id="hangmanNewBtn" type="button">Nova palavra</button></div>
             </article>
 
-            <article class="panel game-arena-large hangman-card" id="hangmanCard">
-              <div class="panel-head"><div><span class="tag">FORCA PVP</span><h3>Forca</h3><small class="muted">O sistema escolhe a palavra. Cada letra certa vale pontos.</small></div><span class="pill" id="hangmanLives">Livre</span></div>
-              <div class="game-lobby-row" id="hangmanLobby">
-                <label>Adversário<select id="hangmanFriendSelect"><option value="">Escolha um amigo</option></select></label>
-                <button class="btn primary" id="hangmanCreateBtn" type="button">Desafiar</button>
-              </div>
-              <div id="hangmanInvites" class="people-list game-invites" hidden></div>
-              <div class="big-game-stage" id="hangmanGamePanel" hidden>
-                <div class="big-game-title"><div><strong id="hangmanTitle">Partida de Forca</strong><span id="hangmanTurnText">Aguardando...</span></div><button class="btn danger-ghost" id="hangmanExitBtn" type="button">Sair</button></div>
-                <div class="hangman-scoreboard"><div><span id="hangmanMeName">Você</span><strong id="hangmanMeScore">0</strong></div><div><span id="hangmanOpponentName">Adversário</span><strong id="hangmanOpponentScore">0</strong></div></div>
-                <div class="hangman-word" id="hangmanWord">—</div>
-                <div class="hangman-keyboard" id="hangmanKeyboard"></div>
-                <div class="duel-log" id="hangmanLog"></div>
-              </div>
+            <article class="panel arcade-card blackjack-card">
+              <div class="panel-head"><div><span class="tag">21</span><h3>Vinte e um</h3></div><span class="pill" id="blackjackStatus">Pronto</span></div>
+              <div class="card-table"><div><small>Mesa</small><div class="playing-cards" id="blackjackDealer"></div><strong id="blackjackDealerScore">0</strong></div><div><small>Você</small><div class="playing-cards" id="blackjackPlayer"></div><strong id="blackjackPlayerScore">0</strong></div></div>
+              <div class="arcade-actions"><button class="btn primary" id="blackjackNewBtn" type="button">Nova partida</button><button class="btn" id="blackjackHitBtn" type="button">Pedir carta</button><button class="btn" id="blackjackStandBtn" type="button">Parar</button></div>
+            </article>
+
+            <article class="panel arcade-card slots-card">
+              <div class="panel-head"><div><span class="tag">SLOTS</span><h3>Slots Gremory</h3></div><span class="pill" id="slotsStatus">Arcade</span></div>
+              <div class="slot-machine"><div class="slot-reel" id="slotReel1">✦</div><div class="slot-reel" id="slotReel2">♛</div><div class="slot-reel" id="slotReel3">◆</div></div>
+              <div class="arcade-actions"><button class="btn primary full" id="slotsSpinBtn" type="button">Girar</button></div>
             </article>
           </div>
-
-          <div class="studio-section-label game-section-label"><span>CASSINO SOLO</span><h3>Slots Gremory</h3></div>
-          <article class="panel game-arena-large slots-card slots-pro-card">
-            <div class="panel-head"><div><span class="tag">SLOTS</span><h3>Slots de Rupias</h3><small class="muted">A aposta é debitada da mesma carteira de Rupias vinculada à Charlotte.</small></div><span class="pill" id="slotsStatus">Pronto</span></div>
-            <div class="slot-wallet"><span>Seu saldo</span><strong id="slotsBalance">₹ 0</strong></div>
-            <div class="slot-bet-panel">
-              <label>Aposta<input id="slotsBetInput" type="number" min="10" max="5000" step="10" value="50"></label>
-              <div class="slot-bet-presets" aria-label="Apostas rápidas"><button class="btn" data-slot-bet="10" type="button">₹10</button><button class="btn" data-slot-bet="50" type="button">₹50</button><button class="btn" data-slot-bet="100" type="button">₹100</button><button class="btn" data-slot-bet="500" type="button">₹500</button><button class="btn" data-slot-bet="1000" type="button">₹1.000</button></div>
-            </div>
-            <div class="slot-machine slot-machine-large"><div class="slot-reel" id="slotReel1">✦</div><div class="slot-reel" id="slotReel2">♛</div><div class="slot-reel" id="slotReel3">◆</div></div>
-            <div class="slot-result-line"><strong id="slotsLastWin">Escolha sua aposta e gire.</strong><span>Trincas pagam mais • qualquer dupla devolve prêmio menor.</span></div>
-            <div class="arcade-actions"><button class="btn primary full slots-spin-button" id="slotsSpinBtn" type="button">Girar Slots</button></div>
-            <details class="slot-paytable"><summary>Tabela de prêmios</summary><div><span>777</span><b>25x</b><span>♛♛♛</span><b>12x</b><span>⚡⚡⚡</span><b>8x</b><span>◆◆◆</span><b>6x</b><span>☾☾☾</span><b>5x</b><span>♥♥♥</span><b>4x</b><span>✦✦✦</span><b>3x</b><span>Qualquer dupla</span><b>1,2x</b></div></details>
-          </article>
         </section>
 
         <section class="view watch-view-v2" data-view="watch">
@@ -679,11 +642,8 @@
                     <div class="watch-screen-head">
                       <div><span class="status-dot"></span><strong id="watchScreenLabel">Tela compartilhada</strong></div>
                       <div class="watch-screen-actions">
-                        <label class="watch-volume-inline" id="watchScreenVolumeControl">
-                          <span>Meu volume <b id="watchScreenVolumeValue">150%</b></span>
-                          <input id="watchScreenVolumeRange" type="range" min="0" max="300" step="5" value="150" aria-label="Meu volume da transmissão">
-                        </label>
                         <button class="btn" id="watchScreenSoundBtn" type="button">Som: ligado</button>
+                        <label class="watch-volume-control" title="Volume da transmissão"><span>Volume</span><input id="watchScreenVolume" type="range" min="0" max="250" step="5" value="100"><b id="watchScreenVolumeLabel">100%</b></label>
                         <button class="btn" id="watchScreenFullscreenBtn" type="button">Tela cheia</button>
                       </div>
                     </div>
@@ -693,19 +653,10 @@
                 </div>
 
                 <div class="watch-source-card">
-                  <form id="watchYoutubeSearch" class="stack-form"><label>Pesquisar no YouTube<input id="watchYoutubeQuery" maxlength="120" placeholder="Título do vídeo" required></label><button class="btn" type="submit">Pesquisar</button></form><div id="watchYoutubeResults" class="youtube-results"></div><form class="watch-media-form" id="watchMediaForm">
+                  <form class="watch-media-form" id="watchMediaForm">
                     <input id="watchMediaInput" placeholder="YouTube, Google Drive ou link de vídeo">
                     <button class="btn primary" type="submit">Carregar</button>
                   </form>
-                  <div class="watch-local-source">
-                    <input id="watchLocalFileInput" type="file" accept="video/*" hidden>
-                    <button class="btn" id="watchLocalFileBtn" type="button">🎬 Filme do dispositivo</button>
-                    <small>O arquivo não é enviado ao servidor: o host transmite direto para a sala.</small>
-                    <label class="watch-transmit-volume" id="watchTransmitVolumeControl" hidden>
-                      <span>Volume enviado para a sala <b id="watchTransmitVolumeValue">150%</b></span>
-                      <input id="watchTransmitVolumeRange" type="range" min="50" max="300" step="5" value="150" aria-label="Volume enviado para a sala">
-                    </label>
-                  </div>
                   <div class="watch-controls">
                     <button class="btn" id="watchPlayBtn" type="button">Play / Pause</button>
                     <button class="btn" id="watchSyncBtn" type="button">Sincronizar</button>
@@ -877,12 +828,6 @@
           </div>
         </section>
 
-<section class="view community-view" data-view="feed">
- <div class="section-head"><div><span class="tag">COMUNIDADE</span><h2>Seu espaço na Gremory</h2><p class="muted">Momentos, amigos e suas conquistas.</p></div><button id="feedRefresh" class="btn" type="button">Atualizar</button></div>
- <article class="panel"><form id="feedForm" class="stack-form"><label>Nova publicação<textarea id="feedText" maxlength="1800" rows="3" placeholder="O que você quer compartilhar?"></textarea></label><label>Foto ou vídeo<input id="feedFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"></label><p class="muted">Fotos até 10 MB • Vídeos até 50 MB. Publique apenas conteúdo que você pode compartilhar.</p><label>Ou link HTTPS da mídia<input id="feedUrl" type="url" placeholder="https://..."></label><label>Tipo da mídia por link<select id="feedKind"><option value="image">Foto / GIF</option><option value="video">Vídeo MP4 / WebM</option></select></label><button class="btn primary" type="submit">Publicar</button><p id="feedProgress" role="status"></p></form></article>
- <div class="feed-filters"><button class="btn active" id="feedAll" type="button">Todos</button><button class="btn" id="feedFollowing" type="button">Seguindo</button><button class="btn" id="feedMyProfile" type="button">Meu perfil e emblemas</button></div>
- <div id="feedProfile" class="panel" hidden></div><div id="feedList" class="feed-list" aria-live="polite"></div><button id="feedMore" class="btn" type="button">Carregar mais</button>
-</section>
         <section class="view" data-view="updates">
           <div class="section-head"><div><span class="tag">ATUALIZAÇÕES</span><h2>Novidades</h2></div></div>
           <div class="updates-feed" id="updatesFeed"><div class="empty-state">Nenhuma atualização publicada.</div></div>
@@ -940,6 +885,13 @@
                 </div>
               </form>
               <div id="adminUserResult" class="admin-user-result"></div>
+              <div class="admin-account-tools">
+                <button class="btn" id="adminSyncUserBtn" type="button">Sincronizar conta</button>
+                <button class="btn" id="adminGenerateLinkBtn" type="button">Gerar código de vínculo</button>
+                <label>Foto do perfil (URL)<input id="adminProfileAvatarUrl" type="url" placeholder="https://..."></label>
+                <div class="profile-upload-row"><label class="btn upload-btn">Escolher foto<input id="adminProfileAvatarFile" type="file" accept="image/*" hidden></label><button class="btn primary" id="adminProfileAvatarSaveBtn" type="button">Salvar foto</button></div>
+                <div class="admin-link-code" id="adminLinkCodeBox" hidden><code id="adminLinkCommand"></code><button class="mini-btn" id="adminCopyLinkCommandBtn" type="button">Copiar</button></div>
+              </div>
             </article>
 
             <article class="panel admin-panel">
@@ -953,7 +905,7 @@
               </div>
             </article>
 
-            <article class="panel admin-panel"><span class="tag">PERFIS</span><h3>Conceder emblema</h3><button class="btn" id="adminVerifyEmail" type="button">Confirmar e-mail do administrador</button><p class="muted">Localize o usuário no painel acima. Ele poderá equipar o emblema no perfil da comunidade.</p><form id="adminBadgeForm" class="stack-form"><label>ID<input id="adminBadgeId" pattern="[a-z0-9_-]{3,40}" required placeholder="pioneiro"></label><label>Nome<input id="adminBadgeName" maxlength="60" required></label><label>Símbolo<input id="adminBadgeIcon" maxlength="8" value="🏅" required></label><div class="admin-row-actions"><button class="btn primary">Conceder emblema</button><button id="adminBadgeRevoke" type="button" class="btn">Revogar</button></div></form></article><article class="panel admin-panel">
+            <article class="panel admin-panel">
               <div class="panel-head"><div><span class="tag">NOTIFICAÇÕES</span><h3>Enviar aviso</h3></div></div>
               <form id="adminNotificationForm" class="stack-form compact">
                 <label>Destino<select id="adminNotificationTarget"><option value="all">Todos os usuários</option><option value="selected">Usuário localizado</option></select></label>
@@ -982,9 +934,9 @@
             </article>
 
             <article class="panel admin-panel">
-              <div class="panel-head"><div><span class="tag">BACKUP</span><h3>Dados da Charlotte</h3></div><span class="pill" id="adminBackupStatus">Aguardando</span></div>
-              <p class="muted" id="adminBackupMeta">Aguardando a primeira cópia de segurança da Charlotte.</p>
-              <button class="btn" id="adminBackupNowBtn" type="button">Criar backup agora</button>
+              <div class="panel-head"><div><span class="tag">BACKUP</span><h3>Firebase do bot</h3></div><span class="pill" id="adminBackupStatus">Aguardando</span></div>
+              <p class="muted" id="adminBackupMeta">Os JSONs operacionais da Charlotte são espelhados no Firebase.</p>
+              <div class="admin-row-actions"><button class="btn primary" id="adminBackupNowBtn" type="button">Criar backup agora</button><button class="btn" id="adminBackupRestoreBtn" type="button">Restaurar último backup</button></div>
             </article>
           </div>
         </section>
@@ -1014,7 +966,6 @@
         <button data-route="rpg"><span>⚄</span><b>RPG</b></button>
         <button data-route="studio"><span>▤</span><b>PDF & Canvas</b></button>
         <button data-route="downloads"><span>⇩</span><b>Downloads</b></button>
-        <button data-route="feed"><span>▧</span><b>Feed</b></button>
         <button data-route="updates"><span>◌</span><b>Novidades</b></button>
         <button data-route="support"><span>?</span><b>Suporte</b></button>
         <button id="mobileAccountBtn"><span>●</span><b>Conta</b></button>
@@ -1031,12 +982,12 @@
       <div class="profile-summary"><img id="profileAvatarPreview" src="/assets/img/profile.jpg" alt=""><div><strong id="profileNameView">Usuário</strong><span id="profileUsernameView">@usuario</span><span id="profilePlanView">Padrão</span></div></div>
       <form id="profileForm" class="profile-form">
         <label>Nome<input id="profileName" maxlength="40"></label><label>Nome de usuário<input id="profileUsername" maxlength="20" autocomplete="username" placeholder="usuario"><small class="field-hint" id="profileUsernameHint">Pode ser alterado uma vez a cada 7 dias.</small></label>
-        <label>Foto (URL)<input id="profileAvatar" type="url" placeholder="https://..."></label>
+        <label>Foto do perfil<input id="profileAvatar" type="url" placeholder="https://..."></label>
+        <div class="profile-upload-row"><label class="btn upload-btn">Escolher foto<input id="profileAvatarFile" type="file" accept="image/*" hidden></label><small id="profileAvatarFileStatus">JPG, PNG ou WEBP</small></div>
         <label>Bio<textarea id="profileBio" maxlength="500" rows="3" placeholder="Seu recado"></textarea></label>
         <label>Anime favorito<input id="profileFavoriteAnime" maxlength="80"></label>
         <div class="profile-preferences">
           <label class="check-row"><input id="profileBrowserNotify" type="checkbox"><span>Notificações do navegador</span></label>
-          <label class="check-row"><input id="profileWhatsappSiteNotify" type="checkbox"><span>Receber avisos do site no WhatsApp</span></label>
           <label class="check-row"><input id="profileRaidWhatsapp" type="checkbox"><span>Avisar novas raids no WhatsApp</span></label>
         </div>
         <div class="profile-stats"><div><span>Nível</span><strong id="profileLevel">0</strong></div><div><span>Rupias</span><strong id="profileBalance">0</strong></div></div>
@@ -1092,6 +1043,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261023-v13-11-games-realtime"></script>
+  <script type="module" src="/assets/js/app.js?v=20261024-v12-1-admin"></script>
 </body>
 </html>
