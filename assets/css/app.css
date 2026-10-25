@@ -1215,27 +1215,11 @@ body.watch-pseudo-fullscreen #watchScreenStage.watch-fullscreen-ui-hidden{cursor
 @media(max-width:620px){.watch-volume-inline{min-width:0;padding:5px 7px;gap:5px}.watch-volume-inline span{font-size:8px}.watch-volume-inline input[type="range"]{width:74px}.watch-transmit-volume{display:grid;grid-template-columns:1fr;gap:7px;width:100%}.watch-transmit-volume input[type="range"]{width:100%}}
 #watchScreenStage:fullscreen .watch-volume-inline,#watchScreenStage:-webkit-full-screen .watch-volume-inline,body.watch-pseudo-fullscreen #watchScreenStage .watch-volume-inline{background:rgba(5,7,10,.78);border-color:rgba(255,255,255,.16)}
 
-/* V12.1 — administração, perfil e Watch Party */
+/* Administração e perfis da atualização, com Watch Party original. */
+
 .profile-upload-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.profile-upload-row small{color:var(--muted)}
 .admin-account-tools{display:grid;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid #252b35}.admin-account-tools>label{display:grid;gap:6px}.admin-link-code{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #2b313c;border-radius:12px;background:#090c11;overflow:hidden}.admin-link-code code{flex:1;overflow-wrap:anywhere;color:#f0a1b0}
 .dynamic-store-preview{background-size:cover!important;background-position:center!important}.dynamic-store-item .dynamic-store-preview{min-height:112px}
 .support-chat-panel{margin-top:14px}.support-chat-list{display:grid;gap:8px;max-height:420px;overflow:auto;padding:8px}.support-message{max-width:min(82%,620px);padding:9px 11px;border-radius:14px;background:#171c24;border:1px solid #272e39}.support-message.admin{margin-left:auto;background:#2a1119;border-color:#5a2632}.support-message b,.support-message p,.support-message small{display:block}.support-message p{margin:4px 0;white-space:pre-wrap}.support-message small{color:var(--muted);font-size:9px}.support-chat-form{display:flex;gap:8px;margin-top:9px}.support-chat-form input{flex:1;min-width:0}
 .admin-support-conversation{width:100%;text-align:left;display:grid;gap:3px;padding:10px;border:1px solid #262d37;border-radius:11px;background:#0b0e13;color:#fff}.admin-support-conversation small{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.watch-volume-control{display:flex!important;align-items:center!important;gap:7px!important;padding:6px 9px!important;border:1px solid #303743!important;border-radius:10px!important;background:#0b0e13!important;font-size:9px!important}.watch-volume-control input{width:110px!important;accent-color:#d44560}.watch-volume-control b{min-width:34px;text-align:right}.watch-main-v2 .watch-player-shell{aspect-ratio:16/9;min-height:0!important}.watch-main-v2 .watch-media-stage,.watch-main-v2 .watch-screen-stage,.watch-main-v2 .watch-video,.watch-main-v2 .watch-iframe{min-height:0!important;height:100%;width:100%}.watch-screen-stage video{width:100%!important;height:100%!important;max-height:none!important;object-fit:contain!important}
-@media(max-width:820px){.watch-room-v2{margin-inline:-4px}.watch-main-v2{padding:4px!important}.watch-main-v2 .watch-player-shell{width:100%;aspect-ratio:16/9;border-radius:12px}.watch-screen-head{padding:7px 8px!important}.watch-screen-actions{grid-template-columns:1fr!important;width:100%}.watch-volume-control{width:100%;justify-content:space-between}.watch-volume-control input{flex:1;width:auto!important}.support-chat-form{display:grid;grid-template-columns:1fr auto}.admin-account-tools .btn{width:100%}}
-
-/* Recuperação visual: compatibilidade com os controles da versão 4. */
-.support-icon{overflow:hidden;flex-shrink:0}
-.support-icon img{display:block;max-width:100%;max-height:100%;object-fit:contain}
-.admin-grid>.panel{min-width:0}
-.admin-account-tools input{width:100%;min-width:0;border:1px solid #2a2f39;background:#0d1016;color:#fff;border-radius:13px;padding:12px 14px}
-.admin-support-panel{grid-column:1/-1}
-.games-view-pro .arcade-grid{grid-template-columns:minmax(0,1fr);gap:18px}
-.games-view-pro .arcade-card{min-width:0;padding:22px;border-radius:22px}
-.games-view-pro .card-table>div{min-height:230px;padding:16px;border-radius:18px}
-.games-view-pro .playing-cards{min-height:120px;align-items:center}
-.games-view-pro .playing-card{width:62px;height:88px;font-size:16px}
-.games-view-pro .playing-card span{font-size:24px}
-.games-view-pro .slot-machine-large{width:100%}
-.games-view-pro .arcade-actions .btn{min-height:48px}
-@media(max-width:580px){.games-view-pro .arcade-card{padding:14px}.games-view-pro .card-table{grid-template-columns:1fr}.games-view-pro .playing-card{width:50px;height:72px}.games-view-pro .arcade-actions{flex-wrap:wrap}.games-view-pro .arcade-actions .btn{flex:1}.admin-support-panel{grid-column:auto}}
+.support-icon{overflow:hidden}.support-icon img{display:block;max-width:100%;max-height:100%}.admin-grid>.panel{min-width:0}.admin-account-tools input{min-width:0;width:100%;padding:12px;border:1px solid #2a2f39;background:#0d1016;color:#fff;border-radius:12px}
