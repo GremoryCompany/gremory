@@ -52,7 +52,7 @@ const state = {
   admin:{reports:{},updates:{},directory:{},bans:{},selectedUid:'',supportChats:{},supportSelectedUid:'',supportUnsub:null,backupStatus:{}},
   tinder:{current:null,seen:[]},updates:{},notifications:{},notificationDismissed:{},ban:null,supportChat:{messages:{}},
   watchCode:null,watchRoom:null,watchUnsubs:[],watchEjecting:false,watchApplying:false,watchMediaStamp:"",
-  watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,screenSource:'',localFileVideo:null,localFileUrl:'',localFileName:'',localFileAudioCtx:null,localFileAudioSource:null,localFileAudioDest:null,localFileAudioGain:null,localFileAudioLimiter:null,screenVolume:Number(localStorage.getItem('gremory:watchScreenVolume')||150),localFileTransmitGainPct:Number(localStorage.getItem('gremory:watchTransmitGain')||150),fullscreenUiTimer:null,peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),dedicatedScreenStreams:new Map(),screenOutPeers:new Map(),screenInPeers:new Map(),screenOutCandidates:new Map(),screenInCandidates:new Map(),screenOfferAt:new Map(),screenOfferLocks:new Set(),processed:new Set(),pendingCandidates:new Map(),screenInOfferAt:new Map(),screenNoFlowAt:new Map(),recoveryTimer:null,starting:null,epoch:0,joinVoicePending:false,presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false},
+  watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,screenSource:'',localFileVideo:null,localFileUrl:'',localFileName:'',localFileAudioCtx:null,localFileAudioSource:null,localFileAudioDest:null,localFileAudioGain:null,localFileAudioLimiter:null,screenVolume:Number(localStorage.getItem('gremory:watchScreenVolume')||150),localFileTransmitGainPct:Number(localStorage.getItem('gremory:watchTransmitGain')||150),fullscreenUiTimer:null,peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),dedicatedScreenStreams:new Map(),screenOutPeers:new Map(),screenInPeers:new Map(),screenOutCandidates:new Map(),screenInCandidates:new Map(),screenOfferAt:new Map(),screenOfferLocks:new Set(),processed:new Set(),pendingCandidates:new Map(),screenInOfferAt:new Map(),screenNoFlowAt:new Map(),recoveryTimer:null,starting:null,epoch:0,joinVoicePending:false,presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false,repairingVoice:false,voicePlaybackBlocked:false,screenStarting:false},
   watchYoutube:{lastTime:0,lastState:-1,lastPublishAt:0},
   watchMusic:{currentId:'',volume:Number(localStorage.getItem('gremory:watchMusicVolume')||65),muted:localStorage.getItem('gremory:watchMusicMuted')==='1',engineReady:false,lastAdvanceId:'',adding:false,currentTime:0,lastClockSync:0,endedId:''},
   rtc:{joined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true},premiumPoll:null,
@@ -2084,6 +2084,7 @@ function watchVoiceUi(){
   if($('watchMicBtn')){$('watchMicBtn').hidden=!audio;$('watchMicBtn').textContent=rtc.micEnabled?'Silenciar':'Ativar microfone'}
   if($('watchShareBtn')){$('watchShareBtn').hidden=!state.watchCode;$('watchShareBtn').textContent=rtc.screenStream?(rtc.screenSource==='file'?'Parar filme local':'Parar compartilhamento'):'Compartilhar tela';$('watchShareBtn').classList.toggle('active',!!rtc.screenStream)}
   if($('watchLeaveVoiceBtn'))$('watchLeaveVoiceBtn').hidden=!audio;
+  const repair=$('watchRepairAudioBtn');if(repair){repair.disabled=!state.watchCode||rtc.repairingVoice;repair.textContent=rtc.repairingVoice?'Verificando...':'Reparar áudio'}
   if(state.watchRoom)renderWatchMusic(state.watchRoom.musicQueue||{},state.watchRoom.musicAccess||{},state.watchRoom.musicPlan||{},state.watchRoom.musicPlayback||{})
 }
 function setWatchRtcStatus(text,tone=''){
@@ -2112,7 +2113,7 @@ function ensureWatchCallCard(uid){
     const avatar=document.createElement('img');avatar.src=state.watchRoom?.members?.[uid]?.avatar||DEFAULT_AVATAR;avatar.alt='';
     const copy=document.createElement('div');copy.className='watch-call-copy';const name=document.createElement('strong');name.textContent=watchPeerName(uid);const status=document.createElement('small');status.textContent='Conectando...';copy.append(name,status);
     const view=document.createElement('button');view.type='button';view.className='mini-btn watch-view-screen';view.textContent='Assistir tela';view.hidden=true;
-    const audio=document.createElement('audio');audio.autoplay=true;audio.muted=!state.watchRtc.audioJoined;
+    const audio=document.createElement('audio');audio.autoplay=true;audio.playsInline=true;audio.muted=!state.watchRtc.audioJoined;audio.addEventListener('playing',()=>{state.watchRtc.voicePlaybackBlocked=false;updateWatchAudioHealth()});
     card.append(avatar,copy,view,audio);grid.appendChild(card)
   }
   return card
@@ -2327,10 +2328,87 @@ function refreshWatchScreenStage(){
   if(soundBtn){const hasAudio=!!atrack;soundBtn.hidden=isLocal;soundBtn.disabled=!hasAudio;soundBtn.textContent=!hasAudio?'Sem áudio':(state.watchRtc.screenSoundMuted?'Ativar som':'Som ligado')}
   refreshWatchVolumeUi()
 }
+function watchMicrophoneError(error){
+  if(!window.isSecureContext)return 'Microfone e tela exigem HTTPS. Abra a versão segura do site.';
+  if(['NotAllowedError','PermissionDeniedError','SecurityError'].includes(error?.name))return 'Microfone bloqueado. Clique no cadeado ao lado do endereço, permita Microfone para este site e tente Reparar áudio.';
+  if(['NotFoundError','DevicesNotFoundError'].includes(error?.name))return 'Nenhum microfone encontrado. Conecte um dispositivo de entrada e tente novamente.';
+  if(['NotReadableError','TrackStartError'].includes(error?.name))return 'O microfone está ocupado ou indisponível. Feche outros aplicativos que usam esse dispositivo e tente novamente.';
+  return 'Não foi possível usar o microfone'+(error?.message?`: ${error.message}`:'.');
+}
+function watchScreenPermissionError(error){
+  if(!window.isSecureContext)return 'Compartilhamento de tela requer HTTPS.';
+  if(error?.name==='InvalidStateError')return 'Não foi possível abrir o seletor de tela. Clique novamente em Compartilhar tela nesta aba ativa.';
+  if(['NotAllowedError','PermissionDeniedError'].includes(error?.name))return 'Compartilhamento cancelado ou bloqueado. Permita a captura no navegador e selecione a tela novamente.';
+  if(error?.name==='NotFoundError')return 'Nenhuma tela disponível para compartilhar.';
+  return 'Falha no compartilhamento'+(error?.message?`: ${error.message}`:'.');
+}
+function updateWatchAudioHealth(message=''){
+  const el=$('watchAudioHealth');if(!el)return;
+  if(message){el.textContent=message;return}
+  const rtc=state.watchRtc,track=rtc.localStream?.getAudioTracks?.()[0];
+  if(!rtc.audioJoined){el.textContent='Microfone desligado. Entre na voz para conversar.';return}
+  if(!track||track.readyState!=='live'){el.textContent='Microfone desconectado. Clique em Reparar áudio.';return}
+  if(!track.enabled){el.textContent='Seu microfone está silenciado.';return}
+  const peers=Object.entries(rtc.presence||{}).filter(([uid,p])=>uid!==state.user?.uid&&p?.audio);
+  if(!peers.length){el.textContent='Microfone ativo. Aguardando outra pessoa na voz.';return}
+  const connected=peers.filter(([uid])=>rtc.peers.get(uid)?.connectionState==='connected');
+  if(rtc.voicePlaybackBlocked){el.textContent='Seu navegador bloqueou a reprodução da chamada. Clique em Reparar áudio.';return}
+  el.textContent=connected.length===peers.length?'Microfone ativo • chamada conectada.':`Microfone ativo • ${connected.length}/${peers.length} conexões de voz prontas.`;
+}
+async function resumeWatchVoicePlayback(){
+  let blocked=false;
+  for(const audio of $$('#watchRemoteMedia .watch-call-card audio')){
+    if(!audio.srcObject?.getAudioTracks?.().length)continue;
+    audio.muted=!state.watchRtc.audioJoined;
+    if(state.watchRtc.audioJoined){try{await audio.play()}catch(e){if(e?.name==='NotAllowedError')blocked=true}}
+  }
+  state.watchRtc.voicePlaybackBlocked=blocked;updateWatchAudioHealth();return !blocked
+}
+async function syncWatchMicrophoneToPeers({renegotiate=false}={}){
+  const track=state.watchRtc.localStream?.getAudioTracks?.().find(t=>t.readyState==='live')||null;
+  for(const [uid,pc] of state.watchRtc.peers){
+    if(pc.signalingState==='closed')continue;
+    const sender=watchPcSender(pc,'audio','voice');
+    if(sender&&sender.track!==track)await sender.replaceTrack(track);
+    if(renegotiate)scheduleWatchRenegotiation(uid,'microphone-resync').catch(()=>{});
+  }
+}
+async function repairWatchAudio(){
+  const rtc=state.watchRtc;if(rtc.repairingVoice||!state.watchCode)return;
+  rtc.repairingVoice=true;watchVoiceUi();
+  try{
+    if(!navigator.mediaDevices?.getUserMedia||!window.isSecureContext){updateWatchAudioHealth('Microfone indisponível. Abra o site com HTTPS em um navegador compatível.');return}
+    // getUserMedia começa na interação do usuário, antes de operações de rede.
+    const existing=rtc.localStream?.getAudioTracks?.().find(t=>t.readyState==='live');
+    const newStream=rtc.audioJoined&&!existing?await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false}):null;
+    if(newStream){rtc.localStream?.getTracks?.().forEach(t=>t.stop());rtc.localStream=newStream;rtc.micEnabled=true;newStream.getAudioTracks()[0].onended=()=>{if(state.watchRtc.localStream===newStream)updateWatchAudioHealth('O microfone foi desconectado. Clique em Reparar áudio.')}}
+    if(!rtc.audioJoined){await joinWatchVoice();if(!rtc.audioJoined)return}
+    const track=rtc.localStream?.getAudioTracks?.()[0];if(!track||track.readyState!=='live')throw new Error('Microfone indisponível.');
+    track.enabled=true;rtc.micEnabled=true;
+    await syncWatchMicrophoneToPeers({renegotiate:true});
+    const code=state.watchCode;
+    if(code&&state.user)await update(ref(db,`watchVoice/${code}/${state.user.uid}`),{audio:true,muted:false}).catch(()=>{});
+    await resumeWatchVoicePlayback();
+    updateWatchAudioHealth(rtc.voicePlaybackBlocked?'Reprodução bloqueada. Clique em Reparar áudio novamente.':'Microfone reenviado para a chamada. Verifique se a outra pessoa consegue ouvir.');
+    toast('Áudio sincronizado sem recarregar a página.');
+  }catch(e){updateWatchAudioHealth(watchMicrophoneError(e));toast(watchMicrophoneError(e),7000)}
+  finally{rtc.repairingVoice=false;watchVoiceUi()}
+}
+async function checkWatchSitePermissions(){
+  const parts=[];
+  if(!window.isSecureContext)parts.push('HTTPS necessário para microfone e tela');
+  else if(!navigator.mediaDevices)parts.push('Este navegador não suporta captura de mídia');
+  else{
+    try{const p=await navigator.permissions?.query?.({name:'microphone'});parts.push('Microfone: '+(p?.state==='granted'?'permitido':p?.state==='denied'?'bloqueado (libere no cadeado do navegador)':'será solicitado ao entrar na voz'))}catch{parts.push('Microfone: verifique no cadeado do navegador')}
+    parts.push('Tela: '+(navigator.mediaDevices.getDisplayMedia?'disponível (escolha e autorize a cada compartilhamento)':'indisponível neste navegador'));
+    if(typeof Notification!=='undefined')parts.push('Notificações: '+(Notification.permission==='granted'?'permitidas':Notification.permission==='denied'?'bloqueadas':'ainda não autorizadas'));
+  }
+  updateWatchAudioHealth(parts.join(' • '));
+}
 function attachWatchRemote(uid){
   const voice=watchVoiceStreamFor(uid),screen=watchScreenStreamFor(uid),card=ensureWatchCallCard(uid),audio=card?.querySelector('audio');
   if(audio&&voice&&audio.srcObject!==voice)audio.srcObject=voice;
-  if(audio){audio.muted=!state.watchRtc.audioJoined;audio.play?.().catch(()=>{})}
+  if(audio){audio.muted=!state.watchRtc.audioJoined;audio.play?.().catch(e=>{if(e?.name==='NotAllowedError'){state.watchRtc.voicePlaybackBlocked=true;updateWatchAudioHealth()}})}
 
   for(const track of screen?.getVideoTracks?.()||[]){
     const refresh=()=>{updateWatchPeerScreenButton(uid);refreshWatchScreenStage()};
@@ -2401,7 +2479,7 @@ async function createWatchPeer(peerUid,initiator=false){
     }
   };
   pc.onconnectionstatechange=()=>{
-    if(pc.connectionState==='connected'){setWatchRtcStatus('Chamada conectada','ok');return}
+    if(pc.connectionState==='connected'){setWatchRtcStatus('Chamada conectada','ok');syncWatchMicrophoneToPeers().catch(()=>{});updateWatchAudioHealth();return}
     if(pc.connectionState==='disconnected'){
       setWatchRtcStatus('Conexão instável, recuperando...','warn');
       setTimeout(()=>{if(pc.connectionState==='disconnected'){if(String(state.user?.uid).localeCompare(peerUid)<0)negotiateWatchPeer(peerUid,{iceRestart:true,reason:'disconnected'}).catch(()=>{});else if(state.watchRtc.screenSharers.has(peerUid))requestWatchScreenFrom(peerUid,true)}},2200)
@@ -2409,7 +2487,7 @@ async function createWatchPeer(peerUid,initiator=false){
   };
 
   if(initiator)await negotiateWatchPeer(peerUid,{reason:'initial'});
-  return pc
+  updateWatchAudioHealth();return pc
 }
 async function flushWatchCandidates(uid,pc){const q=state.watchRtc.pendingCandidates.get(uid)||[];state.watchRtc.pendingCandidates.delete(uid);for(const c of q){try{await pc.addIceCandidate(c)}catch{}}}
 async function handleWatchRtc(id,msg,roomCode=state.watchCode){
@@ -2475,7 +2553,7 @@ function watchWatchPresence(){
     for(const [uid,person] of Object.entries(p)){
       const card=ensureWatchCallCard(uid);if(card){card.querySelector('strong').textContent=watchPeerName(uid)+(uid===state.user.uid?' (você)':'');card.querySelector('small').textContent=person.screen?(person.screenKind==='file'?`Transmitindo ${person.screenLabel||'filme local'}`:'Compartilhando tela'):person.audio?(person.muted?'Microfone silenciado':'Na chamada de voz'):'Assistindo';card.querySelector('img').src=person.avatar||state.watchRoom?.members?.[uid]?.avatar||DEFAULT_AVATAR}
     }
-    refreshWatchScreenStage()
+    refreshWatchScreenStage();updateWatchAudioHealth()
   })
 }
 function startWatchRtcRecovery(){
@@ -2484,6 +2562,8 @@ function startWatchRtcRecovery(){
   state.watchRtc.recoveryTimer=setInterval(()=>{
     if(!state.watchRtc.joined||state.watchCode!==code||!state.user)return;
     const rtc=state.watchRtc,me=String(state.user.uid),now=Date.now();
+    if(rtc.audioJoined)syncWatchMicrophoneToPeers().catch(()=>{});
+    updateWatchAudioHealth();
     for(const uid of Object.keys(rtc.presence||{})){
       if(uid===me)continue;
       const pc=rtc.peers.get(uid);
@@ -2534,25 +2614,35 @@ async function ensureWatchRtcSession(){
   finally{if(rtc.starting===starting)rtc.starting=null}
 }
 async function joinWatchVoice(){
-  if(state.watchRtc.joinVoicePending||state.watchRtc.audioJoined)return;
-  state.watchRtc.joinVoicePending=true;
-  if(!await ensureWatchRtcSession()){state.watchRtc.joinVoicePending=false;return;}
+  const rtc=state.watchRtc;
+  if(rtc.joinVoicePending||rtc.audioJoined)return;
+  if(!state.watchCode||!state.watchRoom?.members?.[state.user?.uid])return toast('Entre numa Watch Party antes de ligar o microfone.');
+  if(!navigator.mediaDevices?.getUserMedia||!window.isSecureContext)return toast('Microfone exige HTTPS e navegador compatível.',6500);
+  const joiningCode=state.watchCode,joiningUid=state.user.uid;
+  rtc.joinVoicePending=true;
+  let stream=null;
   try{
-    const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
-    state.watchRtc.localStream=stream;state.watchRtc.audioJoined=true;state.watchRtc.micEnabled=true;
+    // Abra a permissão de microfone diretamente no clique; a sessão Firebase vem depois.
+    stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+    if(state.watchCode!==joiningCode||state.user?.uid!==joiningUid){stream.getTracks().forEach(t=>t.stop());return}
+    if(!await ensureWatchRtcSession()){stream.getTracks().forEach(t=>t.stop());return}
+    if(state.watchCode!==joiningCode||state.user?.uid!==joiningUid){stream.getTracks().forEach(t=>t.stop());return}
+    rtc.localStream?.getTracks?.().forEach(t=>t.stop());rtc.localStream=stream;rtc.audioJoined=true;rtc.micEnabled=true;
     const track=stream.getAudioTracks()[0];
-    for(const pc of state.watchRtc.peers.values()){const sender=watchPcSender(pc,'audio','voice');if(sender)await sender.replaceTrack(track)}
-    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:true}).catch(()=>{});
-    $$('.watch-call-card audio').forEach(a=>{a.muted=false;a.play?.().catch(()=>{})});watchVoiceUi();toast('Você entrou na voz.')
-  }catch(e){toast(e?.name==='NotAllowedError'?'Permissão do microfone negada.':'Não foi possível abrir o microfone.')}
-  finally{state.watchRtc.joinVoicePending=false}
+    if(!track)throw new Error('Nenhuma faixa de microfone disponível.');
+    track.onended=()=>{if(rtc.localStream===stream)updateWatchAudioHealth('Microfone desconectado. Clique em Reparar áudio.')};
+    await syncWatchMicrophoneToPeers({renegotiate:true});
+    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:true,muted:false}).catch(()=>{});
+    await resumeWatchVoicePlayback();watchVoiceUi();updateWatchAudioHealth();toast('Você entrou na voz.')
+  }catch(e){if(stream&&!rtc.audioJoined)stream.getTracks().forEach(t=>t.stop());const msg=watchMicrophoneError(e);updateWatchAudioHealth(msg);toast(msg,7000)}
+  finally{rtc.joinVoicePending=false}
 }
-function toggleWatchMic(){const track=state.watchRtc.localStream?.getAudioTracks?.()[0];if(!track)return;track.enabled=!track.enabled;state.watchRtc.micEnabled=track.enabled;update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{muted:!track.enabled}).catch(()=>{});watchVoiceUi()}
+function toggleWatchMic(){const track=state.watchRtc.localStream?.getAudioTracks?.()[0];if(!track||track.readyState!=='live'){updateWatchAudioHealth('Microfone desconectado. Clique em Reparar áudio.');return}track.enabled=!track.enabled;state.watchRtc.micEnabled=track.enabled;update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{muted:!track.enabled}).catch(()=>{});watchVoiceUi();updateWatchAudioHealth()}
 async function leaveWatchAudio(silent=false){
   const track=state.watchRtc.localStream?.getAudioTracks?.()[0];if(track)track.stop();state.watchRtc.localStream=null;state.watchRtc.audioJoined=false;state.watchRtc.micEnabled=true;
   for(const pc of state.watchRtc.peers.values()){const sender=watchPcSender(pc,'audio','voice');if(sender)await sender.replaceTrack(null)}
   if(state.watchCode&&state.user)await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:false}).catch(()=>{});
-  $$('.watch-call-card audio').forEach(a=>a.muted=true);destroyWatchMusicPlayback();watchVoiceUi();if(!silent)toast('Você saiu da voz.')
+  $$('.watch-call-card audio').forEach(a=>a.muted=true);destroyWatchMusicPlayback();watchVoiceUi();updateWatchAudioHealth();if(!silent)toast('Você saiu da voz.')
 }
 function cleanupWatchLocalFilePlayer(){
   const rtc=state.watchRtc,v=rtc.localFileVideo,url=rtc.localFileUrl;
@@ -2649,16 +2739,18 @@ async function toggleWatchScreen(){
   if(!state.user||!state.watchCode)return toast('Entre numa sala primeiro.');
 
   if(state.watchRtc.screenStream){await stopWatchPublishedStream();return}
+  if(state.watchRtc.screenStarting)return;
 
   if(!navigator.mediaDevices?.getDisplayMedia)return toast('Este navegador não oferece captura de tela. Você pode assistir aqui e compartilhar pelo Chrome ou Edge no computador.');
-  if(!await ensureWatchRtcSession())return;
-
+  const sharingCode=state.watchCode,sharingUid=state.user.uid;
+  state.watchRtc.screenStarting=true;
+  let screenCapture=null;
   try{
     setWatchRtcStatus('Escolha a tela ou janela para compartilhar...','warn');
 
     // audio:true solicita o áudio da aba/tela quando o navegador/SO oferece suporte.
     // Em Chrome/Edge, ao compartilhar uma aba, marque "Compartilhar áudio".
-    const stream=await navigator.mediaDevices.getDisplayMedia({
+    const stream=screenCapture=await navigator.mediaDevices.getDisplayMedia({
       video:{frameRate:{ideal:24,max:30},width:{ideal:1280,max:1920},height:{ideal:720,max:1080}},
       audio:{suppressLocalAudioPlayback:false},
       systemAudio:'include',
@@ -2666,6 +2758,10 @@ async function toggleWatchScreen(){
       surfaceSwitching:'include'
     });
 
+    // Não publique uma captura em outra sala se o usuário navegou durante a seleção.
+    if(state.watchCode!==sharingCode||state.user?.uid!==sharingUid){stream.getTracks().forEach(t=>t.stop());return}
+    if(!await ensureWatchRtcSession()){stream.getTracks().forEach(t=>t.stop());return}
+    if(state.watchCode!==sharingCode||state.user?.uid!==sharingUid){stream.getTracks().forEach(t=>t.stop());return}
     const videoTrack=stream.getVideoTracks()[0];
     try{if(videoTrack)videoTrack.contentHint='motion'}catch{}
     const screenAudioTrack=stream.getAudioTracks()[0]||null;
@@ -2695,12 +2791,13 @@ async function toggleWatchScreen(){
     if(screenAudioTrack)toast('Tela + áudio compartilhados com a sala.');
     else toast('Tela compartilhada. Para transmitir som, no seletor do navegador marque “Compartilhar áudio”.',6000)
   }catch(e){
+    screenCapture?.getTracks?.().forEach(t=>{try{t.stop()}catch{}});
     state.watchRtc.screenStream=null;state.watchRtc.screenSource='';state.watchRtc.screenSharers.delete(String(state.user?.uid||''));
     if(state.watchCode&&state.user)await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{screen:false,screenAt:null,screenAudio:false}).catch(()=>{});
     setWatchRtcStatus('Compartilhamento não iniciado','');
-    if(e?.name!=='NotAllowedError')toast(`Não foi possível compartilhar a tela${e?.message?`: ${e.message}`:'.'}`);
+    const msg=watchScreenPermissionError(e);setWatchRtcStatus(msg,'warn');toast(msg,7000);
     watchVoiceUi()
-  }
+  }finally{state.watchRtc.screenStarting=false}
 }
 function watchFullscreenIsActive(){const stage=$('watchScreenStage');return !!stage&&(document.fullscreenElement===stage||document.webkitFullscreenElement===stage||document.body.classList.contains('watch-pseudo-fullscreen'))}
 function clearWatchFullscreenUiTimer(){if(state.watchRtc.fullscreenUiTimer){clearTimeout(state.watchRtc.fullscreenUiTimer);state.watchRtc.fullscreenUiTimer=null}}
@@ -2758,12 +2855,14 @@ async function leaveWatchVoice(silent=false){
   for(const pc of state.watchRtc.screenOutPeers.values()){try{pc.close()}catch{}}for(const pc of state.watchRtc.screenInPeers.values()){try{pc.close()}catch{}}
   state.watchRtc.peers.clear();state.watchRtc.screenOutPeers.clear();state.watchRtc.screenInPeers.clear();state.watchRtc.remoteStreams.clear();state.watchRtc.remoteVoiceStreams.clear();state.watchRtc.remoteScreenStreams.clear();state.watchRtc.dedicatedScreenStreams.clear();state.watchRtc.localStream?.getTracks?.().forEach(t=>t.stop());state.watchRtc.screenStream?.getTracks?.().forEach(t=>t.stop());
   cleanupWatchLocalFilePlayer();state.watchRtc.localStream=null;state.watchRtc.screenStream=null;state.watchRtc.screenSource='';state.watchRtc.joined=false;state.watchRtc.audioJoined=false;state.watchRtc.joinVoicePending=false;state.watchRtc.activeScreenUid=null;state.watchRtc.micEnabled=true;
-  state.watchRtc.processed.clear();state.watchRtc.pendingCandidates.clear();state.watchRtc.screenOutCandidates.clear();state.watchRtc.screenInCandidates.clear();state.watchRtc.screenOfferAt.clear();state.watchRtc.screenOfferLocks.clear();state.watchRtc.screenSharers.clear();state.watchRtc.screenInOfferAt.clear();state.watchRtc.screenNoFlowAt.clear();state.watchRtc.presence={};state.watchRtc.screenRetry.clear();state.watchRtc.makingOffer.clear();
+  state.watchRtc.voicePlaybackBlocked=false;state.watchRtc.repairingVoice=false;state.watchRtc.screenStarting=false;state.watchRtc.processed.clear();state.watchRtc.pendingCandidates.clear();state.watchRtc.screenOutCandidates.clear();state.watchRtc.screenInCandidates.clear();state.watchRtc.screenOfferAt.clear();state.watchRtc.screenOfferLocks.clear();state.watchRtc.screenSharers.clear();state.watchRtc.screenInOfferAt.clear();state.watchRtc.screenNoFlowAt.clear();state.watchRtc.presence={};state.watchRtc.screenRetry.clear();state.watchRtc.makingOffer.clear();
   if(code&&uid){await remove(ref(db,`watchVoice/${code}/${uid}`)).catch(()=>{});await remove(ref(db,`watchRtc/${code}/${uid}`)).catch(()=>{})}
   if($('watchRemoteMedia'))$('watchRemoteMedia').innerHTML='';if($('watchVoiceCount'))$('watchVoiceCount').textContent='0';
-  destroyWatchMusicPlayback();refreshWatchScreenStage();watchVoiceUi();if(!silent)toast('Você saiu da chamada.')
+  destroyWatchMusicPlayback();refreshWatchScreenStage();watchVoiceUi();updateWatchAudioHealth();if(!silent)toast('Você saiu da chamada.')
 }
 $('watchJoinVoiceBtn')?.addEventListener('click',joinWatchVoice);
+$('watchRepairAudioBtn')?.addEventListener('click',repairWatchAudio);
+$('watchCheckPermissionsBtn')?.addEventListener('click',checkWatchSitePermissions);
 $('watchMicBtn')?.addEventListener('click',toggleWatchMic);
 $('watchShareBtn')?.addEventListener('click',toggleWatchScreen);
 $('watchScreenFullscreenBtn')?.addEventListener('click',fullscreenWatchScreen);

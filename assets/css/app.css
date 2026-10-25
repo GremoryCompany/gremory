@@ -1232,3 +1232,9 @@ body.watch-pseudo-fullscreen #watchScreenStage.watch-fullscreen-ui-hidden{cursor
 .watch-banned-row{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#0b1016;border:1px solid #252b34;padding:6px 9px;border-radius:10px;font-size:12px}
 .watch-banned-row span{overflow-wrap:anywhere;min-width:0}
 .watch-banned-row .mini-btn{flex-shrink:0}
+
+/* Watch Party: estado de áudio/permissões, responsivo e sem F5 */
+.watch-audio-health{display:block;color:#aeb9c9;font-size:11px;line-height:1.5;padding:9px 11px;margin:4px 0 10px;border:1px solid #303b49;border-radius:10px;background:#0b1016;overflow-wrap:anywhere}
+.watch-call-panel .watch-voice-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.watch-call-panel .watch-voice-actions .btn{min-width:0;white-space:normal}
+@media(max-width:480px){.watch-call-panel .watch-voice-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
