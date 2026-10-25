@@ -1223,3 +1223,12 @@ body.watch-pseudo-fullscreen #watchScreenStage.watch-fullscreen-ui-hidden{cursor
 .support-chat-panel{margin-top:14px}.support-chat-list{display:grid;gap:8px;max-height:420px;overflow:auto;padding:8px}.support-message{max-width:min(82%,620px);padding:9px 11px;border-radius:14px;background:#171c24;border:1px solid #272e39}.support-message.admin{margin-left:auto;background:#2a1119;border-color:#5a2632}.support-message b,.support-message p,.support-message small{display:block}.support-message p{margin:4px 0;white-space:pre-wrap}.support-message small{color:var(--muted);font-size:9px}.support-chat-form{display:flex;gap:8px;margin-top:9px}.support-chat-form input{flex:1;min-width:0}
 .admin-support-conversation{width:100%;text-align:left;display:grid;gap:3px;padding:10px;border:1px solid #262d37;border-radius:11px;background:#0b0e13;color:#fff}.admin-support-conversation small{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .support-icon{overflow:hidden}.support-icon img{display:block;max-width:100%;max-height:100%}.admin-grid>.panel{min-width:0}.admin-account-tools input{min-width:0;width:100%;padding:12px;border:1px solid #2a2f39;background:#0d1016;color:#fff;border-radius:12px}
+
+/* Watch Party r4: ações do host e banimento em tempo real */
+.watch-member-item .watch-ban-btn{flex:none;margin-left:auto;min-height:30px;white-space:nowrap}
+.watch-banned-list{margin-top:10px;border-top:1px solid #272e38;padding-top:9px;display:grid;gap:7px}
+.watch-banned-list[hidden]{display:none!important}
+.watch-banned-list>small{font-size:11px;color:var(--muted)}
+.watch-banned-row{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#0b1016;border:1px solid #252b34;padding:6px 9px;border-radius:10px;font-size:12px}
+.watch-banned-row span{overflow-wrap:anywhere;min-width:0}
+.watch-banned-row .mini-btn{flex-shrink:0}

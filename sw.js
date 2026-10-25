@@ -1,9 +1,9 @@
-const CACHE='gremory-watch-realtime-r3';
+const CACHE='gremory-watch-room-music-ban-r4';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261025-watch-realtime-r3',
-  '/assets/js/app.js?v=20261025-watch-realtime-r3',
+  '/assets/css/app.css?v=20261025-watch-room-music-ban-r4',
+  '/assets/js/app.js?v=20261025-watch-room-music-ban-r4',
   '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
