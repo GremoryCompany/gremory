@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261025-watch-realtime-r3">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261023-v13-11-games-realtime">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -282,14 +282,17 @@
           </article>
 
           <article class="panel site-raid-panel" id="siteRaidPanel">
-            <div class="panel-head"><div><span class="tag">RAID GLOBAL</span><h3>Raid Pokémon</h3></div><span class="pill" id="siteRaidStatus">Aguardando</span></div>
-            <p class="panel-help">Entre com sua equipe ativa, cause dano junto com outros treinadores e receba recompensas ao derrotar o boss.</p>
-            <div class="site-raid-stage" id="siteRaidStage"><div class="empty-state small">Nenhuma raid ativa.</div></div>
+            <div class="panel-head">
+              <div><span class="tag">RAID GLOBAL</span><h3>Raid Pokémon</h3></div>
+              <span class="pill" id="siteRaidStatus">Aguardando</span>
+            </div>
+            <p class="panel-help">Quando uma Raid Global estiver ativa, o boss aparece aqui em tempo real. Ataque com sua equipe vinculada à Charlotte e participe das recompensas.</p>
+            <div class="site-raid-stage" id="siteRaidStage"><div class="empty-state small">Nenhuma raid ativa. O modo automático pode iniciar uma nova raid a cada hora.</div></div>
             <div class="site-raid-prefs">
-              <label class="check-row"><input id="raidWhatsappNotify" type="checkbox"><span>Receber aviso de novas raids pela Charlotte</span></label>
+              <label class="check-row"><input id="raidWhatsappNotify" type="checkbox"><span>Receber avisos de Raid no WhatsApp</span></label>
               <div class="site-raid-admin" id="siteRaidAdmin" hidden>
-                <button class="btn primary" id="siteRaidStartBtn" type="button">Iniciar raid agora</button>
-                <label class="check-row"><input id="siteRaidAutoToggle" type="checkbox"><span>Raids automáticas</span></label>
+                <label class="check-row"><input id="siteRaidAutoToggle" type="checkbox"><span>Raid automática</span></label>
+                <button class="btn primary" id="siteRaidStartBtn" type="button">Iniciar Raid Global</button>
               </div>
             </div>
           </article>
@@ -303,8 +306,8 @@
               <div class="premier-item"><span>⚪ Premier Ball</span><strong id="pokemonPremierBallCount">0</strong><small>Recompensa de raids</small></div>
             </div>
             <div class="pokemon-item-shop">
-              <div><strong>🧪 Poção</strong><small>Recupera 50% do HP máximo de um Pokémon machucado.</small></div>
-              <div class="pokemon-item-shop-actions"><span>₹500</span><button class="btn" id="pokemonBuyPotionBtn" type="button">Comprar Poção</button></div>
+              <div><strong>🧪 Poção</strong><small>Recupera 35% do HP máximo sem precisar sair da coleção.</small></div>
+              <div class="pokemon-item-shop-actions"><span>₹80</span><button class="btn" id="pokemonBuyPotionBtn" type="button">Comprar Poção</button></div>
             </div>
           </article>
 
@@ -937,14 +940,6 @@
                 </div>
               </form>
               <div id="adminUserResult" class="admin-user-result"></div>
-              <div class="admin-account-tools">
-                <button class="btn" id="adminSyncUserBtn" type="button">Sincronizar conta</button>
-                <button class="btn" id="adminGenerateLinkBtn" type="button">Gerar código de vínculo</button>
-                <label>Foto do perfil (URL)<input id="adminProfileAvatarUrl" type="text" placeholder="https://..."></label>
-                <div class="profile-upload-row"><label class="btn upload-btn">Escolher foto<input id="adminProfileAvatarFile" type="file" accept="image/*" hidden></label><button class="btn primary" id="adminProfileAvatarSaveBtn" type="button">Salvar foto</button></div>
-                <div class="admin-link-code" id="adminLinkCodeBox" hidden><code id="adminLinkCommand"></code><button class="mini-btn" id="adminCopyLinkCommandBtn" type="button">Copiar</button></div>
-              </div>
-
             </article>
 
             <article class="panel admin-panel">
@@ -989,7 +984,7 @@
             <article class="panel admin-panel">
               <div class="panel-head"><div><span class="tag">BACKUP</span><h3>Dados da Charlotte</h3></div><span class="pill" id="adminBackupStatus">Aguardando</span></div>
               <p class="muted" id="adminBackupMeta">Aguardando a primeira cópia de segurança da Charlotte.</p>
-              <div class="admin-row-actions"><button class="btn primary" id="adminBackupNowBtn" type="button">Criar backup agora</button><button class="btn" id="adminBackupRestoreBtn" type="button">Restaurar último backup</button></div>
+              <button class="btn" id="adminBackupNowBtn" type="button">Criar backup agora</button>
             </article>
           </div>
         </section>
@@ -1036,8 +1031,7 @@
       <div class="profile-summary"><img id="profileAvatarPreview" src="/assets/img/profile.jpg" alt=""><div><strong id="profileNameView">Usuário</strong><span id="profileUsernameView">@usuario</span><span id="profilePlanView">Padrão</span></div></div>
       <form id="profileForm" class="profile-form">
         <label>Nome<input id="profileName" maxlength="40"></label><label>Nome de usuário<input id="profileUsername" maxlength="20" autocomplete="username" placeholder="usuario"><small class="field-hint" id="profileUsernameHint">Pode ser alterado uma vez a cada 7 dias.</small></label>
-        <label>Foto (URL ou arquivo)<input id="profileAvatar" type="text" placeholder="https://..."></label>
-        <div class="profile-upload-row"><label class="btn upload-btn">Escolher foto<input id="profileAvatarFile" type="file" accept="image/*" hidden></label><small id="profileAvatarFileStatus">JPG, PNG ou WEBP</small></div>
+        <label>Foto (URL)<input id="profileAvatar" type="url" placeholder="https://..."></label>
         <label>Bio<textarea id="profileBio" maxlength="500" rows="3" placeholder="Seu recado"></textarea></label>
         <label>Anime favorito<input id="profileFavoriteAnime" maxlength="80"></label>
         <div class="profile-preferences">
@@ -1098,6 +1092,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261025-watch-realtime-r3"></script>
+  <script type="module" src="/assets/js/app.js?v=20261025-v13-12-slots-site"></script>
 </body>
 </html>

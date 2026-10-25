@@ -719,16 +719,60 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   async function processHangmanExit(uid,data){const gameId=String(data.gameId||''),gr=rtdb.ref(`hangmanGames/${gameId}`),sn=await gr.once('value');if(!sn.exists())return{};const g={id:gameId,...sn.val()};if(g.status!=='active'||!g.players?.[uid])return{};const secret=(await rtdb.ref(`gameSecrets/hangman/${gameId}`).once('value').catch(()=>null))?.val?.()||{},winnerUid=Object.keys(g.players).find(x=>x!==uid);return finishHangman(gr,g,winnerUid,String(secret.word||''),`${g.players[uid].name} saiu da partida.`)}
 
   // ======================================================
-  // SLOTS SOLO — Rupias reais da Charlotte
+  // SLOTS SOLO — o SITE sorteia; bot só liquida a carteira.
+  // A fonte do resultado é siteSlotsPending (escrita exclusivamente pelo
+  // servidor via Firebase Admin). Um navegador não pode indicar prêmios.
   // ======================================================
   const SLOT_ITEMS=[{symbol:'✦',weight:28,mult:3},{symbol:'♥',weight:22,mult:4},{symbol:'☾',weight:18,mult:5},{symbol:'◆',weight:14,mult:6},{symbol:'⚡',weight:9,mult:8},{symbol:'♛',weight:6,mult:12},{symbol:'7',weight:3,mult:25}];
-  function slotSymbol(){const total=SLOT_ITEMS.reduce((n,x)=>n+x.weight,0),roll=crypto.randomInt(1,total+1);let acc=0;for(const item of SLOT_ITEMS){acc+=item.weight;if(roll<=acc)return item}return SLOT_ITEMS[0]}
-  function slotPayout(items,bet){const syms=items.map(x=>x.symbol);if(syms[0]===syms[1]&&syms[1]===syms[2])return{payout:Math.floor(bet*items[0].mult),jackpot:syms[0]==='7',label:`Trinca ${syms[0]}`};if(new Set(syms).size===2)return{payout:Math.floor(bet*1.2),jackpot:false,label:'Dupla'};return{payout:0,jackpot:false,label:'Sem prêmio'}}
-  async function processSlotsSpin(uid,jid,data){
-    if(!registeredFor(jid))throw new Error('Use /reg na Charlotte antes de jogar Slots.');if(typeof economy.delkoin!=='function'||typeof economy.addkoin!=='function')throw new Error('Sistema de Rupias indisponível.');const bet=Math.floor(Number(data.bet||0));if(!Number.isFinite(bet)||bet<10||bet>5000)throw new Error('A aposta deve ficar entre ₹10 e ₹5.000.');const balance=balanceFor(jid);if(balance<bet)throw new Error(`Saldo insuficiente. Você possui ₹${balance}.`);
-    await economy.delkoin(jid,bet);const items=[slotSymbol(),slotSymbol(),slotSymbol()],result=slotPayout(items,bet);if(result.payout>0)await economy.addkoin(jid,result.payout);try{if(result.payout>0)await achievements.registrarEventoConquista?.({sender:jid,evento:'dinheiro_ganho',qtd:result.payout})}catch{}const finalBalance=balanceFor(jid);await syncAccount(uid,jid).catch(()=>{});return{symbols:items.map(x=>x.symbol),bet,payout:result.payout,net:result.payout-bet,balance:finalBalance,jackpot:result.jackpot,label:result.label};
+  function slotPayout(items,bet){const syms=items.map(x=>x.symbol);if(syms[0]===syms[1]&&syms[1]===syms[2])return{payout:Math.floor(bet*items[0].mult),jackpot:syms[0]==='7',label:`Trinca ${syms[0]}`};if(new Set(syms).size===2)return{payout:Math.floor(bet*1.2),jackpot:false,label:'Dupla'};return{payout:0,jackpot:false,label:'Sem prêmio'};}
+  async function processSlotsSettle(uid,jid,data,jobId){
+    const spinId=String(data.spinId||'');
+    if(!/^spin_[a-f0-9]{32}$/.test(spinId))throw new Error('Identificador da aposta inválido.');
+    const receiptRef=rtdb.ref(`siteSlotsSettlements/${uid}/${spinId}`);
+    const prior=(await receiptRef.once('value')).val()||null;
+    if(prior?.status==='done')return{bet:prior.bet,payout:prior.payout,balance:prior.balance,spinId};
+    if(prior)throw new Error('Essa aposta está em análise; nenhum débito adicional será feito.');
+    const pendingRef=rtdb.ref(`siteSlotsPending/${uid}`);
+    const pending=(await pendingRef.once('value')).val()||null;
+    if(!pending||String(pending.spinId)!==spinId||String(pending.jobId)!==String(jobId)||String(pending.uid)!==uid)throw new Error('Aposta não autorizada pelo servidor do site.');
+    const bet=Number(pending.bet),payout=Number(pending.payout),symbols=pending.symbols;
+    if(!Number.isSafeInteger(bet)||bet<10||bet>5000||!Number.isSafeInteger(payout)||!Array.isArray(symbols)||symbols.length!==3)throw new Error('Aposta inválida.');
+    const items=symbols.map(x=>SLOT_ITEMS.find(k=>k.symbol===x));
+    if(items.some(x=>!x))throw new Error('Símbolos inválidos.');
+    const valid=slotPayout(items,bet);
+    if(payout!==valid.payout||!!pending.jackpot!==valid.jackpot)throw new Error('Prêmio não confere com os símbolos.');
+    if(!registeredFor(jid))throw new Error('Use /reg na Charlotte antes de jogar Slots.');
+    if(typeof economy.delkoin!=='function'||typeof economy.addkoin!=='function')throw new Error('Sistema de rúpias indisponível.');
+    const previousBalance=balanceFor(jid);
+    if(previousBalance<bet)throw new Error(`Saldo insuficiente. Você possui ₹${previousBalance}.`);
+    // Um recibo processing funciona como trava de idempotência: numa falha ou
+    // reinício durante a operação, não repetimos o débito automaticamente.
+    const claim=await receiptRef.transaction(current=>current?undefined:{status:'processing',spinId,jobId,bet,payout,previousBalance,startedAt:Date.now()},undefined,false);
+    if(!claim.committed)throw new Error('Aposta já reservada para liquidação.');
+    try{
+      const net=payout-bet;
+      // Uma única alteração líquida para reduzir a janela de falha e manter a
+      // carteira da Charlotte como autoridade do saldo.
+      if(net<0)await economy.delkoin(jid,-net);
+      else if(net>0)await economy.addkoin(jid,net);
+      const balance=balanceFor(jid);
+      await receiptRef.update({status:'done',balance,finishedAt:Date.now()});
+      await pendingRef.transaction(current=>current?.spinId===spinId?null:undefined,undefined,false);
+      try{if(net>0)await achievements.registrarEventoConquista?.({sender:jid,evento:'dinheiro_ganho',qtd:net})}catch{}
+      await syncAccount(uid,jid).catch(()=>{});
+      return{bet,payout,net,balance,spinId,symbols,jackpot:valid.jackpot,label:valid.label};
+    }catch(e){
+      // Falha após reservar a carteira: nunca cobrar duas vezes automaticamente.
+      await receiptRef.update({status:'review',error:String(e?.message||e).slice(0,250),reviewAt:Date.now()}).catch(()=>{});
+      throw new Error('Liquidação em análise: verifique o extrato antes de liberar outro giro.');
+    }
   }
-
+  async function releaseFailedSlotReservation(uid,data,jobId){
+    const spinId=String(data?.spinId||'');if(!/^spin_[a-f0-9]{32}$/.test(spinId))return;
+    const receipt=(await rtdb.ref(`siteSlotsSettlements/${uid}/${spinId}`).once('value').catch(()=>null))?.val?.();
+    if(receipt)return; // pode ter ocorrido uma alteração financeira; manter bloqueado.
+    await rtdb.ref(`siteSlotsPending/${uid}`).transaction(current=>current?.spinId===spinId&&current?.jobId===jobId?null:undefined,undefined,false).catch(()=>{});
+  }
 
   function tinderNormalizeProfile(p={}){
     return{...p,jid:cleanJid(p.jid||''),nome:String(p.nome||'Usuário').slice(0,60),idade:String(p.idade||''),bio:String(p.bio||'').slice(0,300),likes:Number(p.likes||0),matches:Number(p.matches||0),likedBy:Array.isArray(p.likedBy)?p.likedBy:[],matchedWith:Array.isArray(p.matchedWith)?p.matchedWith:[],ativo:p.ativo!==false};
@@ -1111,7 +1155,7 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
       else if(type==='hangman_create')payload=await processHangmanCreate(uid,data);
       else if(type==='hangman_guess')payload=await processHangmanGuess(uid,data);
       else if(type==='hangman_exit')payload=await processHangmanExit(uid,data);
-      else if(type==='slots_spin')payload=await processSlotsSpin(uid,jid,data);
+      else if(type==='slots_settle')payload=await processSlotsSettle(uid,jid,data,jobId);
       else if(type==='sync_identity')payload=await syncIdentity(uid,jid,data);
       else if(type==='tinder_profile_get')payload=await processTinderProfileGet(uid,jid);
       else if(type==='tinder_profile_save')payload=await processTinderProfileSave(uid,jid,data);
@@ -1123,20 +1167,25 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
       else if(type==='watch_music_advance')payload=await processWatchMusicAdvance(uid,data);
       else throw new Error('Ação do site não permitida.');
       await rtdb.ref(`charlottePublic/${uid}/lastError`).remove().catch(()=>{});await writeResult(uid,jobId,type,payload||{});
-    }catch(e){logger.log(`[SITE BRIDGE] job ${type}:`,e.message);await writeError(uid,jobId,type,e)}finally{await rtdb.ref(`siteBridgeJobs/${uid}/${jobId}`).remove().catch(()=>{})}
+    }catch(e){logger.log(`[SITE BRIDGE] job ${type}:`,e.message);if(type==='slots_settle')await releaseFailedSlotReservation(uid,data,jobId).catch(()=>{});await writeError(uid,jobId,type,e)}finally{await rtdb.ref(`siteBridgeJobs/${uid}/${jobId}`).remove().catch(()=>{})}
   }
-  function processJob(uid,jobId,data){const prev=userQueues.get(uid)||Promise.resolve(),next=prev.catch(()=>{}).then(()=>processJobNow(uid,jobId,data));userQueues.set(uid,next);next.finally(()=>{if(userQueues.get(uid)===next)userQueues.delete(uid)});return next;}
+  function processJob(uid,jobId,data){
+    // Enfileira cada pedido UMA VEZ. O listener não deve criar uma segunda fila,
+    // pois isso faria a Promise do job aguardar a si mesma e bloquear o Slots.
+    const prev=userQueues.get(uid)||Promise.resolve();
+    const job=prev.catch(()=>{}).then(()=>processJobNow(uid,jobId,data));
+    const tracked=job.catch(e=>logger.log('[SITE BRIDGE] fila:',e.message)).finally(()=>{
+      if(userQueues.get(uid)===tracked)userQueues.delete(uid);
+    });
+    userQueues.set(uid,tracked);
+    return tracked;
+  }
   function watchUserJobs(uid){
     if(watchedUsers.has(uid))return;
     watchedUsers.add(uid);
     const userRef=rtdb.ref(`siteBridgeJobs/${uid}`);
-    // Serializa os jobs por usuário. Isso impede giros de Slots simultâneos de
-    // lerem o mesmo saldo antes do débito e também deixa as ações dos jogos em ordem.
-    const handler=sn=>{
-      const previous=userQueues.get(uid)||Promise.resolve();
-      const next=previous.catch(()=>{}).then(()=>processJob(uid,sn.key,sn.val())).finally(()=>{if(userQueues.get(uid)===next)userQueues.delete(uid)});
-      userQueues.set(uid,next);
-    };
+    // Uma fila por usuário: impede giros simultâneos de lerem o mesmo saldo.
+    const handler=sn=>{processJob(uid,sn.key,sn.val());};
     userRef.on('child_added',handler);
     watchedRefs.set(uid,{userRef,handler});
   }

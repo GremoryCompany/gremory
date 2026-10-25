@@ -1,9 +1,9 @@
-const CACHE='gremory-watch-realtime-r3';
+const CACHE='gremory-v13-12-slots-site-20261025';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261025-watch-realtime-r3',
-  '/assets/js/app.js?v=20261025-watch-realtime-r3',
+  '/assets/css/app.css?v=20261025-v13-12-slots-site',
+  '/assets/js/app.js?v=20261025-v13-12-slots-site',
   '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',

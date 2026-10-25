@@ -1,0 +1,75 @@
+PATCH GREMORY: SLOT CONTROLADO PELO SITE / CARTEIRA CHARLOTTE
+===========================================================
+
+Objetivo:
+- O site (API da Vercel) sorteia os três símbolos e calcula o prêmio.
+- O site mostra o resultado ao terminar o giro, SEM esperar o bot sortear.
+- O bridge da Charlotte apenas aplica a diferença líquida na carteira real,
+  uma única vez, e devolve a confirmação financeira pelo Firebase.
+- Não existe mais pedido 'slots_spin' ao bot. O tipo interno 'slots_settle'
+  é criado exclusivamente pelo servidor da Vercel (Firebase Admin).
+- Se a Charlotte cair, o prêmio aparece como PENDENTE, e novos giros ficam
+  bloqueados até a liquidação. Isto impede apostas sem saldo real.
+
+INSTALAÇÃO — SOMENTE OS ARQUIVOS DESTE ZIP
+-----------------------------------------
+NO SITE, substituir/adicionar:
+  assets/js/app.js
+  api/main.js
+  api/slots.js                  (novo)
+  index.html                   (somente cache-bust do app.js)
+  sw.js                        (novo cache do service worker)
+  package.json                 (adiciona firebase-admin)
+
+NO BOT, substituir:
+  database/gremory_site_bridge.js
+
+Mantenha a estrutura das pastas acima; reinicie o bot e faça deploy do site.
+Instale dependências do site via npm install ou pelo build automático Vercel.
+
+CONFIGURAÇÃO OBRIGATÓRIA NA VERCEL — ENVIRONMENT VARIABLES:
+  FIREBASE_SERVICE_ACCOUNT_JSON = JSON COMPLETO de uma service account do MESMO
+  projeto Firebase da Charlotte. Pode ser texto JSON ou base64.
+  FIREBASE_DATABASE_URL = URL do Realtime Database (se diferente da padrão).
+
+Alternativamente, configure na Vercel:
+  FIREBASE_PROJECT_ID
+  FIREBASE_CLIENT_EMAIL
+  FIREBASE_PRIVATE_KEY ou FIREBASE_PRIVATE_KEY_BASE64
+  FIREBASE_DATABASE_URL
+
+Estas credenciais são SECRETAS e devem ficar SOMENTE nas variáveis do SERVIDOR
+Vercel, NUNCA nos arquivos JS da pasta assets/js nem no navegador.
+O bot já costuma ter as próprias credenciais Firebase; NÃO copie a chave
+para o código do site. O Firebase Admin do servidor não precisa de novas
+permissões para ler/gravar os nós internos, desde que use o projeto correto.
+
+FIREBASE RULES:
+  Este patch NÃO exige liberar novos caminhos ao navegador. Os registros
+  siteSlotsPending e siteSlotsSettlements devem continuar inacessíveis para
+  gravação pelo cliente. A API administra os dois nós com Firebase Admin.
+  O cliente já lê siteBridgeResults/${uid} conforme as regras antigas.
+
+SEGURANÇA E FALHAS:
+  1) Sorteio feito no servidor com crypto.randomInt, não controlável via JS.
+  2) Servidor registra aposta pendente ANTES de exibir resultado.
+  3) Um giro pendente por usuário (trava transacional no Firebase).
+  4) O bot valida o resultado no registro do servidor e recalcula payout.
+  5) Um recibo persistido impede cobrança/crédito duplicado por repetição.
+  6) Em interrupções no meio da liquidação, a conta entra em análise, sem
+     reaplicar automaticamente (para evitar dupla cobrança).
+  7) Nunca edite o saldo manualmente em charlotteSync: é só o espelho.
+
+TESTE:
+  1) Publique o site e reinicie o bot.
+  2) Vincule o WhatsApp e confira a carteira.
+  3) Faça UM giro de ₹10.
+  4) Confira o resultado visual sem 'Charlotte demorou para responder'.
+  5) Confira se o saldo verdadeiro foi confirmado no site e no bot.
+  6) Tente dois giros simultâneos em abas diferentes: só um é autorizado.
+
+IMPORTANTE:
+  Sem a credencial Firebase Admin configurada na Vercel, a API retorna
+  erro 503 e NÃO inicia apostas. É intencional, por segurança.
+  Se uma liquidação entrar em 'review', não remova manualmente o registro
+  sem conferir primeiro se houve débito/crédito na carteira real.
