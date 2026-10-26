@@ -1,9 +1,9 @@
-const CACHE='gremory-v13-14-watch-audio-link-reset-20261026';
+const CACHE='gremory-v13-15-backup-restore-20261026';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261026-v13-14-audio-link-reset',
-  '/assets/js/app.js?v=20261026-v13-14-audio-link-reset',
+  '/assets/css/app.css?v=20261026-v13-15-backup-restore',
+  '/assets/js/app.js?v=20261026-v13-15-backup-restore',
   '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',

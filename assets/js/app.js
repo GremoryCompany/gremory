@@ -1087,6 +1087,18 @@ $('adminResetCharlotteLinkBtn')?.addEventListener('click',async()=>{
   }catch(e){if($('adminResetCharlotteLinkBtn'))$('adminResetCharlotteLinkBtn').disabled=false;toast(e.message||'Não foi possível resetar o vínculo.',6000)}
 });
 
+$('adminCreateCharlotteLinkBtn')?.addEventListener('click',async()=>{
+  try{
+    if(!state.admin.selectedUid)await adminLookupUser();
+    const targetUid=requireAdminSelectedUid(),btn=$('adminCreateCharlotteLinkBtn');if(btn)btn.disabled=true;
+    const r=await bridgeRequest('admin_create_link_code',{targetUid},30000,false),code=String(r?.code||'').trim();
+    if(!code)throw new Error('O bridge não retornou o código.');
+    const help=$('adminCharlotteLinkHelp');if(help)help.innerHTML=`Código para <strong>${escText(state.admin.directory?.[targetUid]?.nome||targetUid)}</strong>: <code>${escText(code)}</code> • expira em 10 minutos • envie <code>/vincular ${escText(code)}</code> para a Charlotte.`;
+    try{await navigator.clipboard?.writeText?.(code)}catch{}
+    toast(`Código ${code} criado e copiado.`,7000);if(btn)btn.disabled=false;
+  }catch(e){if($('adminCreateCharlotteLinkBtn'))$('adminCreateCharlotteLinkBtn').disabled=false;toast(e.message||'Não foi possível gerar o código.',6000)}
+});
+
 
 function requireAdminSelectedUid(){const uid=String(state.admin.selectedUid||'').trim();if(!uid)throw new Error('Localize um usuário primeiro.');return uid}
 async function adminGrantCurrency(sign=1){try{const targetUid=requireAdminSelectedUid(),amount=Math.max(1,Math.floor(Number($('adminCurrencyAmount')?.value||0)))*Math.sign(sign||1);const r=await bridgeRequest('admin_grant_currency',{targetUid,amount},25000,false);toast(`Saldo atualizado: ₹${formatNumber(r.balance||0)}.`);await loadAdminDashboard()}catch(e){toast(e.message)}}
@@ -1098,8 +1110,31 @@ $('adminNotificationForm')?.addEventListener('submit',async ev=>{ev.preventDefau
 $('adminStoreForm')?.addEventListener('submit',async ev=>{ev.preventDefault();try{const itemId=String($('adminStoreId')?.value||'').trim().toLowerCase(),name=String($('adminStoreName')?.value||'').trim(),price=Number($('adminStorePrice')?.value||0),slot=$('adminStoreSlot')?.value||'cover',mediaUrl=String($('adminStoreMediaUrl')?.value||'').trim();await bridgeRequest('admin_store_upsert',{item:{id:itemId,name,price,slot,mediaUrl,mediaKind:slot==='decor'?'sprite':'gif'}},25000,false);toast('Personalização salva na loja.')}catch(e){toast(e.message)}});
 $('adminStoreDeleteBtn')?.addEventListener('click',async()=>{try{const itemId=String($('adminStoreId')?.value||'').trim().toLowerCase();if(!itemId)throw new Error('Informe o ID do item.');await bridgeRequest('admin_store_delete',{itemId},20000,false);toast('Item removido da loja.')}catch(e){toast(e.message)}});
 
-function renderAdminBackupStatus(){const b=state.admin.backupStatus||{};if($('adminBackupStatus'))$('adminBackupStatus').textContent=b.lastSuccessAt?'Ativo':'Aguardando';if($('adminBackupMeta'))$('adminBackupMeta').textContent=b.lastSuccessAt?`Última cópia: ${shortDateTime(b.lastSuccessAt)} • ${Number(b.files||0)} arquivo(s) • ${Number(b.skipped||0)} ignorado(s)`:'Aguardando a primeira cópia de segurança da Charlotte.'}
-$('adminBackupNowBtn')?.addEventListener('click',async()=>{try{const btn=$('adminBackupNowBtn');btn.disabled=true;const r=await bridgeRequest('admin_backup_now',{},60000,false);toast(`Backup concluído: ${r.files||0} arquivo(s).`);await loadAdminDashboard();btn.disabled=false}catch(e){if($('adminBackupNowBtn'))$('adminBackupNowBtn').disabled=false;toast(e.message)}});
+function renderAdminBackupStatus(){
+  const b=state.admin.backupStatus||{},pill=$('adminBackupStatus'),meta=$('adminBackupMeta');
+  if(pill)pill.textContent=b.restartRequired?'Reiniciar':b.recoveryRequired?'Recuperação':b.lastSuccessAt?'Ativo':'Aguardando';
+  if(meta){
+    if(b.restartRequired)meta.textContent=`Backup restaurado: ${Number(b.restoredFiles||0)} arquivo(s). Reinicie a Charlotte para carregar os dados restaurados.`;
+    else if(b.recoveryRequired)meta.textContent=`Backup remoto protegido. ${Number(b.remoteFiles||0)} arquivo(s) no Firebase; ${Number(b.missingFiles||0)} ausente(s) e ${Number(b.mismatchedFiles||0)} diferente(s) localmente. Restaure antes de usar a Charlotte.`;
+    else if(b.lastSuccessAt)meta.textContent=`Última cópia: ${shortDateTime(b.lastSuccessAt)} • ${Number(b.files||0)} arquivo(s) • ${Number(b.skipped||0)} ignorado(s)`;
+    else meta.textContent='Aguardando a primeira cópia de segurança da Charlotte.';
+  }
+}
+$('adminBackupNowBtn')?.addEventListener('click',async()=>{
+  const btn=$('adminBackupNowBtn');try{btn.disabled=true;let confirmReplace=false;if(state.admin.backupStatus?.recoveryRequired){confirmReplace=confirm('ATENÇÃO: esta instalação está diferente do backup remoto.
+
+Cancelar = manter o backup remoto protegido.
+OK = SUBSTITUIR o backup remoto pelos JSONs atuais desta Railway.
+
+Só confirme se você tiver certeza de que os dados locais atuais são os corretos.');if(!confirmReplace){btn.disabled=false;return}}
+    const r=await bridgeRequest('admin_backup_now',{confirmReplace},90000,false);toast(`Backup concluído: ${r.files||0} arquivo(s).`);await loadAdminDashboard();btn.disabled=false
+  }catch(e){if(btn)btn.disabled=false;toast(e.message)}
+});
+$('adminRestoreBackupBtn')?.addEventListener('click',async()=>{
+  const btn=$('adminRestoreBackupBtn');try{if(!confirm('Restaurar TODOS os JSONs salvos no Firebase para esta Charlotte?
+
+Use isso em um deploy novo da Railway. Os arquivos locais correspondentes serão substituídos pelo backup. Depois será necessário reiniciar a Charlotte.'))return;btn.disabled=true;const r=await bridgeRequest('admin_restore_backup',{},120000,false);toast(`Backup restaurado: ${r.restoredFiles||0} arquivo(s). REINICIE a Charlotte agora.`,9000);await loadAdminDashboard();btn.disabled=false}catch(e){if(btn)btn.disabled=false;toast(e.message||'Não foi possível restaurar o backup.',8000)}
+});
 
 function renderAdminSupportConversations(){const box=$('adminSupportConversations');if(!box)return;const rows=Object.entries(state.admin.supportChats||{}).map(([uid,v])=>({uid,meta:v?.meta||{},messages:v?.messages||{}})).sort((a,b)=>Number(b.meta.updatedAt||0)-Number(a.meta.updatedAt||0));box.innerHTML='';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma conversa.</div>';return}rows.slice(0,80).forEach(r=>{const b=document.createElement('button');b.type='button';b.className='admin-support-conversation'+(state.admin.supportSelectedUid===r.uid?' active':'');b.innerHTML=`<strong>${escText(r.meta.name||state.admin.directory?.[r.uid]?.nome||'Usuário')}</strong><span>${escText(r.meta.lastText||'Abrir conversa')}</span>`;b.onclick=()=>openAdminSupportChat(r.uid);box.appendChild(b)})}
 function openAdminSupportChat(uid){state.admin.supportSelectedUid=String(uid||'');try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;renderAdminSupportConversations();if(!uid)return;state.admin.supportUnsub=onValue(query(ref(db,`supportChats/${uid}/messages`),orderByChild('createdAt'),limitToLast(150)),sn=>{renderSupportMessages('adminSupportChat',sn.exists()?sn.val():{},state.user?.uid)});if($('adminSupportReplyInput'))$('adminSupportReplyInput').disabled=false;if($('adminSupportReplyForm')?.querySelector('button'))$('adminSupportReplyForm').querySelector('button').disabled=false}

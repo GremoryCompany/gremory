@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261026-v13-14-audio-link-reset">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261026-v13-15-backup-restore">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -938,8 +938,8 @@
                   <button class="btn danger-ghost" id="adminBanUserBtn" type="button">Suspender</button>
                   <button class="btn" id="adminUnbanUserBtn" type="button">Remover ban</button>
                 </div>
-                <button class="btn full" id="adminResetCharlotteLinkBtn" type="button">Resetar vínculo Charlotte</button>
-                <p class="muted">Limpa somente o pareamento/sincronização da Charlotte. Não apaga Rúpias, Pokémon, perfil, amigos, compras ou backups.</p>
+                <div class="admin-row-actions"><button class="btn" id="adminCreateCharlotteLinkBtn" type="button">Gerar código de vínculo</button><button class="btn danger-ghost" id="adminResetCharlotteLinkBtn" type="button">Resetar vínculo Charlotte</button></div>
+                <p class="muted" id="adminCharlotteLinkHelp">Você pode gerar um código para o usuário selecionado. O reset limpa somente o pareamento/sincronização; não apaga Rúpias, Pokémon, perfil, amigos, compras ou backups.</p>
               </form>
               <div id="adminUserResult" class="admin-user-result"></div>
             </article>
@@ -986,7 +986,8 @@
             <article class="panel admin-panel">
               <div class="panel-head"><div><span class="tag">BACKUP</span><h3>Dados da Charlotte</h3></div><span class="pill" id="adminBackupStatus">Aguardando</span></div>
               <p class="muted" id="adminBackupMeta">Aguardando a primeira cópia de segurança da Charlotte.</p>
-              <button class="btn" id="adminBackupNowBtn" type="button">Criar backup agora</button>
+              <div class="admin-row-actions"><button class="btn" id="adminBackupNowBtn" type="button">Criar backup agora</button><button class="btn primary" id="adminRestoreBackupBtn" type="button">Restaurar backup do Firebase</button></div>
+              <p class="muted">Em uma Railway nova, restaure primeiro e depois reinicie a Charlotte. O sistema pausa o backup automático quando detecta arquivos locais diferentes do cofre remoto para não sobrescrever seus dados.</p>
             </article>
           </div>
         </section>
@@ -1094,6 +1095,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261026-v13-14-audio-link-reset"></script>
+  <script type="module" src="/assets/js/app.js?v=20261026-v13-15-backup-restore"></script>
 </body>
 </html>
