@@ -1073,6 +1073,19 @@ $('adminDeletePostForm')?.addEventListener('submit',async ev=>{ev.preventDefault
 $('adminUserLookupForm')?.addEventListener('submit',adminLookupUser);
 $('adminBanUserBtn')?.addEventListener('click',async()=>{if(!state.admin.selectedUid)await adminLookupUser();if(state.admin.selectedUid)await adminBanUid(state.admin.selectedUid,$('adminBanReason').value.trim()||'Violação das regras')});
 $('adminUnbanUserBtn')?.addEventListener('click',async()=>{if(!state.admin.selectedUid)await adminLookupUser();if(state.admin.selectedUid)await adminUnbanUid(state.admin.selectedUid)});
+$('adminResetCharlotteLinkBtn')?.addEventListener('click',async()=>{
+  try{
+    if(!state.admin.selectedUid)await adminLookupUser();
+    const targetUid=requireAdminSelectedUid();
+    const person=state.admin.directory?.[targetUid]?.nome||targetUid;
+    if(!confirm(`Resetar somente o vínculo da Charlotte de ${person}?\n\nIsso NÃO apaga Rúpias, Pokémon, perfil, amigos, compras ou backups. O usuário precisará gerar um novo código e vincular novamente.`))return;
+    const btn=$('adminResetCharlotteLinkBtn');if(btn)btn.disabled=true;
+    const r=await bridgeRequest('admin_reset_charlotte_link',{targetUid},30000,false);
+    toast(r?.hadLink?'Vínculo da Charlotte resetado. Agora gere um novo código para esse usuário.':'Dados de vínculo limpos. Agora tente vincular novamente.',6500);
+    if(btn)btn.disabled=false;
+    await loadAdminDashboard();
+  }catch(e){if($('adminResetCharlotteLinkBtn'))$('adminResetCharlotteLinkBtn').disabled=false;toast(e.message||'Não foi possível resetar o vínculo.',6000)}
+});
 
 
 function requireAdminSelectedUid(){const uid=String(state.admin.selectedUid||'').trim();if(!uid)throw new Error('Localize um usuário primeiro.');return uid}
@@ -2234,9 +2247,19 @@ function refreshWatchScreenStage(){
   const vtrack=stream.getVideoTracks?.().find(t=>t.readyState==='live'),atrack=stream.getAudioTracks?.().find(t=>t.readyState==='live');
   const videoStream=new MediaStream();if(vtrack)videoStream.addTrack(vtrack);if(video.srcObject?.getVideoTracks?.()[0]?.id!==vtrack?.id)video.srcObject=videoStream;video.muted=true;video.playsInline=true;video.play?.().catch(()=>{});
   if(audio){
-    const audioStream=new MediaStream();if(atrack)audioStream.addTrack(atrack);if(audio.srcObject?.getAudioTracks?.()[0]?.id!==atrack?.id)audio.srcObject=atrack?audioStream:null;audio.volume=1;audio.muted=false;
-    if(atrack&&!isLocal){const graph=applyWatchScreenVolume();if(!state.watchRtc.screenSoundMuted){graph?.ctx?.resume?.().catch(()=>{});audio.play?.().catch(()=>{state.watchRtc.screenSoundMuted=true;applyWatchScreenVolume();if(soundBtn)soundBtn.textContent='Toque para ativar som'})}}
-    else if(!atrack){try{audio.pause()}catch{}}
+    // O host NÃO reproduz localmente o áudio capturado da própria tela.
+    // O sistema/jogo já está tocando no computador; reproduzir a captura aqui
+    // criava retorno, áudio duplicado e chiado. A faixa continua sendo enviada
+    // normalmente aos convidados pelo WebRTC dedicado.
+    if(isLocal){
+      try{audio.pause()}catch{}
+      if(audio.srcObject)audio.srcObject=null;
+      audio.muted=true;
+    }else{
+      const audioStream=new MediaStream();if(atrack)audioStream.addTrack(atrack);if(audio.srcObject?.getAudioTracks?.()[0]?.id!==atrack?.id)audio.srcObject=atrack?audioStream:null;audio.volume=1;audio.muted=false;
+      if(atrack){const graph=applyWatchScreenVolume();if(!state.watchRtc.screenSoundMuted){graph?.ctx?.resume?.().catch(()=>{});audio.play?.().catch(()=>{state.watchRtc.screenSoundMuted=true;applyWatchScreenVolume();if(soundBtn)soundBtn.textContent='Toque para ativar som'})}}
+      else{try{audio.pause()}catch{}}
+    }
   }
   if(label)label.textContent=isLocal?'Sua tela compartilhada':`${watchPeerName(uid)} está compartilhando`;
   if(soundBtn){const hasAudio=!!atrack;soundBtn.hidden=isLocal;soundBtn.disabled=!hasAudio;soundBtn.textContent=!hasAudio?'Sem áudio':(state.watchRtc.screenSoundMuted?'Ativar som':'Som ligado')}
