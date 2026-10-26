@@ -1,10 +1,10 @@
-const CACHE='gremory-v15-social-raid-20261026';
+const CACHE='gremory-v16-fast-site-20261026';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261026-v15-social-raid',
-  '/assets/js/app.js?v=20261026-v15-social-raid',
-  '/assets/js/community.js?v=20261026-v15-social-raid',
+  '/assets/css/app.css?v=20261026-v16-fast-site',
+  '/assets/js/app.js?v=20261026-v16-fast-site',
+  '/assets/js/community.js?v=20261026-v16-fast-site',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
   '/manifest.webmanifest'

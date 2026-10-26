@@ -1,4 +1,4 @@
-import { initCommunity } from './community.js?v=20261026-v15-social-raid';
+import { initCommunity } from './community.js?v=20261026-v16-fast-site';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js';
 import {
   getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence, inMemoryPersistence,
@@ -54,7 +54,7 @@ const state = {
   browserNotificationLastAt:0,
   admin:{reports:{},updates:{},directory:{},bans:{},selectedUid:'',supportChats:{},supportSelectedUid:'',supportUnsub:null,backupStatus:{}},
   userPlaylists:{},dm:{peerUid:'',messages:{},unsub:null},watchPublicRooms:{},
-  tinder:{current:null,seen:[]},updates:{},notifications:{},notificationDismissed:{},ban:null,supportChat:{messages:{}},
+  tinder:{current:null,seen:[],pool:{},poolAt:0},updates:{},notifications:{},notificationDismissed:{},ban:null,supportChat:{messages:{}},
   watchCode:null,watchRoom:null,watchUnsubs:[],watchApplying:false,
   watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,screenSource:'',localFileVideo:null,localFileUrl:'',localFileName:'',localFileAudioCtx:null,localFileAudioSource:null,localFileAudioDest:null,localFileAudioGain:null,localFileAudioLimiter:null,screenVolume:Number(localStorage.getItem('gremory:watchScreenVolume')||150),localFileTransmitGainPct:Number(localStorage.getItem('gremory:watchTransmitGain')||150),fullscreenUiTimer:null,peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),screenOutPeers:new Map(),screenInPeers:new Map(),screenOutCandidates:new Map(),screenInCandidates:new Map(),screenOfferAt:new Map(),screenOfferLocks:new Set(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false,mutedPeers:new Set(),peerVolumes:new Map(),autoVoiceCode:'',autoVoicePending:false},
   watchYoutube:{lastTime:0,lastState:-1,lastPublishAt:0},
@@ -385,7 +385,7 @@ $('profileForm').addEventListener('submit',async ev=>{
   }
 });
 
-function clearUserSubscriptions(){try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}if(state.gameRealtimePoll){clearInterval(state.gameRealtimePoll);state.gameRealtimePoll=null}state.gameRealtimeSyncing=false;clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.blackjack.handUnsub){try{state.blackjack.handUnsub()}catch{}state.blackjack.handUnsub=null}try{state.dm.unsub?.()}catch{}state.dm.unsub=null;if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonAudio={encounterId:'',resultId:''};state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.siteRaidBattle=null;state.siteRaidBattleLoading=false;state.siteRaidBattleCheckedId='';state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.hand=null;state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.userPlaylists={};state.dm={peerUid:'',messages:{},unsub:null};state.watchPublicRooms={};state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.notificationDismissed={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null}
+function clearUserSubscriptions(){try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}if(state.gameRealtimePoll){clearInterval(state.gameRealtimePoll);state.gameRealtimePoll=null}state.gameRealtimeSyncing=false;clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.blackjack.handUnsub){try{state.blackjack.handUnsub()}catch{}state.blackjack.handUnsub=null}try{state.dm.unsub?.()}catch{}state.dm.unsub=null;if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonAudio={encounterId:'',resultId:''};state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.siteRaidBattle=null;state.siteRaidBattleLoading=false;state.siteRaidBattleCheckedId='';state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.hand=null;state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.userPlaylists={};state.dm={peerUid:'',messages:{},unsub:null};state.watchPublicRooms={};state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[],pool:{},poolAt:0};state.updates={};state.notifications={};state.notificationDismissed={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null}
 async function syncSiteGameRealtimeState(){
   if(!state.user||state.gameRealtimeSyncing)return;
   const uid=state.user.uid;
@@ -416,6 +416,11 @@ function scheduleGameRealtimeSync(delay=250){
 function gameRealtimeListenerError(label,e){
   console.warn(`[GAMES REALTIME] listener ${label} interrompido:`,e?.code||e?.message||e);
   scheduleGameRealtimeSync(500);
+  // Só liga o polling quando um listener realmente caiu. Realtime saudável não
+  // precisa fazer quatro leituras extras a cada poucos segundos.
+  if(!state.gameRealtimePoll){
+    state.gameRealtimePoll=setInterval(()=>syncSiteGameRealtimeState().catch(()=>{}),15000);
+  }
 }
 function startUserSubscriptions(){
   clearUserSubscriptions();const uid=state.user.uid;
@@ -423,7 +428,8 @@ function startUserSubscriptions(){
   state.userUnsubs.push(onValue(ref(db,`friendRequests/${uid}`),s=>{state.requests=s.exists()?s.val():{};renderFriendRequests()}));
   state.userUnsubs.push(onValue(ref(db,`charlottePublic/${uid}`),s=>{state.charlottePublic=s.exists()?s.val():null;renderCharlotteStatus()}));
   state.userUnsubs.push(onValue(ref(db,`charlotteSync/${uid}`),s=>{state.charlotteSync=s.exists()?s.val():null;renderCharlotteSync();renderAccount();loadPokemonSources();renderCollection();renderStore();renderPokemonInventory()}));
-  state.userUnsubs.push(onValue(ref(db,`siteBridgeResults/${uid}`),s=>{state.bridgeResults=s.exists()?s.val():{}}));
+  // Resultados do bridge são observados apenas pelo job que os solicitou; evita
+  // baixar novamente todo o histórico temporário de resultados a cada ação.
   state.userUnsubs.push(onValue(ref(db,`siteInventory/${uid}`),s=>{state.siteInventory=s.exists()?s.val():{};renderStore()}));
   state.userUnsubs.push(onValue(ref(db,`siteCustomization/${uid}`),s=>{state.siteCustomization=s.exists()?s.val():{};applyCustomization();renderStore();syncPublicCustomization().catch(()=>{})}));
   state.userUnsubs.push(onValue(ref(db,'siteStoreCatalog'),sn=>{state.storeCatalog=sn.exists()?sn.val():{};mergeRemoteStoreCatalog(state.storeCatalog);renderStore();applyCustomization();}));
@@ -454,10 +460,9 @@ function startUserSubscriptions(){
     notificationBoot=false;
   }));
   state.userUnsubs.push(onValue(ref(db,`siteBans/${uid}`),s=>{state.ban=s.exists()?s.val():null;applySiteBan()}));
-  // Fallback leve: se um listener do Firebase for cancelado (ex.: regras foram publicadas com o site aberto),
-  // convites e partidas continuam aparecendo sem precisar recarregar a página.
+  // Uma única conferência no boot. Depois disso os listeners realtime assumem.
+  // O polling de fallback só é ligado por gameRealtimeListenerError.
   scheduleGameRealtimeSync(350);
-  state.gameRealtimePoll=setInterval(()=>syncSiteGameRealtimeState().catch(()=>{}),3000);
 }
 
 await initialAuthPolicy();
@@ -758,21 +763,23 @@ async function runSlotsSpin(){
       if([404,500,501,502,503,504].includes(Number(response.status))){r=await bridgeRequest('slots_spin',{bet},30000,true);directBridge=true}
       else throw new Error(r.erro||'O site não conseguiu registrar a aposta.');
     }
-    await slotWait(Math.max(0,1550-(Date.now()-started)));
+    await slotWait(Math.max(0,820-(Date.now()-started)));
     stopVisual();
     const symbols=Array.isArray(r.symbols)&&r.symbols.length===3?r.symbols:['✦','✦','✦'];
     for(let i=0;i<symbols.length;i++){
       if(els[i])els[i].textContent=symbols[i];
       playGameSfx('reelStop');
-      if(i<symbols.length-1)await slotWait(105);
+      if(i<symbols.length-1)await slotWait(65);
     }
     const payout=Number(r.payout||0),jackpot=!!r.jackpot,net=payout-bet;
     if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':net>0?'Você ganhou!':'Você perdeu';
-    if($('slotsLastWin'))$('slotsLastWin').textContent=net>0?`Você ganhou ₹${formatNumber(net)}.`:`Você perdeu ₹${formatNumber(bet)}.`;
+    if($('slotsLastWin'))$('slotsLastWin').textContent=net>0
+      ?`Lucro: +₹${formatNumber(net)} • Retorno total: ₹${formatNumber(payout)}`
+      :`Você perdeu ₹${formatNumber(bet)}.`;
     if($('slotsBalanceHint'))$('slotsBalanceHint').textContent=symbols.join(' ');
     if(jackpot){
       playGameSfx('jackpot');setTimeout(()=>playGameSfx('coins'),240);
-      showGameResult({title:'JACKPOT!',text:`Você ganhou ₹${formatNumber(net)}.`,win:true,icon:'7'});
+      showGameResult({title:'JACKPOT!',text:`Lucro +₹${formatNumber(net)} • retorno ₹${formatNumber(payout)}.`,win:true,icon:'7'});
     }else if(net>0){playVictoryTone();setTimeout(()=>playGameSfx('coins'),220);}
     else{playGameSfx('debit');setTimeout(()=>playDefeatTone(),180);}
     if(directBridge){
@@ -1160,7 +1167,7 @@ $('adminSupportRefreshBtn')?.addEventListener('click',loadAdminDashboard);
 $('adminSupportReplyForm')?.addEventListener('submit',async ev=>{ev.preventDefault();const uid=state.admin.supportSelectedUid,input=$('adminSupportReplyInput'),text=String(input?.value||'').trim().slice(0,500);if(!uid||!text)return;try{const mref=push(ref(db,`supportChats/${uid}/messages`)),createdAt=Date.now();await Promise.all([set(mref,{id:mref.key,senderUid:state.user.uid,senderName:'Equipe Gremory',role:'admin',text,createdAt}),update(ref(db,`supportChats/${uid}/meta`),{updatedAt:createdAt,lastText:text.slice(0,120),status:'open'})]);input.value='';await set(ref(db,`siteNotifications/${uid}/support_${createdAt}`),{id:`support_${createdAt}`,type:'support_chat',title:'Nova resposta da equipe',text:text.slice(0,160),link:'#support',sound:true,createdAt}).catch(()=>{})}catch(e){toast(permissionMessage(e,e.message))}});
 
 
-// Tinder — um único perfil compartilhado entre site e Charlotte
+// Tinder — o site responde primeiro; a Charlotte sincroniza depois.
 let tinderUploadFile=null;
 function tinderPreview(url=''){if($('tinderProfilePreview'))$('tinderProfilePreview').src=url||state.profile?.avatar||avatarFor()||DEFAULT_AVATAR}
 function fillOwnTinderProfile(profile={}){
@@ -1175,50 +1182,79 @@ function fillOwnTinderProfile(profile={}){
 }
 async function loadOwnTinderProfile(){
   if(!state.user)return;fillOwnTinderProfile({exists:false});
-  if(!linkedCharlotte())return;
-  try{const r=await bridgeRequest('tinder_profile_get',{},20000);fillOwnTinderProfile(r.profile?{...r.profile,exists:true}:{exists:false})}catch(e){console.warn('[TINDER PROFILE]',e)}
+  try{const sn=await get(ref(db,`siteTinderProfiles/${state.user.uid}`));fillOwnTinderProfile(sn.exists()?{...sn.val(),exists:true}:{exists:false})}catch(e){console.warn('[TINDER PROFILE]',e)}
 }
 $('tinderProfilePhoto')?.addEventListener('input',e=>{if(!tinderUploadFile)tinderPreview(String(e.target.value||'').trim())});
 $('tinderProfileFile')?.addEventListener('change',e=>{
   const file=e.target.files?.[0]||null;tinderUploadFile=file;
   if(!file)return tinderPreview($('tinderProfilePhoto')?.value||'');
-  if(!/^image\/(jpeg|png|webp|gif)$/i.test(file.type)) {tinderUploadFile=null;e.target.value='';return toast('Escolha uma imagem JPG, PNG, WebP ou GIF.');}
+  if(!/^image\/(jpeg|png|webp|gif)$/i.test(file.type)){tinderUploadFile=null;e.target.value='';return toast('Escolha uma imagem JPG, PNG, WebP ou GIF.');}
   if(file.size>10*1024*1024){tinderUploadFile=null;e.target.value='';return toast('A foto pode ter no máximo 10 MB.');}
   const reader=new FileReader();reader.onload=()=>tinderPreview(String(reader.result||''));reader.readAsDataURL(file);
 });
+async function optimizeTinderPhoto(file){
+  if(!file||file.type==='image/gif'||file.size<=700*1024)return file;
+  try{
+    const bitmap=await createImageBitmap(file),max=1440,scale=Math.min(1,max/Math.max(bitmap.width,bitmap.height));
+    const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+    canvas.getContext('2d',{alpha:false})?.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',.84));
+    if(blob&&blob.size<file.size)return new File([blob],'tinder-profile.webp',{type:'image/webp',lastModified:Date.now()});
+  }catch(e){console.warn('[TINDER IMAGE]',e)}
+  return file;
+}
 async function uploadTinderPhoto(file){
   if(!state.user||!file)return'';
-  const path=`tinder/${state.user.uid}/profile`;
-  const target=storageRef(storage,path);
-  if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent='Enviando sua foto...';
-  await uploadBytes(target,file,{contentType:file.type||'image/jpeg'});
+  const optimized=await optimizeTinderPhoto(file),path=`tinder/${state.user.uid}/profile`,target=storageRef(storage,path);
+  if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent=optimized!==file?'Otimizando e enviando foto...':'Enviando sua foto...';
+  await uploadBytes(target,optimized,{contentType:optimized.type||'image/jpeg',cacheControl:'public,max-age=86400'});
   return getDownloadURL(target);
 }
 $('tinderProfileForm')?.addEventListener('submit',async ev=>{
   ev.preventDefault();if(!state.user)return;
-  if(!linkedCharlotte())return toast('Vincule a Charlotte antes de salvar o Tinder.');
-  const idade=Number($('tinderProfileAge').value||0);if(idade<18)return toast('O Tinder do site é somente para maiores de 18 anos.');
+  const idade=Number($('tinderProfileAge').value||0);if(idade<18||idade>99)return toast('O Tinder do site é somente para maiores de 18 anos.');
   const submit=ev.submitter;try{
     if(submit)submit.disabled=true;
     let foto=String($('tinderProfilePhoto')?.value||'').trim().slice(0,1000);
     if(tinderUploadFile){foto=await uploadTinderPhoto(tinderUploadFile);if($('tinderProfilePhoto'))$('tinderProfilePhoto').value=foto;}
-    const data={nome:$('tinderProfileName').value.trim().slice(0,60)||displayName(),idade,bio:$('tinderProfileBio').value.trim().slice(0,300),foto,ativo:$('tinderProfileActive').checked};
-    const r=await bridgeRequest('tinder_profile_save',data,25000);tinderUploadFile=null;if($('tinderProfileFile'))$('tinderProfileFile').value='';fillOwnTinderProfile({...r.profile,exists:true});if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent='Perfil salvo no site e na Charlotte.';toast('Perfil do Tinder salvo e sincronizado com a Charlotte.');await loadTinderProfile();
+    const data={uid:state.user.uid,nome:$('tinderProfileName').value.trim().slice(0,60)||displayName(),idade,bio:$('tinderProfileBio').value.trim().slice(0,300),foto,ativo:$('tinderProfileActive').checked,updatedAt:Date.now()};
+    const profileRef=ref(db,`siteTinderProfiles/${state.user.uid}`);
+    const tx=await runTransaction(profileRef,current=>({...data,likes:Number(current?.likes||0),matches:Number(current?.matches||0)}));
+    if(!tx.committed)throw new Error('Não foi possível salvar o perfil.');
+    const saved=tx.snapshot.val()||data;tinderUploadFile=null;if($('tinderProfileFile'))$('tinderProfileFile').value='';fillOwnTinderProfile({...saved,exists:true});
+    if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent=linkedCharlotte()?'Salvo. Sincronizando com a Charlotte...':'Perfil salvo no site.';
+    toast(linkedCharlotte()?'Perfil salvo. A Charlotte está sincronizando em segundo plano.':'Perfil salvo no site.');
+    if(linkedCharlotte())bridgeBackground('tinder_profile_save',data,{onSuccess:()=>{if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent='Salvo no site e sincronizado com a Charlotte.'},onError:e=>{if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent='Salvo no site • sincronização pendente';console.warn('[TINDER SYNC]',e?.message||e)}}).catch(e=>console.warn('[TINDER QUEUE]',e));
+    loadTinderProfile().catch(()=>{});
   }catch(e){if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent=e.message;toast(e.message)}finally{if(submit)submit.disabled=false}
 });
 function renderTinderCard(profile){
   const box=$('tinderSiteCard'),actions=$('tinderSiteActions');if(!box||!actions)return;box.innerHTML='';
   if(!profile){box.innerHTML='<div class="empty-state">Não encontrei outro perfil disponível agora.</div>';actions.hidden=true;return}
-  const card=document.createElement('article');card.className='tinder-profile-card';const img=document.createElement('img');img.className='tinder-profile-photo';img.src=profile.photo||DEFAULT_AVATAR;img.alt='';img.loading='lazy';const copy=document.createElement('div');copy.className='tinder-profile-copy';const h=document.createElement('h3');h.textContent=`${profile.nome||'Usuário'}${profile.idade?`, ${profile.idade}`:''}`;const bio=document.createElement('p');bio.textContent=profile.bio||'Sem bio.';const stats=document.createElement('small');stats.textContent=`${profile.likes||0} curtidas • ${profile.matches||0} matches`;copy.append(h,bio,stats);card.append(img,copy);box.appendChild(card);actions.hidden=false
+  const card=document.createElement('article');card.className='tinder-profile-card';const img=document.createElement('img');img.className='tinder-profile-photo';img.src=profile.photo||profile.foto||DEFAULT_AVATAR;img.alt='';img.loading='lazy';const copy=document.createElement('div');copy.className='tinder-profile-copy';const h=document.createElement('h3');h.textContent=`${profile.nome||'Usuário'}${profile.idade?`, ${profile.idade}`:''}`;const bio=document.createElement('p');bio.textContent=profile.bio||'Sem bio.';const stats=document.createElement('small');stats.textContent=`${profile.likes||0} curtidas • ${profile.matches||0} matches`;copy.append(h,bio,stats);card.append(img,copy);box.appendChild(card);actions.hidden=false
 }
 async function loadTinderProfile(){
   if(!state.user)return;const box=$('tinderSiteCard');if(box)box.innerHTML='<div class="loading-line">Procurando perfil...</div>';
-  if(!linkedCharlotte()){renderTinderCard(null);if(box)box.innerHTML='<div class="empty-state">Vincule a Charlotte para usar o Tinder.</div>';return}
-  try{const r=await bridgeRequest('tinder_feed',{skipUids:state.tinder.seen},25000);state.tinder.current=r.profile||null;if(r.profile&&!state.tinder.seen.includes(r.profile.uid))state.tinder.seen.push(r.profile.uid);renderTinderCard(state.tinder.current)}catch(e){if(box)box.innerHTML=`<div class="empty-state">${escText(e.message)}</div>`}
+  try{
+    let all=state.tinder.pool||{};
+    if(!state.tinder.poolAt||Date.now()-state.tinder.poolAt>60000){const sn=await get(ref(db,'siteTinderProfiles'));all=sn.exists()?sn.val():{};state.tinder.pool=all;state.tinder.poolAt=Date.now()}
+    const seen=new Set((state.tinder.seen||[]).map(String));
+    const candidates=Object.entries(all).map(([uid,p])=>({uid,...p,photo:p?.foto||p?.photo||''})).filter(p=>p.uid!==state.user.uid&&p.ativo!==false&&!seen.has(String(p.uid))&&Number(p.idade||0)>=18);
+    let profile=null;if(candidates.length){const a=new Uint32Array(1);crypto.getRandomValues(a);profile=candidates[a[0]%candidates.length];state.tinder.seen.push(profile.uid)}
+    else if(seen.size){state.tinder.seen=[];const fallback=Object.entries(all).map(([uid,p])=>({uid,...p,photo:p?.foto||''})).filter(p=>p.uid!==state.user.uid&&p.ativo!==false&&Number(p.idade||0)>=18);if(fallback.length){const a=new Uint32Array(1);crypto.getRandomValues(a);profile=fallback[a[0]%fallback.length];state.tinder.seen.push(profile.uid)}}
+    state.tinder.current=profile;renderTinderCard(profile);
+  }catch(e){if(box)box.innerHTML=`<div class="empty-state">${escText(permissionMessage(e,e.message))}</div>`}
 }
 $('tinderRefreshBtn')?.addEventListener('click',loadTinderProfile);
 $('tinderSkipBtn')?.addEventListener('click',loadTinderProfile);
-$('tinderLikeBtn')?.addEventListener('click',async()=>{const p=state.tinder.current;if(!p)return;try{const r=await bridgeRequest('tinder_like',{targetUid:p.uid},25000);if(r.match){toast(r.contact?`Deu match! Contato: ${r.contact}`:'Deu match! Confira suas notificações.',5500);playNotificationTone()}else toast('Curtida enviada.');await loadTinderProfile()}catch(e){toast(e.message)}});
+$('tinderLikeBtn')?.addEventListener('click',async()=>{
+  const p=state.tinder.current;if(!p)return;
+  if(!linkedCharlotte())return toast('Vincule a Charlotte para enviar curtidas e receber matches.');
+  try{
+    const targetUid=p.uid;toast('Curtida enviada.');loadTinderProfile().catch(()=>{});
+    await bridgeBackground('tinder_like',{targetUid},{onSuccess:r=>{if(r.match){toast(r.contact?`Deu match! Contato: ${r.contact}`:'Deu match! Confira suas notificações.',5500);playNotificationTone()}},onError:e=>toast(`A curtida não foi sincronizada: ${e.message}`,5000)});
+  }catch(e){toast(e.message)}
+});
 
 // Amigos
 async function loadDirectory(){if(!state.user)return;const box=$('peopleSearchResults');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const s=await get(ref(db,'directory'));state.directory=s.exists()?s.val():{};renderPeople('')}catch(e){box.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
@@ -1298,10 +1334,28 @@ function renderTeam(list,source='Charlotte'){
 function moveTeamSlot(index,delta){const next=index+delta;if(next<0||next>=state.teamDraft.length)return;[state.teamDraft[index],state.teamDraft[next]]=[state.teamDraft[next],state.teamDraft[index]];renderTeam(state.teamDraft,'Rascunho')}
 function removeTeamSlot(index){state.teamDraft.splice(index,1);renderTeam(state.teamDraft,'Rascunho');renderCollection()}
 function addTeamMon(mon){const p=normalizeMon(mon);if(state.teamDraft.some(x=>String(x.uid)===String(p.uid)))return toast('Esse Pokémon já está na equipe.');if(state.teamDraft.length>=6)return toast('Sua equipe já tem 6 Pokémon.');state.teamDraft.push(p);renderTeam(state.teamDraft,'Rascunho');renderCollection()}
-$('savePokemonTeamBtn')?.addEventListener('click',async()=>{try{if(!state.teamDraft.length)throw new Error('Escolha pelo menos um Pokémon.');const teamUids=state.teamDraft.slice(0,6).map(x=>x.uid);await bridgeRequest('pokemon_set_team',{teamUids},30000);await requestAccountSync();toast('Equipe salva no site e na Charlotte.')}catch(e){toast(e.message)}});
+$('savePokemonTeamBtn')?.addEventListener('click',async()=>{try{if(!state.teamDraft.length)throw new Error('Escolha pelo menos um Pokémon.');const teamUids=state.teamDraft.slice(0,6).map(x=>x.uid),r=await bridgeRequest('pokemon_set_team',{teamUids},20000);if(r.pokemon){state.charlotteSync=state.charlotteSync||{};state.charlotteSync.pokemon=r.pokemon;renderCollection();renderPokemonInventory()}toast('Equipe salva. A Charlotte já recebeu a alteração.')}catch(e){toast(e.message)}});
 $('resetPokemonTeamBtn')?.addEventListener('click',()=>loadPokemonSources());
 $('pokemonSyncBtn')?.addEventListener('click',async()=>{try{await requestAccountSync();toast('Pokémon sincronizados.')}catch(e){toast(e.message)}});
-$('pokemonExploreBotBtn').onclick=async()=>{try{const r=await bridgeRequest('pokemon_explore',{},30000);if(r.encounter)state.pokemonEncounter=r.encounter;renderWildEncounter();toast('Um Pokémon selvagem apareceu!')}catch(e){toast(e.message)}};
+$('pokemonExploreBotBtn').onclick=async()=>{
+  const btn=$('pokemonExploreBotBtn');if(!state.user||btn?.disabled)return;
+  try{
+    if(!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');
+    if(btn){btn.disabled=true;btn.textContent='Explorando...'}
+    const idToken=await state.user.getIdToken();
+    let r=null;
+    try{
+      const response=await fetch('/api/main?action=pokemon_explore_site',{method:'POST',headers:{'content-type':'application/json'},cache:'no-store',body:JSON.stringify({idToken})});
+      r=await response.json().catch(()=>({}));
+      if(!response.ok)throw Object.assign(new Error(r.erro||'Exploração indisponível.'),{status:response.status,payload:r});
+    }catch(apiError){
+      // Primeiro uso após reiniciar o bot pode ainda não ter o encontro pré-carregado.
+      // Nesse caso usa o bridge uma vez; os próximos ficam pré-carregados pelo bot.
+      r=await bridgeRequest('pokemon_explore',{},20000);
+    }
+    if(r.encounter)state.pokemonEncounter=r.encounter;renderWildEncounter();toast(r.reused?'Você voltou ao encontro atual.':'Um Pokémon selvagem apareceu!');
+  }catch(e){toast(e.message)}finally{if(btn){btn.disabled=false;btn.textContent='Explorar'}}
+};
 
 // Duelo Pokémon 6x6 via bridge do bot
 function renderDuelFriendSelect(){const sel=$('duelFriendSelect');if(!sel)return;const current=sel.value;sel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';sel.appendChild(o)});if(state.friends[current])sel.value=current;renderGameFriendSelects()}
@@ -1356,13 +1410,36 @@ $('duelExitBtn')?.addEventListener('click',async()=>{if(!state.duel)return;if(!c
 
 // Bridge / ações do site
 function linkedCharlotte(){return state.charlottePublic?.status==='linked'}
+async function bridgeEnqueue(type,data={},requireLink=true){
+  if(!state.user)throw new Error('Entre na sua conta.');
+  if(requireLink&&!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');
+  const jobRef=push(ref(db,`siteBridgeJobs/${state.user.uid}`)),jobId=jobRef.key;
+  await set(jobRef,{type,...data,createdAt:nowIso()});
+  return jobId;
+}
+function watchBridgeResult(jobId,{timeoutMs=45000,onSuccess=null,onError=null}={}){
+  if(!state.user||!jobId)return()=>{};
+  let done=false,unsub=()=>{};
+  const finish=(fn,value)=>{if(done)return;done=true;clearTimeout(timer);try{unsub()}catch{};try{fn?.(value)}catch(e){console.warn('[BRIDGE CALLBACK]',e)}};
+  const timer=setTimeout(()=>finish(onError,new Error('A sincronização com a Charlotte continua em segundo plano.')),timeoutMs);
+  unsub=onValue(ref(db,`siteBridgeResults/${state.user.uid}/${jobId}`),sn=>{
+    if(!sn.exists())return;const v=sn.val()||{};
+    if(v.ok===false)finish(onError,new Error(v.error||'Não foi possível sincronizar.'));else finish(onSuccess,v);
+  },e=>finish(onError,e));
+  return()=>finish(null,null);
+}
+async function bridgeBackground(type,data={},options={}){
+  const {requireLink=true,timeoutMs=45000,onSuccess=null,onError=null}=options||{};
+  const jobId=await bridgeEnqueue(type,data,requireLink);
+  watchBridgeResult(jobId,{timeoutMs,onSuccess,onError});
+  return jobId;
+}
 async function bridgeRequest(type,data={},timeoutMs=22000,requireLink=true){
-  if(!state.user) throw new Error('Entre na sua conta.');
-  if(requireLink&&!linkedCharlotte()) throw new Error('Vincule a Charlotte primeiro.');
-  const jobRef=push(ref(db,`siteBridgeJobs/${state.user.uid}`));const jobId=jobRef.key;await set(jobRef,{type,...data,createdAt:nowIso()});
-  return await new Promise((resolve,reject)=>{let done=false;let unsub=null;const timer=setTimeout(()=>{if(done)return;done=true;try{unsub?.()}catch{}reject(new Error('A Charlotte demorou para responder. Tente novamente.'))},timeoutMs);unsub=onValue(ref(db,`siteBridgeResults/${state.user.uid}/${jobId}`),sn=>{if(done||!sn.exists())return;done=true;clearTimeout(timer);try{unsub?.()}catch{}const v=sn.val()||{};if(v.ok===false)reject(new Error(v.error||'Não foi possível concluir.'));else resolve(v)},e=>{if(done)return;done=true;clearTimeout(timer);reject(e)})});
+  const jobId=await bridgeEnqueue(type,data,requireLink);
+  return await new Promise((resolve,reject)=>watchBridgeResult(jobId,{timeoutMs,onSuccess:resolve,onError:reject}));
 }
 async function requestAccountSync(){return bridgeRequest('sync_account',{},25000)}
+function applyBridgeBalance(value){const balance=Number(value);if(!Number.isFinite(balance))return;state.charlotteSync=state.charlotteSync||{};state.charlotteSync.account=state.charlotteSync.account||{};state.charlotteSync.account.balance=balance;renderAccount();renderStore()}
 function resultBox(){return $('siteCommandResult')}
 function renderProfileResult(){
   const box=resultBox();if(!box)return;const acc=accountSnapshot();const poke=state.charlotteSync?.pokemon||{};const total=(poke.collection||[]).length||Object.keys(poke.collection||{}).length||0;
@@ -1376,7 +1453,7 @@ function renderAchievementsResult(){
 async function handleSiteAction(action){
   try{
     if(['profile','achievements','vip','team','collection'].includes(action)){
-      if(linkedCharlotte()) await requestAccountSync();
+      if(linkedCharlotte())bridgeBackground('sync_account',{},{}).catch(()=>{});
       if(action==='profile'){renderProfileResult();navigate('charlotte');return}
       if(action==='achievements'){renderAchievementsResult();navigate('charlotte');return}
       if(action==='vip'){navigate('premium');renderAccount();return}
@@ -1386,13 +1463,12 @@ async function handleSiteAction(action){
     if(action==='daily'){
       const box=resultBox();if(box)box.innerHTML='<div class="loading-line">Coletando Daily...</div>';
       const r=await bridgeRequest('daily_claim',{},25000);
-      await requestAccountSync().catch(()=>{});
       if(r.claimed===false){
         const ms=Math.max(0,Number(r.cooldownMs||0));const h=Math.floor(ms/3600000);const m=Math.floor((ms%3600000)/60000);
         if(box)box.innerHTML=`<div class="empty-state small">Daily já coletado. Volte em <strong>${h}h ${m}m</strong>.</div>`;
         toast('Seu Daily ainda está em cooldown.');return;
       }
-      if(box)box.innerHTML=`<div class="site-result-grid"><div><span>Recompensa</span><strong>${escText(r.rewardName||'Daily')}</strong></div><div><span>Rúpias</span><strong>+₹${formatNumber(r.rupias||0)}</strong></div><div><span>XP</span><strong>+${formatNumber(r.xp||0)}</strong></div><div><span>Saldo</span><strong>₹${formatNumber(r.balance||0)}</strong></div></div>`;
+      applyBridgeBalance(r.balance);if(box)box.innerHTML=`<div class="site-result-grid"><div><span>Recompensa</span><strong>${escText(r.rewardName||'Daily')}</strong></div><div><span>Rúpias</span><strong>+₹${formatNumber(r.rupias||0)}</strong></div><div><span>XP</span><strong>+${formatNumber(r.xp||0)}</strong></div><div><span>Saldo</span><strong>₹${formatNumber(r.balance||0)}</strong></div></div>`;
       if(Number(r.rupias||0)>0)playGameSfx('coins');
       toast('Daily coletado.');
     }
@@ -1452,7 +1528,7 @@ $('premiumRupiasBuyBtn')?.addEventListener('click',async()=>{
   try{
     if(!linkedCharlotte())throw new Error('Vincule a Charlotte antes de continuar.');
     if(alreadyPremium){if(!groupLink)throw new Error('Cole o link do grupo que deseja vincular.');if(btn)btn.disabled=true;if(status)status.textContent='Vinculando grupo...';const r=await bridgeRequest('premium_group_link',{groupLink},45000,false);if(status)status.textContent=`Grupo ${r.group?.groupName||'vinculado'} conectado ao seu Premium.`;toast('Grupo vinculado ao Premium.');return}
-    if(!confirm(`Ativar Premium por 7 dias por ₹200.000${groupLink?' e vincular o grupo informado':''}?`))return;if(btn)btn.disabled=true;if(status)status.textContent='Ativando Premium pela Charlotte...';const r=await bridgeRequest('premium_rupias_buy',{groupLink},45000,false);if(status)status.textContent=r.group?`Premium ativo • grupo ${r.group.groupName||'vinculado'}`:r.groupError?`Premium ativo • grupo pendente: ${r.groupError}`:'Premium ativo por 7 dias. Você pode vincular um grupo quando quiser.';toast(`Premium ativado. Saldo: ₹${formatNumber(r.balance||0)}.`,6500);await requestAccountSync().catch(()=>{})
+    if(!confirm(`Ativar Premium por 7 dias por ₹200.000${groupLink?' e vincular o grupo informado':''}?`))return;if(btn)btn.disabled=true;if(status)status.textContent='Ativando Premium pela Charlotte...';const r=await bridgeRequest('premium_rupias_buy',{groupLink},45000,false);if(status)status.textContent=r.group?`Premium ativo • grupo ${r.group.groupName||'vinculado'}`:r.groupError?`Premium ativo • grupo pendente: ${r.groupError}`:'Premium ativo por 7 dias. Você pode vincular um grupo quando quiser.';applyBridgeBalance(r.balance);state.charlotteSync=state.charlotteSync||{};state.charlotteSync.account=state.charlotteSync.account||{};state.charlotteSync.account.premium=true;renderAccount();toast(`Premium ativado. Saldo: ₹${formatNumber(r.balance||0)}.`,6500)
   }catch(e){if(status)status.textContent=e.message;toast(e.message,7000)}finally{if(btn)btn.disabled=false}
 });
 $('premiumGroupUnlinkBtn')?.addEventListener('click',async()=>{const btn=$('premiumGroupUnlinkBtn'),status=$('premiumRupiasStatus');try{if(!confirm('Desvincular seu grupo do Premium?'))return;btn.disabled=true;const r=await bridgeRequest('premium_group_unlink',{},30000,false);if(status)status.textContent=r.groupName?`${r.groupName} foi desvinculado do seu Premium.`:'Nenhum grupo estava vinculado.';toast('Grupo desvinculado.')}catch(e){toast(e.message)}finally{btn.disabled=false}});
@@ -1549,21 +1625,21 @@ function renderStore(){
   $$('[data-store-item]').forEach(card=>{const id=card.dataset.storeItem;const owned=ownedCustomization(id);const isEquipped=equipped.has(id);card.classList.toggle('owned',owned);card.classList.toggle('equipped',isEquipped);const b=card.querySelector('[data-buy-customization]');if(!b)return;b.textContent=isEquipped?'Equipado':owned?'Equipar':'Comprar';b.classList.toggle('primary',!owned||!isEquipped)});
   renderEquippedCustomizationSummary();applyStoreFilter(currentStoreFilter);
 }
-async function handleCustomizationButton(btn){const itemId=btn?.dataset?.buyCustomization;if(!itemId)return;try{btn.disabled=true;if(!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');if(ownedCustomization(itemId)){await bridgeRequest('equip_customization',{itemId});playGameSfx('select');toast('Personalização equipada.')}else{const r=await bridgeRequest('buy_customization',{itemId},25000);playGameSfx('purchase');setTimeout(()=>playGameSfx('coins'),170);toast(`${STORE_CATALOG[itemId]?.name||'Item'} comprado por ₹${formatNumber(r.price||0)}.`);await requestAccountSync().catch(()=>{})}}catch(e){toast(e.message)}finally{btn.disabled=false}}
+async function handleCustomizationButton(btn){const itemId=btn?.dataset?.buyCustomization;if(!itemId)return;try{btn.disabled=true;if(!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');if(ownedCustomization(itemId)){await bridgeRequest('equip_customization',{itemId});playGameSfx('select');toast('Personalização equipada.')}else{const r=await bridgeRequest('buy_customization',{itemId},25000);playGameSfx('purchase');setTimeout(()=>playGameSfx('coins'),170);applyBridgeBalance(r.balance);toast(`${STORE_CATALOG[itemId]?.name||'Item'} comprado por ₹${formatNumber(r.price||0)}.`)}}catch(e){toast(e.message)}finally{btn.disabled=false}}
 $$('[data-buy-customization]').forEach(btn=>btn.addEventListener('click',()=>handleCustomizationButton(btn)));
 
 
 function pokemonItems(){return state.charlotteSync?.pokemon?.items||{}}
 function renderPokemonInventory(){const items=pokemonItems();if($('pokemonBallCount'))$('pokemonBallCount').textContent=formatNumber(items.pokebola||0);if($('pokemonGreatBallCount'))$('pokemonGreatBallCount').textContent=formatNumber(items.greatball||0);if($('pokemonUltraBallCount'))$('pokemonUltraBallCount').textContent=formatNumber(items.ultraball||0);if($('pokemonPremierBallCount'))$('pokemonPremierBallCount').textContent=formatNumber(items.premierball||0);if($('pokemonPotionCount'))$('pokemonPotionCount').textContent=`${formatNumber(items.potion||0)} poção${Number(items.potion||0)===1?'':'ões'}`}
-async function usePokemonPotion(monUid){try{const r=await bridgeRequest('pokemon_use_potion',{monUid},20000);toast(`${r.name||'Pokémon'} recuperou ${r.healed||0} HP.`);await requestAccountSync().catch(()=>{})}catch(e){toast(e.message)}}
-async function buyPokemonPotion(){const btn=$('pokemonBuyPotionBtn');try{if(btn)btn.disabled=true;if(!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');const r=await bridgeRequest('pokemon_buy_potion',{quantity:1},20000);toast(`Poção comprada por ₹${formatNumber(r.total||80)}.`);await requestAccountSync().catch(()=>{})}catch(e){toast(e.message)}finally{if(btn)btn.disabled=false}}
+async function usePokemonPotion(monUid){try{const r=await bridgeRequest('pokemon_use_potion',{monUid},20000);toast(`${r.name||'Pokémon'} recuperou ${r.healed||0} HP.`)}catch(e){toast(e.message)}}
+async function buyPokemonPotion(){const btn=$('pokemonBuyPotionBtn');try{if(btn)btn.disabled=true;if(!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');const r=await bridgeRequest('pokemon_buy_potion',{quantity:1},16000);applyBridgeBalance(r.balance);toast(`Poção comprada por ₹${formatNumber(r.total||80)}.`)}catch(e){toast(e.message)}finally{if(btn)btn.disabled=false}}
 $('pokemonBuyPotionBtn')?.addEventListener('click',buyPokemonPotion);
 function renderCollection(){
   const wrap=$('pokemonCollection');if(!wrap)return;const list=state.charlotteSync?.pokemon?.collection||[];wrap.innerHTML='';$('collectionCount').textContent=String(Array.isArray(list)?list.length:Object.keys(list||{}).length);const rows=Array.isArray(list)?list:Object.values(list||{});const draftIds=new Set((state.teamDraft||[]).map(x=>String(x.uid))),items=pokemonItems();renderPokemonInventory();
   if(!rows.length){wrap.innerHTML='<div class="empty-state small">Nenhum Pokémon sincronizado.</div>';return}
   rows.slice(0,160).forEach(m=>{const p=normalizeMon(m);const damaged=Number(p.hp)<Number(p.maxHp),d=document.createElement('div');d.className='collection-mon collection-mon-v5'+(p.fainted?' fainted':'');const img=document.createElement('img');img.src=p.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`;img.alt='';img.loading='lazy';img.decoding='async';const c=document.createElement('div');const st=document.createElement('strong');st.textContent=p.name;const sm=document.createElement('small');sm.textContent=`Lv.${p.level} • HP ${Math.max(0,p.hp)}/${p.maxHp}${p.fainted?' • DESMAIADO':''}`;c.append(st,sm);const acts=document.createElement('div');acts.className='collection-actions';const add=document.createElement('button');add.className='mini-btn';add.textContent=draftIds.has(String(p.uid))?'Na equipe':'Equipe';add.disabled=draftIds.has(String(p.uid));add.onclick=()=>addTeamMon(m);acts.appendChild(add);if(damaged){const heal=document.createElement('button');heal.className='mini-btn';heal.textContent='Hospital';heal.onclick=()=>startPokemonHealing(p.uid);acts.appendChild(heal)}if(damaged&&!p.fainted&&Number(items.potion||0)>0){const pot=document.createElement('button');pot.className='mini-btn primary';pot.textContent='Usar poção';pot.onclick=()=>usePokemonPotion(p.uid);acts.appendChild(pot)}d.append(img,c,acts);wrap.appendChild(d)})
 }
-async function startPokemonHealing(monUid){try{const r=await bridgeRequest('pokemon_heal_start',{monUid},30000);toast(r.alreadyHealing?'Esse Pokémon já está em recuperação.':`Recuperação iniciada: ₹${formatNumber(r.cost||100)}.`);await requestAccountSync().catch(()=>{})}catch(e){toast(e.message)}}
+async function startPokemonHealing(monUid){try{const r=await bridgeRequest('pokemon_heal_start',{monUid},18000);toast(r.alreadyHealing?'Esse Pokémon já está em recuperação.':`Recuperação iniciada: ₹${formatNumber(r.cost||100)}.`)}catch(e){toast(e.message)}}
 function renderHealingList(){const box=$('pokemonHealingList');if(!box)return;const rows=Object.values(state.pokemonHealing||{});box.innerHTML='';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhum Pokémon em recuperação.</div>';return}rows.sort((a,b)=>Number(a.readyAt||0)-Number(b.readyAt||0)).forEach(x=>{const d=document.createElement('div');d.className='healing-row';const c=document.createElement('div');const st=document.createElement('strong');st.textContent=x.name||'Pokémon';const sm=document.createElement('small');const left=Math.max(0,Number(x.readyAt||0)-Date.now());const min=Math.ceil(left/60000);sm.textContent=left?`Pronto em ~${min} min`:'Finalizando recuperação...';c.append(st,sm);const pill=document.createElement('span');pill.className='pill';pill.textContent='Hospital';d.append(c,pill);box.appendChild(d)})}
 function renderWildEncounter(){
   const box=$('wildStage');if(!box)return;const e=state.pokemonEncounter;
@@ -1599,7 +1675,7 @@ function renderWildEncounter(){
   const stage=document.createElement('div');stage.className='wild-battle-stage';stage.innerHTML=`<div class="wild-mon"><img src="${escText(wild.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${wild.id}.png`)}" alt=""><strong>${escText(wild.name)}</strong><div class="pokemon-type-row">${typeBadgesHtml(wild.types)}</div><small>Lv.${wild.level} • HP ${Math.max(0,wild.hp)}/${wild.maxHp}</small></div><div class="wild-vs">VS</div><div class="wild-mon mine"><img src="${escText(mine.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${mine.id}.png`)}" alt=""><strong>${escText(mine.name||'Sua equipe')}</strong><div class="pokemon-type-row">${typeBadgesHtml(mine.types)}</div><small>${mine.uid?`HP ${Math.max(0,mine.hp)}/${mine.maxHp}`:'Escolha uma equipe saudável'}</small></div>`;
   const acts=document.createElement('div');acts.className='wild-actions';
   if(mine.uid){(mine.moves.length?mine.moves:[{name:'Ataque rápido'},{name:'Investida'}]).slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn';b.textContent=`${m.nome||m.name||`Golpe ${i+1}`} • ${typeLabel(m.type||m.tipo||'normal')}`;b.onclick=async()=>{try{await bridgeRequest('pokemon_wild_move',{moveIndex:i},30000);playPokemonSound('hit')}catch(er){toast(er.message)}};acts.appendChild(b)})}
-  ['pokebola','greatball','ultraball',...(Number(pokemonItems().premierball||0)>0?['premierball']:[])].forEach(ball=>{const b=document.createElement('button');b.className=['ultraball','premierball'].includes(ball)?'btn primary':'btn';b.textContent=ball==='pokebola'?'Pokébola':ball==='greatball'?'Great Ball':ball==='ultraball'?'Ultra Ball':'Premier Ball';b.onclick=async()=>{try{playPokemonSound('ball');const r=await bridgeRequest('pokemon_capture',{ball},30000);toast(r.captured?'Pokémon capturado!':`Escapou! Chance ${r.chance||'?'}%.`);if(r.captured){playPokemonSound('capture');await requestAccountSync().catch(()=>{})}}catch(er){toast(er.message)}};acts.appendChild(b)});
+  ['pokebola','greatball','ultraball',...(Number(pokemonItems().premierball||0)>0?['premierball']:[])].forEach(ball=>{const b=document.createElement('button');b.className=['ultraball','premierball'].includes(ball)?'btn primary':'btn';b.textContent=ball==='pokebola'?'Pokébola':ball==='greatball'?'Great Ball':ball==='ultraball'?'Ultra Ball':'Premier Ball';b.onclick=async()=>{try{playPokemonSound('ball');const r=await bridgeRequest('pokemon_capture',{ball},30000);toast(r.captured?'Pokémon capturado!':`Escapou! Chance ${r.chance||'?'}%.`);if(r.captured)playPokemonSound('capture')}catch(er){toast(er.message)}};acts.appendChild(b)});
   const flee=document.createElement('button');flee.className='btn danger-ghost';flee.type='button';flee.textContent='Fugir';flee.onclick=async()=>{try{await bridgeRequest('pokemon_wild_exit',{},20000);toast('Você saiu da batalha.')}catch(er){toast(er.message)}};acts.appendChild(flee);
   box.append(stage,acts);
 }
@@ -1634,13 +1710,13 @@ function renderSiteRaid(){
   battleWrap.appendChild(slots);
   if(battle.status==='team_defeated'||!active||active.fainted||active.hp<=0){
     const defeated=document.createElement('div');defeated.className='site-raid-defeated';defeated.innerHTML='<strong>Sua equipe foi derrotada.</strong><span>Cure todos agora com rúpias ou saia, reorganize sua equipe no Centro Pokémon e volte para a Raid.</span>';
-    const heal=document.createElement('button');heal.className='btn primary';heal.textContent=`Curar equipe • ₹${formatNumber(Number(battle.healCost||Math.max(1,team.length)*100))}`;heal.onclick=async()=>{try{heal.disabled=true;const r=await bridgeRequest('site_raid_heal',{},30000);state.siteRaidBattle=r.battle||null;await requestAccountSync().catch(()=>{});toast(`Equipe curada. Saldo: ₹${formatNumber(r.balance||0)}.`);renderSiteRaid()}catch(e){toast(e.message)}finally{heal.disabled=false}};
+    const heal=document.createElement('button');heal.className='btn primary';heal.textContent=`Curar equipe • ₹${formatNumber(Number(battle.healCost||Math.max(1,team.length)*100))}`;heal.onclick=async()=>{try{heal.disabled=true;const r=await bridgeRequest('site_raid_heal',{},18000);state.siteRaidBattle=r.battle||null;applyBridgeBalance(r.balance);toast(`Equipe curada. Saldo: ₹${formatNumber(r.balance||0)}.`);renderSiteRaid()}catch(e){toast(e.message)}finally{heal.disabled=false}};
     const exit=document.createElement('button');exit.className='btn';exit.textContent='Sair e trocar equipe';exit.onclick=async()=>{try{await bridgeRequest('site_raid_exit',{},20000);state.siteRaidBattle=null;navigate('pokemon');toast('Você saiu da batalha. Escolha sua equipe e entre novamente.')}catch(e){toast(e.message)}};
     const row=document.createElement('div');row.className='site-raid-defeated-actions';row.append(heal,exit);defeated.appendChild(row);battleWrap.appendChild(defeated);box.appendChild(battleWrap);return
   }
   const activeMon=normalizeMon(active),activeCard=document.createElement('div');activeCard.className='site-raid-active-mon';activeCard.innerHTML=`<img src="${escText(activeMon.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${activeMon.id}.png`)}" alt=""><div><small>EM CAMPO</small><strong>${escText(activeMon.name)}</strong><span>Lv.${activeMon.level} • HP ${Math.max(0,activeMon.hp)}/${activeMon.maxHp}</span><div class="pokemon-type-row">${typeBadgesHtml(activeMon.types)}</div></div>`;battleWrap.appendChild(activeCard);
   const acts=document.createElement('div');acts.className='site-raid-actions';const moves=activeMon.moves?.length?activeMon.moves:[{name:'Ataque rápido',power:40,type:'normal'}];
-  moves.slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn'+(i===0?' primary':'');b.innerHTML=`<b>${escText(m.nome||m.name||`Golpe ${i+1}`)}</b><small>${escText(typeLabel(m.type||m.tipo||'normal'))} • ${Number(m.power||m.poder||0)}</small>`;b.onclick=async()=>{try{b.disabled=true;playGameSfx('select');const r=await bridgeRequest('site_raid_attack',{moveIndex:i},30000);state.siteRaidBattle=r.battle||state.siteRaidBattle;if(r.damage){playPokemonSound('hit');const counter=Number(r.counterDamage||0);toast(counter?`${activeMon.name} causou ${r.damage}. ${boss.name} revidou com ${counter}.`:`${activeMon.name} causou ${r.damage} de dano.`)}renderSiteRaid()}catch(e){toast(e.message)}finally{setTimeout(()=>b.disabled=false,700)}};acts.appendChild(b)});
+  moves.slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn'+(i===0?' primary':'');b.innerHTML=`<b>${escText(m.nome||m.name||`Golpe ${i+1}`)}</b><small>${escText(typeLabel(m.type||m.tipo||'normal'))} • ${Number(m.power||m.poder||0)}</small>`;b.onclick=async()=>{try{b.disabled=true;playGameSfx('select');const oldHtml=b.innerHTML;b.innerHTML='<b>Atacando...</b><small>Registrando golpe</small>';const r=await bridgeRequest('site_raid_attack',{raidId:raid.id,moveIndex:i},18000);state.siteRaidBattle=r.battle||state.siteRaidBattle;if(r.damage){playPokemonSound('hit');const counter=Number(r.counterDamage||0);toast(counter?`${activeMon.name} causou ${r.damage}. ${boss.name} revidou com ${counter}.`:`${activeMon.name} causou ${r.damage} de dano.`)}renderSiteRaid();if(document.body.contains(b))b.innerHTML=oldHtml}catch(e){toast(e.message)}finally{setTimeout(()=>{if(document.body.contains(b))b.disabled=false},350)}};acts.appendChild(b)});
   const exit=document.createElement('button');exit.className='btn danger-ghost';exit.type='button';exit.textContent='Sair da batalha';exit.onclick=async()=>{try{await bridgeRequest('site_raid_exit',{},20000);state.siteRaidBattle=null;renderSiteRaid();toast('Você saiu da batalha.')}catch(e){toast(e.message)}};acts.appendChild(exit);battleWrap.appendChild(acts);box.appendChild(battleWrap);
 }
 $('siteRaidStartBtn')?.addEventListener('click',async()=>{try{await bridgeRequest('site_raid_start',{},30000,false);toast('Raid iniciada.')}catch(e){toast(e.message)}});
@@ -1798,17 +1874,26 @@ $('watchSyncBtn')?.addEventListener('click',syncWatchPlayer);
 $('watchLocalFileBtn')?.addEventListener('click',()=>{if(!isWatchHost())return toast('Somente o host pode transmitir um arquivo.');$('watchLocalFileInput')?.click()});
 $('watchLocalFileInput')?.addEventListener('change',async ev=>{const file=ev.target.files?.[0];ev.target.value='';if(file)await startWatchLocalFile(file)});
 async function uniqueWatchCode(){for(let i=0;i<8;i++){const c=randomCode();const sn=await get(ref(db,`watchRooms/${c}`));if(!sn.exists())return c}throw new Error('Não foi possível gerar código.')}
+let watchCreatePending=false;
+function watchVisibilityLabel(value){const v=String(value||'private');return v==='public'?'Pública':v==='invite'?'Só por convite':'Privada por código'}
+function watchVisibilityClass(value){const v=String(value||'private');return v==='public'?'watch-privacy-public':v==='invite'?'watch-privacy-invite':'watch-privacy-private'}
 async function createWatchRoom(ev){
-  ev.preventDefault();if(!state.user)return;
+  ev.preventDefault();if(!state.user||watchCreatePending)return;
+  const form=$('watchCreateForm'),submit=form?.querySelector('button[type="submit"]'),oldText=submit?.textContent||'Criar sala';
+  watchCreatePending=true;if(submit){submit.disabled=true;submit.textContent='Criando...'}
   try{
-    const code=await uniqueWatchCode(),createdAt=nowIso(),name=$('watchNameInput').value.trim()||'Watch Party',visibility=String($('watchVisibilityInput')?.value||'public');
-    const room={meta:{code,name,ownerUid:state.user.uid,visibility,createdAt,updatedAt:Date.now()},members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Host',joinedAt:createdAt}},invited:{[state.user.uid]:true},media:{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}};
-    await set(ref(db,`watchRooms/${code}`),room);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name,role:'Host',visibility,joinedAt:createdAt});
-    if(visibility==='public')await set(ref(db,`watchPublicRooms/${code}`),{code,name,ownerUid:state.user.uid,ownerName:displayName(),memberCount:1,updatedAt:Date.now()});
-    closeModal('watchCreateModal');$('watchCreateForm').reset();await openWatchRoom(code);await joinWatchVoice({automatic:true}).catch(()=>false)
+    const code=await uniqueWatchCode(),createdAt=nowIso(),createdAtMs=Date.now(),name=$('watchNameInput').value.trim()||'Watch Party',visibility=String($('watchVisibilityInput')?.value||'public');
+    const room={meta:{code,name,ownerUid:state.user.uid,visibility,createdAt,updatedAt:createdAtMs},members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Host',joinedAt:createdAt}},invited:{[state.user.uid]:true},media:{url:'',type:'',playing:false,position:0,updatedAt:createdAtMs}};
+    const updates={};
+    updates[`watchRooms/${code}`]=room;
+    updates[`watchUserRooms/${state.user.uid}/${code}`]={code,name,role:'Host',visibility,joinedAt:createdAt};
+    if(visibility==='public'||visibility==='invite')updates[`watchPublicRooms/${code}`]={code,name,ownerUid:state.user.uid,ownerName:displayName(),memberCount:1,visibility,updatedAt:createdAtMs};
+    await update(ref(db),updates);
+    closeModal('watchCreateModal');form?.reset();await openWatchRoom(code);joinWatchVoice({automatic:true}).catch(()=>false)
   }catch(e){toast(permissionMessage(e,e.message||'Não foi possível criar a sala.'),6000)}
+  finally{watchCreatePending=false;if(submit){submit.disabled=false;submit.textContent=oldText}}
 }
-async function loadWatchRooms(){if(!state.user)return;const box=$('watchRoomsList');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await get(ref(db,`watchUserRooms/${state.user.uid}`));box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];$('homeWatchRecent').textContent=rows.length?`${rows.length} sala${rows.length===1?'':'s'}`:'Assistir e conversar';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala.</div>';return}rows.forEach(r=>{const item=document.createElement('div');item.className='room-item';const c=document.createElement('div');c.innerHTML=`<strong>${escText(r.name||r.code)}</strong><small>${escText(r.code)} • ${escText(r.role||'Participante')}</small>`;const acts=document.createElement('div');acts.className='room-item-actions';const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=()=>openWatchRoom(r.code);acts.appendChild(b);if(r.role==='Host'){const del=document.createElement('button');del.className='btn danger-ghost';del.textContent='Apagar';del.onclick=()=>deleteWatchRoom(r.code,r.name);acts.appendChild(del)}item.append(c,acts);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
+async function loadWatchRooms(){if(!state.user)return;const box=$('watchRoomsList');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await get(ref(db,`watchUserRooms/${state.user.uid}`));box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];$('homeWatchRecent').textContent=rows.length?`${rows.length} sala${rows.length===1?'':'s'}`:'Assistir e conversar';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala.</div>';return}rows.forEach(r=>{const visibility=String(r.visibility||'private'),item=document.createElement('div');item.className='room-item watch-room-card';const c=document.createElement('div');c.className='watch-room-card-copy';c.innerHTML=`<div class="watch-room-card-title"><strong>${escText(r.name||r.code)}</strong><span class="watch-privacy-badge ${watchVisibilityClass(visibility)}">${escText(watchVisibilityLabel(visibility))}</span></div><small>${escText(r.code)} • ${escText(r.role||'Participante')}</small>`;const acts=document.createElement('div');acts.className='room-item-actions';const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=()=>openWatchRoom(r.code);acts.appendChild(b);if(r.role==='Host'){const del=document.createElement('button');del.className='btn danger-ghost';del.textContent='Apagar';del.onclick=()=>deleteWatchRoom(r.code,r.name);acts.appendChild(del)}item.append(c,acts);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
 async function joinWatchRoom(code){
   if(!state.user)return;code=String(code||'').trim().toUpperCase();
   try{
@@ -1840,10 +1925,10 @@ async function unbanWatchMember(uid){if(!isWatchHost()||!state.watchCode||!uid)r
 function renderWatchBans(bans={}){const box=$('watchBannedList'),rows=$('watchBannedRows');if(!box||!rows)return;const all=Object.values(bans||{});box.hidden=!isWatchHost()||!all.length;rows.innerHTML='';all.forEach(x=>{const row=document.createElement('div');row.className='watch-banned-row';row.innerHTML=`<span>${escText(x.name||x.uid||'Usuário')}</span>`;const b=document.createElement('button');b.className='mini-btn';b.type='button';b.textContent='Desbanir';b.onclick=()=>unbanWatchMember(x.uid);row.appendChild(b);rows.appendChild(row)})}
 
 function renderWatchPublicRooms(){
-  const box=$('watchPublicRoomsList');if(!box)return;const rows=Object.values(state.watchPublicRooms||{}).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0));box.innerHTML='';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala pública agora.</div>';return}rows.slice(0,30).forEach(r=>{const item=document.createElement('div');item.className='room-item';item.innerHTML=`<div><strong>${escText(r.name||r.code)}</strong><small>${escText(r.ownerName||'Host')} • ${Number(r.memberCount||0)} pessoa(s) • ${escText(r.code)}</small></div>`;const b=document.createElement('button');b.className='btn';b.type='button';b.textContent='Entrar';b.onclick=()=>joinWatchRoom(r.code);item.appendChild(b);box.appendChild(item)})
+  const box=$('watchPublicRoomsList');if(!box)return;const rows=Object.values(state.watchPublicRooms||{}).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0));box.innerHTML='';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala disponível agora.</div>';return}rows.slice(0,30).forEach(r=>{const visibility=String(r.visibility||'public');if(visibility==='private')return;const item=document.createElement('div');item.className='room-item watch-room-card';const copy=document.createElement('div');copy.className='watch-room-card-copy';copy.innerHTML=`<div class="watch-room-card-title"><strong>${escText(r.name||r.code)}</strong><span class="watch-privacy-badge ${watchVisibilityClass(visibility)}">${escText(watchVisibilityLabel(visibility))}</span></div><small>${escText(r.ownerName||'Host')} • ${Number(r.memberCount||0)} pessoa(s)${visibility==='public'?` • ${escText(r.code)}`:''}</small>${visibility==='invite'?'<em>Entre somente pelo convite enviado pelo host.</em>':''}`;const b=document.createElement('button');b.className='btn';b.type='button';if(visibility==='invite'){b.textContent='Somente convite';b.disabled=true;b.classList.add('watch-invite-only-btn')}else{b.textContent='Entrar';b.onclick=()=>joinWatchRoom(r.code)}item.append(copy,b);box.appendChild(item)});if(!box.children.length)box.innerHTML='<div class="empty-state small">Nenhuma sala disponível agora.</div>'
 }
 function renderWatchInviteFriends(){const sel=$('watchInviteFriendSelect');if(!sel)return;const current=sel.value;sel.innerHTML='<option value="">Convidar amigo</option>';Object.values(state.friends||{}).filter(f=>!state.watchRoom?.members?.[f.uid]).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||f.username||'Amigo';sel.appendChild(o)});if([...sel.options].some(o=>o.value===current))sel.value=current}
-$('watchVisibilitySelect')?.addEventListener('change',async e=>{if(!isWatchHost()||!state.watchCode)return;const visibility=String(e.target.value||'private');try{await update(ref(db,`watchRooms/${state.watchCode}/meta`),{visibility,updatedAt:Date.now()});if(visibility==='public')await set(ref(db,`watchPublicRooms/${state.watchCode}`),{code:state.watchCode,name:state.watchRoom?.meta?.name||state.watchCode,ownerUid:state.user.uid,ownerName:displayName(),memberCount:Object.keys(state.watchRoom?.members||{}).length,updatedAt:Date.now()});else await remove(ref(db,`watchPublicRooms/${state.watchCode}`)).catch(()=>{});toast(visibility==='public'?'Sala pública.':visibility==='invite'?'Sala somente por convite.':'Sala privada por código.')}catch(err){toast(permissionMessage(err,err.message))}});
+$('watchVisibilitySelect')?.addEventListener('change',async e=>{if(!isWatchHost()||!state.watchCode)return;const visibility=String(e.target.value||'private');try{const updatedAt=Date.now(),patch={};patch[`watchRooms/${state.watchCode}/meta/visibility`]=visibility;patch[`watchRooms/${state.watchCode}/meta/updatedAt`]=updatedAt;if(visibility==='public'||visibility==='invite')patch[`watchPublicRooms/${state.watchCode}`]={code:state.watchCode,name:state.watchRoom?.meta?.name||state.watchCode,ownerUid:state.user.uid,ownerName:displayName(),memberCount:Object.keys(state.watchRoom?.members||{}).length,visibility,updatedAt};else patch[`watchPublicRooms/${state.watchCode}`]=null;await update(ref(db),patch);toast(visibility==='public'?'Sala pública.':visibility==='invite'?'Sala somente por convite.':'Sala privada por código.')}catch(err){toast(permissionMessage(err,err.message))}});
 $('watchInviteFriendBtn')?.addEventListener('click',async()=>{if(!isWatchHost()||!state.watchCode)return;const targetUid=$('watchInviteFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');try{await set(ref(db,`watchRooms/${state.watchCode}/invited/${targetUid}`),true);const id=`watch_${state.watchCode}_${Date.now()}`;await set(ref(db,`siteNotifications/${targetUid}/${id}`),{id,type:'watch_invite',actorUid:state.user.uid,roomCode:state.watchCode,title:'Convite para Watch Party',text:`${displayName()} convidou você para ${state.watchRoom?.meta?.name||'uma Watch Party'}.`,link:`?watch=${state.watchCode}#watch`,sound:true,createdAt:Date.now()}).catch(()=>{});toast('Convite enviado.')}catch(e){toast(permissionMessage(e,e.message))}});
 function renderWatchChat(chat={}){const box=$('watchChatList');if(!box)return;const rows=Object.values(chat||{}).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0)).slice(-100);box.innerHTML=rows.length?'':'<div class="empty-state small">Converse com a sala.</div>';rows.forEach(m=>{const row=document.createElement('div');row.className='watch-chat-message'+(m.uid===state.user?.uid?' mine':'');row.innerHTML=`<strong>${escText(m.name||'Usuário')}</strong><span>${escText(m.text||'')}</span><small>${shortDateTime(m.createdAt)}</small>`;box.appendChild(row)});box.scrollTop=box.scrollHeight}
 $('watchChatForm')?.addEventListener('submit',async ev=>{ev.preventDefault();if(!state.user||!state.watchCode)return;const input=$('watchChatInput'),text=String(input?.value||'').trim().slice(0,500);if(!text)return;try{const mr=push(ref(db,`watchRooms/${state.watchCode}/chat`));await set(mr,{id:mr.key,uid:state.user.uid,name:displayName(),text,createdAt:Date.now()});input.value=''}catch(e){toast(permissionMessage(e,e.message))}});

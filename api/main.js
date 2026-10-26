@@ -1283,6 +1283,10 @@ module.exports = async (req, res) => {
     return require('./slots').handleSlotsSpin(req,res,{readJsonBody,sendJson});
   }
 
+  if (action === 'pokemon_explore_site') {
+    return require('./explore').handlePokemonExplore(req,res,{readJsonBody,sendJson});
+  }
+
   if(action === 'youtube_search'){
     if(req.method!=='GET')return sendJson(res,405,{erro:'Método inválido'});
     const key=process.env.YOUTUBE_API_KEY,term=String(qp(req,'q')||'').trim().slice(0,120);
