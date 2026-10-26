@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261026-v14-core">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261026-v15-social-raid">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -286,8 +286,8 @@
               <div><span class="tag">RAID GLOBAL</span><h3>Raid Pokémon</h3></div>
               <span class="pill" id="siteRaidStatus">Aguardando</span>
             </div>
-            <p class="panel-help">Quando uma Raid Global estiver ativa, o boss aparece aqui em tempo real. Ataque com sua equipe vinculada à Charlotte e participe das recompensas.</p>
-            <div class="site-raid-stage" id="siteRaidStage"><div class="empty-state small">Nenhuma raid ativa. O modo automático pode iniciar uma nova raid a cada hora.</div></div>
+            <p class="panel-help">Quando uma Raid Global aparecer, entre na batalha com sua equipe de até 6 Pokémon. Você pode trocar de Pokémon durante a luta e o próximo entra automaticamente quando o atual desmaia.</p>
+            <div class="site-raid-stage" id="siteRaidStage"><div class="empty-state small">Nenhuma raid ativa no momento.</div></div>
             <div class="site-raid-prefs">
               <label class="check-row"><input id="raidWhatsappNotify" type="checkbox"><span>Receber avisos de Raid no WhatsApp</span></label>
               <div class="site-raid-admin" id="siteRaidAdmin" hidden>
@@ -371,11 +371,18 @@
               <div class="panel-head"><div><span class="tag">SEU PERFIL</span><h3>Perfil do Tinder</h3></div><span class="pill" id="tinderOwnStatus">Não criado</span></div>
               <p class="muted">Você pode criar e editar pelo site. O perfil fica sincronizado com a Charlotte. Somente maiores de 18 anos.</p>
               <form id="tinderProfileForm" class="stack-form tinder-profile-form">
+                <div class="tinder-own-photo-row">
+                  <img id="tinderProfilePreview" src="/assets/img/profile.jpg" alt="Prévia da foto do Tinder">
+                  <div><strong>Sua foto</strong><small>Use uma foto do aparelho ou cole um link.</small></div>
+                </div>
                 <label>Nome<input id="tinderProfileName" maxlength="60" required></label>
                 <label>Idade<input id="tinderProfileAge" type="number" min="18" max="99" required></label>
-                <label>Foto (URL)<input id="tinderProfilePhoto" type="url" placeholder="https://..."></label>
+                <label>Foto do aparelho<input id="tinderProfileFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
+                <div class="tinder-photo-divider"><span>ou</span></div>
+                <label>Link da foto<input id="tinderProfilePhoto" type="url" placeholder="https://..."></label>
                 <label>Bio<textarea id="tinderProfileBio" maxlength="300" rows="4" placeholder="Fale um pouco sobre você"></textarea></label>
                 <label class="check-row"><input id="tinderProfileActive" type="checkbox" checked><span>Mostrar meu perfil para outras pessoas</span></label>
+                <small class="muted" id="tinderProfileUploadStatus">Nome, foto e bio ficam sincronizados com a Charlotte.</small>
                 <button class="btn primary full" type="submit">Salvar perfil</button>
               </form>
             </article>
@@ -577,7 +584,7 @@
           <div class="studio-section-label game-section-label"><span>MULTIPLAYER</span><h3>21 e Forca contra amigos</h3></div>
           <div class="multiplayer-games-grid">
             <article class="panel game-arena-large blackjack-card" id="blackjackCard">
-              <div class="panel-head"><div><span class="tag">21 PVP</span><h3>Vinte e um</h3><small class="muted">Chegue o mais perto de 21 sem estourar. A mão do adversário fica secreta até o fim.</small></div><span class="pill" id="blackjackStatus">Livre</span></div>
+              <div class="panel-head"><div><span class="tag">21 PVP</span><h3>Vinte e um</h3><small class="muted">Faça 21 ou chegue o mais perto. A mão do adversário só aparece no final.</small></div><span class="pill" id="blackjackStatus">Livre</span></div>
               <div class="game-lobby-row" id="blackjackLobby">
                 <label>Adversário<select id="blackjackFriendSelect"><option value="">Escolha um amigo</option></select></label>
                 <label>Aposta opcional<input id="blackjackWagerInput" type="number" min="0" max="100000" step="10" value="0" placeholder="0 = sem aposta"></label>
@@ -615,14 +622,14 @@
 
           <div class="studio-section-label game-section-label"><span>CASSINO SOLO</span><h3>Slots Gremory</h3></div>
           <article class="panel game-arena-large slots-card slots-pro-card">
-            <div class="panel-head"><div><span class="tag">SLOTS</span><h3>Slots de Rupias</h3><small class="muted">A aposta é debitada da mesma carteira de Rupias vinculada à Charlotte.</small></div><span class="pill" id="slotsStatus">Pronto</span></div>
+            <div class="panel-head"><div><span class="tag">SLOTS</span><h3>Slots de Rupias</h3><small class="muted">Escolha o valor e gire.</small></div><span class="pill" id="slotsStatus">Pronto</span></div>
             <div class="slot-wallet"><span>Seu saldo</span><strong id="slotsBalance">₹ 0</strong></div>
             <div class="slot-bet-panel">
               <label>Aposta<input id="slotsBetInput" type="number" min="10" max="5000" step="10" value="50"></label>
               <div class="slot-bet-presets" aria-label="Apostas rápidas"><button class="btn" data-slot-bet="10" type="button">₹10</button><button class="btn" data-slot-bet="50" type="button">₹50</button><button class="btn" data-slot-bet="100" type="button">₹100</button><button class="btn" data-slot-bet="500" type="button">₹500</button><button class="btn" data-slot-bet="1000" type="button">₹1.000</button></div>
             </div>
             <div class="slot-machine slot-machine-large"><div class="slot-reel" id="slotReel1">✦</div><div class="slot-reel" id="slotReel2">♛</div><div class="slot-reel" id="slotReel3">◆</div></div>
-            <div class="slot-result-line"><strong id="slotsLastWin">Escolha sua aposta e gire.</strong><span>Trincas pagam mais • qualquer dupla devolve prêmio menor.</span></div>
+            <div class="slot-result-line"><strong id="slotsLastWin">Escolha sua aposta e gire.</strong><span id="slotsBalanceHint">O resultado aparece aqui.</span></div>
             <div class="arcade-actions"><button class="btn primary full slots-spin-button" id="slotsSpinBtn" type="button">Girar Slots</button></div>
             <details class="slot-paytable"><summary>Tabela de prêmios</summary><div><span>777</span><b>25x</b><span>♛♛♛</span><b>12x</b><span>⚡⚡⚡</span><b>8x</b><span>◆◆◆</span><b>6x</b><span>☾☾☾</span><b>5x</b><span>♥♥♥</span><b>4x</b><span>✦✦✦</span><b>3x</b><span>Qualquer dupla</span><b>1,2x</b></div></details>
           </article>
@@ -822,36 +829,45 @@
           </div>
         </section>
 
-        <section class="view" data-view="premium">
-          <div class="section-head"><div><span class="tag">PREMIUM</span><h2>Gremory Premium</h2></div><button class="btn" id="refreshPremiumBtn" type="button">Atualizar status</button></div>
-          <article class="panel premium-status-card">
-            <div><span class="tag">SUA CONTA</span><h3 id="premiumStatusTitle">Plano padrão</h3><p id="premiumStatusText">Vincule a Charlotte para comprar e sincronizar o Premium pelo site.</p></div>
-            <span class="pill" id="premiumStatusPill">Padrão</span>
-          </article>
-          <article class="panel premium-rupias-card">
-            <div><span class="tag">RÚPIAS</span><h3>Premium 7 dias</h3><p>Ative por <strong>₹200.000</strong>. O link do grupo é opcional; você pode vincular um grupo depois.</p></div>
-            <label>Grupo do WhatsApp (opcional)<input id="premiumGroupLinkInput" type="url" placeholder="https://chat.whatsapp.com/..."></label>
-            <button class="btn primary" id="premiumRupiasBuyBtn" type="button">Ativar por ₹200.000</button>
-            <small class="muted" id="premiumRupiasStatus">Inclui Charlotte no grupo enquanto houver Premium ativo.</small>
-          </article>
-          <article class="panel premium-benefits-card">
-            <div class="panel-head"><div><span class="tag">VANTAGENS</span><h3>Premium que vale a pena</h3></div></div>
-            <div class="premium-benefits-grid">
-              <div><strong>🤖 Charlotte no grupo</strong><small>1 grupo enquanto o Premium estiver ativo; link pode ser informado depois.</small></div>
-              <div><strong>💰 Bônus diário</strong><small><code>/premiumbonus</code> rende ₹5.000 a cada 24 horas.</small></div>
-              <div><strong>🎵 Music ilimitada</strong><small>Se um Premium ativa a música da Watch Party, a sala inteira fica ilimitada.</small></div>
-              <div><strong>🏥 Hospital rápido</strong><small>Recuperação Pokémon Premium é mais rápida.</small></div>
-              <div><strong>🏆 Recompensas melhores</strong><small>Mais limite e bônus em vitórias elegíveis.</small></div>
-              <div><strong>✨ Destaque Premium</strong><small>Status Premium sincronizado entre Charlotte e site.</small></div>
-            </div>
-          </article>
-          <div class="plans-grid">
+        <section class="view premium-view-v15" data-view="premium">
+          <div class="section-head premium-page-head"><div><span class="tag">PREMIUM</span><h2>Gremory Premium</h2><p class="muted">Escolha como ativar e veja seus benefícios sem enrolação.</p></div><button class="btn" id="refreshPremiumBtn" type="button">Atualizar status</button></div>
+
+          <div class="premium-dashboard-v15">
+            <article class="panel premium-status-card premium-status-v15">
+              <div class="premium-status-icon">♛</div>
+              <div class="premium-status-copy"><span class="tag">SUA CONTA</span><h3 id="premiumStatusTitle">Plano padrão</h3><p id="premiumStatusText">Vincule a Charlotte para comprar e sincronizar o Premium pelo site.</p></div>
+              <span class="pill" id="premiumStatusPill">Padrão</span>
+            </article>
+
+            <article class="panel premium-rupias-card premium-rupias-v15">
+              <div class="premium-rupias-price"><span class="tag">7 DIAS • RÚPIAS</span><strong>₹200.000</strong><small>Ativação imediata pela Charlotte</small></div>
+              <div class="premium-rupias-copy"><h3>Premium 7 dias</h3><p>O grupo do WhatsApp é opcional. Você pode informar agora ou vincular depois.</p></div>
+              <label>Grupo do WhatsApp (opcional)<input id="premiumGroupLinkInput" type="url" placeholder="https://chat.whatsapp.com/..."></label>
+              <div class="premium-group-actions"><button class="btn primary" id="premiumRupiasBuyBtn" type="button">Ativar Premium</button><button class="btn" id="premiumGroupUnlinkBtn" type="button" hidden>Desvincular grupo</button></div>
+              <small class="muted premium-rupias-status" id="premiumRupiasStatus">A Charlotte permanece no grupo enquanto o Premium estiver ativo.</small>
+            </article>
+          </div>
+
+          <div class="premium-price-head"><div><span class="tag">OUTROS PLANOS</span><h3>Ativar por pagamento</h3></div></div>
+          <div class="plans-grid premium-plans-grid-v15">
             <article class="plan-card"><small>1 DIA</small><strong>R$ 2</strong><span>1 dia</span><button class="btn" data-buy-plan="1">Comprar</button></article>
             <article class="plan-card"><small>7 DIAS</small><strong>R$ 5</strong><span>7 dias</span><button class="btn" data-buy-plan="7">Comprar</button></article>
             <article class="plan-card featured"><small>15 DIAS</small><strong>R$ 8</strong><span>15 dias</span><button class="btn primary" data-buy-plan="15">Comprar</button></article>
             <article class="plan-card"><small>30 DIAS</small><strong>R$ 12</strong><span>30 dias</span><button class="btn" data-buy-plan="30">Comprar</button></article>
           </div>
           <div class="form-status" id="premiumCheckoutStatus"></div>
+
+          <article class="panel premium-benefits-card premium-benefits-v15">
+            <div class="panel-head"><div><span class="tag">VANTAGENS</span><h3>O que vem com o Premium</h3></div></div>
+            <div class="premium-benefits-grid">
+              <div><span>🤖</span><strong>Charlotte no grupo</strong><small>1 grupo enquanto o Premium estiver ativo.</small></div>
+              <div><span>💰</span><strong>Bônus diário</strong><small>₹5.000 no <code>/premiumbonus</code>.</small></div>
+              <div><span>🎵</span><strong>Music ilimitada</strong><small>Watch Party sem limite quando ativada por Premium.</small></div>
+              <div><span>🏥</span><strong>Hospital rápido</strong><small>Recuperação Pokémon em menos tempo.</small></div>
+              <div><span>🏆</span><strong>Mais recompensas</strong><small>Bônus em vitórias elegíveis.</small></div>
+              <div><span>✨</span><strong>Status sincronizado</strong><small>Premium reconhecido no site e na Charlotte.</small></div>
+            </div>
+          </article>
         </section>
 
         <section class="view" data-view="personalize">
@@ -912,11 +928,18 @@
           </div>
         </section>
 
-<section class="view community-view" data-view="feed">
- <div class="section-head"><div><span class="tag">COMUNIDADE</span><h2>Seu espaço na Gremory</h2><p class="muted">Momentos, amigos e suas conquistas.</p></div><button id="feedRefresh" class="btn" type="button">Atualizar</button></div>
+<section class="view community-view feed-view-v15" data-view="feed">
+ <div class="section-head"><div><span class="tag">COMUNIDADE</span><h2>Feed</h2><p class="muted">Veja quem você segue, publique e converse com seus amigos.</p></div><button id="feedRefresh" class="btn" type="button">Atualizar</button></div>
  <article class="panel"><form id="feedForm" class="stack-form"><label>Nova publicação<textarea id="feedText" maxlength="1800" rows="3" placeholder="O que você quer compartilhar?"></textarea></label><label>Foto ou vídeo<input id="feedFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"></label><p class="muted">Fotos até 10 MB • Vídeos até 50 MB. Publique apenas conteúdo que você pode compartilhar.</p><label>Ou link HTTPS da mídia<input id="feedUrl" type="url" placeholder="https://..."></label><label>Tipo da mídia por link<select id="feedKind"><option value="image">Foto / GIF</option><option value="video">Vídeo MP4 / WebM</option></select></label><button class="btn primary" type="submit">Publicar</button><p id="feedProgress" role="status"></p></form></article>
  <div class="feed-filters"><button class="btn active" id="feedAll" type="button">Todos</button><button class="btn" id="feedFollowing" type="button">Seguindo</button><button class="btn" id="feedMyProfile" type="button">Meu perfil e emblemas</button></div>
  <div id="feedProfile" class="panel" hidden></div><div id="feedList" class="feed-list" aria-live="polite"></div><button id="feedMore" class="btn" type="button">Carregar mais</button>
+ <nav class="feed-mobile-nav" id="feedMobileNav" aria-label="Navegação do feed">
+   <button type="button" data-route="home" aria-label="Início"><span>⌂</span><small>Início</small></button>
+   <button type="button" id="feedMobileSearchBtn" aria-label="Pesquisar pessoas"><span>⌕</span><small>Buscar</small></button>
+   <button type="button" class="active" data-route="feed" aria-label="Feed"><span>▧</span><small>Feed</small></button>
+   <button type="button" id="feedMobileMessagesBtn" aria-label="Mensagens"><span>✉</span><small>Mensagens</small></button>
+   <button type="button" class="feed-mobile-profile" id="feedMobileProfileBtn" aria-label="Meu perfil"><img id="feedMobileProfileAvatar" src="/assets/img/profile.jpg" alt=""><small>Perfil</small></button>
+ </nav>
 </section>
         <section class="view" data-view="updates">
           <div class="section-head"><div><span class="tag">ATUALIZAÇÕES</span><h2>Novidades</h2></div></div>
@@ -1143,6 +1166,6 @@
 Outra música"></textarea></label><button class="btn primary full" type="submit">Salvar</button></form></div></div>
   <div class="modal" id="dmModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="dmModal"></button><div class="modal-card wide"><button class="modal-close" data-close-modal="dmModal">×</button><span class="tag">MENSAGEM PRIVADA</span><h2 id="dmTitle">Conversa</h2><div id="dmMessages" class="dm-messages"><div class="empty-state small">Nenhuma mensagem.</div></div><form id="dmForm" class="watch-chat-form"><input id="dmInput" maxlength="500" placeholder="Mensagem"><button class="btn primary" type="submit">Enviar</button></form></div></div>
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261026-v14-core"></script>
+  <script type="module" src="/assets/js/app.js?v=20261026-v15-social-raid"></script>
 </body>
 </html>

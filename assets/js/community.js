@@ -16,7 +16,7 @@ export function initCommunity({app,db,getUser,isAdmin,toast,getSelectedUid,bridg
   const rows=Object.entries(posts).filter(([,p])=>!onlyFollowing||following[p.uid]||p.uid===getUser()?.uid).sort((a,b)=>b[1].createdAt-a[1].createdAt);
   for(const [id,p] of rows){
    const card=node('article',null,'panel feed-post'),head=node('div',null,'feed-post-head');
-   const avatar=node('img');avatar.src=safeUrl(directory[p.uid]?.avatar)||'/assets/img/profile.jpg';avatar.alt='';avatar.loading='lazy';
+   const avatar=node('img');avatar.src=safeUrl(directory[p.uid]?.avatar)||'/assets/img/profile.jpg';avatar.alt='';avatar.loading='lazy';avatar.classList.add('feed-post-avatar');avatar.role='button';avatar.tabIndex=0;avatar.onclick=()=>showProfile(p.uid).catch(e=>toast(e.message));avatar.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showProfile(p.uid).catch(err=>toast(err.message))}};
    head.append(avatar,button(name(p.uid),()=>showProfile(p.uid)));const time=node('small',new Date(p.createdAt).toLocaleString('pt-BR'));head.append(time);card.append(head,node('p',p.text,'feed-post-text'));
    const url=safeUrl(p.mediaUrl);if(url){const media=node(p.mediaKind==='video'?'video':'img');media.className='feed-media';media.src=url;if(p.mediaKind==='video'){media.controls=true;media.playsInline=true;media.preload='metadata'}else{media.loading='lazy';media.alt='Imagem da publicação'}media.onerror=()=>{media.replaceWith(node('p','Mídia indisponível. O link pode ter expirado.','muted'))};card.append(media)}
    const actions=node('div',null,'feed-actions');let liked=false;
