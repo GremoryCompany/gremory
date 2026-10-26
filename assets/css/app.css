@@ -1238,3 +1238,9 @@ body.watch-pseudo-fullscreen #watchScreenStage.watch-fullscreen-ui-hidden{cursor
 .watch-call-panel .watch-voice-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
 .watch-call-panel .watch-voice-actions .btn{min-width:0;white-space:normal}
 @media(max-width:480px){.watch-call-panel .watch-voice-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* V13.13 — Watch Party: voz estilo Discord (mute local por participante) */
+.watch-call-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;min-width:0}
+.watch-call-actions .mini-btn{white-space:nowrap}
+.watch-mute-peer.active{border-color:#d85b73;background:#2b1118;color:#fff}
+@media(max-width:620px){.watch-call-card{grid-template-columns:34px minmax(0,1fr)!important}.watch-call-actions{grid-column:2;justify-content:flex-start}.watch-call-actions .mini-btn{min-height:36px;padding:7px 9px}}
