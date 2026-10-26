@@ -1,9 +1,9 @@
-const CACHE='gremory-v13-15-backup-restore-20261026';
+const CACHE='gremory-v13-15-1-login-fix-20261026';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261026-v13-15-backup-restore',
-  '/assets/js/app.js?v=20261026-v13-15-backup-restore',
+  '/assets/css/app.css?v=20261026-v13-15-1-login-fix',
+  '/assets/js/app.js?v=20261026-v13-15-1-login-fix',
   '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',

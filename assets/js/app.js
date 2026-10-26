@@ -1121,19 +1121,19 @@ function renderAdminBackupStatus(){
   }
 }
 $('adminBackupNowBtn')?.addEventListener('click',async()=>{
-  const btn=$('adminBackupNowBtn');try{btn.disabled=true;let confirmReplace=false;if(state.admin.backupStatus?.recoveryRequired){confirmReplace=confirm('ATENÇÃO: esta instalação está diferente do backup remoto.
+  const btn=$('adminBackupNowBtn');try{btn.disabled=true;let confirmReplace=false;if(state.admin.backupStatus?.recoveryRequired){confirmReplace=confirm(`ATENÇÃO: esta instalação está diferente do backup remoto.
 
 Cancelar = manter o backup remoto protegido.
 OK = SUBSTITUIR o backup remoto pelos JSONs atuais desta Railway.
 
-Só confirme se você tiver certeza de que os dados locais atuais são os corretos.');if(!confirmReplace){btn.disabled=false;return}}
+Só confirme se você tiver certeza de que os dados locais atuais são os corretos.`);if(!confirmReplace){btn.disabled=false;return}}
     const r=await bridgeRequest('admin_backup_now',{confirmReplace},90000,false);toast(`Backup concluído: ${r.files||0} arquivo(s).`);await loadAdminDashboard();btn.disabled=false
   }catch(e){if(btn)btn.disabled=false;toast(e.message)}
 });
 $('adminRestoreBackupBtn')?.addEventListener('click',async()=>{
-  const btn=$('adminRestoreBackupBtn');try{if(!confirm('Restaurar TODOS os JSONs salvos no Firebase para esta Charlotte?
+  const btn=$('adminRestoreBackupBtn');try{if(!confirm(`Restaurar TODOS os JSONs salvos no Firebase para esta Charlotte?
 
-Use isso em um deploy novo da Railway. Os arquivos locais correspondentes serão substituídos pelo backup. Depois será necessário reiniciar a Charlotte.'))return;btn.disabled=true;const r=await bridgeRequest('admin_restore_backup',{},120000,false);toast(`Backup restaurado: ${r.restoredFiles||0} arquivo(s). REINICIE a Charlotte agora.`,9000);await loadAdminDashboard();btn.disabled=false}catch(e){if(btn)btn.disabled=false;toast(e.message||'Não foi possível restaurar o backup.',8000)}
+Use isso em um deploy novo da Railway. Os arquivos locais correspondentes serão substituídos pelo backup. Depois será necessário reiniciar a Charlotte.`))return;btn.disabled=true;const r=await bridgeRequest('admin_restore_backup',{},120000,false);toast(`Backup restaurado: ${r.restoredFiles||0} arquivo(s). REINICIE a Charlotte agora.`,9000);await loadAdminDashboard();btn.disabled=false}catch(e){if(btn)btn.disabled=false;toast(e.message||'Não foi possível restaurar o backup.',8000)}
 });
 
 function renderAdminSupportConversations(){const box=$('adminSupportConversations');if(!box)return;const rows=Object.entries(state.admin.supportChats||{}).map(([uid,v])=>({uid,meta:v?.meta||{},messages:v?.messages||{}})).sort((a,b)=>Number(b.meta.updatedAt||0)-Number(a.meta.updatedAt||0));box.innerHTML='';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma conversa.</div>';return}rows.slice(0,80).forEach(r=>{const b=document.createElement('button');b.type='button';b.className='admin-support-conversation'+(state.admin.supportSelectedUid===r.uid?' active':'');b.innerHTML=`<strong>${escText(r.meta.name||state.admin.directory?.[r.uid]?.nome||'Usuário')}</strong><span>${escText(r.meta.lastText||'Abrir conversa')}</span>`;b.onclick=()=>openAdminSupportChat(r.uid);box.appendChild(b)})}
