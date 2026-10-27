@@ -1,5 +1,5 @@
 import { initCommunity } from './community.js';
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js';
+import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js';
 import {
   getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence, inMemoryPersistence,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail,
@@ -20,7 +20,7 @@ const firebaseConfig = {
   measurementId: 'G-6Q9KFT1CC5'
 };
 
-const app = initializeApp(firebaseConfig);
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 const safeStorageGet=(key,fallback='')=>{try{const value=localStorage.getItem(key);return value==null?fallback:value}catch{return fallback}};
