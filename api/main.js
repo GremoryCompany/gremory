@@ -1287,6 +1287,28 @@ module.exports = async (req, res) => {
     return require('./explore').handlePokemonExplore(req,res,{readJsonBody,sendJson});
   }
 
+  if (action === 'pokemon_wild_move_site') {
+    return require('./pokemon-actions').handleWildMove(req,res,{readJsonBody,sendJson});
+  }
+  if (action === 'pokemon_capture_site') {
+    return require('./pokemon-actions').handleWildCapture(req,res,{readJsonBody,sendJson});
+  }
+  if (action === 'pokemon_wild_exit_site') {
+    return require('./pokemon-actions').handleWildExit(req,res,{readJsonBody,sendJson});
+  }
+  if (action === 'site_raid_enter_site') {
+    return require('./pokemon-actions').handleRaidEnter(req,res,{readJsonBody,sendJson});
+  }
+  if (action === 'site_raid_switch_site') {
+    return require('./pokemon-actions').handleRaidSwitch(req,res,{readJsonBody,sendJson});
+  }
+  if (action === 'site_raid_attack_site') {
+    return require('./pokemon-actions').handleRaidAttack(req,res,{readJsonBody,sendJson});
+  }
+  if (action === 'site_raid_exit_site') {
+    return require('./pokemon-actions').handleRaidExit(req,res,{readJsonBody,sendJson});
+  }
+
   if(action === 'youtube_search'){
     if(req.method!=='GET')return sendJson(res,405,{erro:'Método inválido'});
     const key=process.env.YOUTUBE_API_KEY,term=String(qp(req,'q')||'').trim().slice(0,120);

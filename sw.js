@@ -1,10 +1,10 @@
-const CACHE='gremory-raids-salas-slots-20261027';
+const CACHE='gremory-v20-fastbridge-20261027';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261027-raids-salas-slots',
-  '/assets/js/bootstrap.js?v=20261027-raids-salas-slots',
-  '/assets/js/app.js?v=20261027-raids-salas-slots',
+  '/assets/css/app.css?v=20261027-v20-fastbridge',
+  '/assets/js/bootstrap.js?v=20261027-v20-fastbridge',
+  '/assets/js/app.js?v=20261027-v20-fastbridge',
   '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',

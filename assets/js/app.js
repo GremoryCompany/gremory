@@ -43,7 +43,7 @@ const state = {
   roomCode:null, room:null, roomUnsubs:[],
   userUnsubs:[], duel:null, duelUnsub:null,
   bridgeResults:{}, siteInventory:{}, siteCustomization:{}, storeCatalog:{},
-  teamDraft:[], pokemonEncounter:null, pokemonHealing:{}, pokemonAudio:{encounterId:'',resultId:''}, siteRaid:null, siteRaidConfig:{},
+  teamDraft:[], pokemonEncounter:null, pokemonHealing:{}, pokemonAudio:{encounterId:'',resultId:''}, siteRaid:null, siteRaidConfig:{}, siteRaidBattle:null, siteRaidBattleLoading:false, siteRaidBattleCheckedId:'',
   ttt:{game:null,unsub:null,index:{},lastResultId:'',seenActiveIds:new Set()},
   blackjack:{game:null,private:null,unsub:null,privateUnsub:null,subscribedGameId:'',privateUid:'',index:{},seenActiveIds:new Set()},
   hangman:{game:null,unsub:null,index:{},seenActiveIds:new Set()},
@@ -387,7 +387,7 @@ $('profileForm').addEventListener('submit',async ev=>{
   }
 });
 
-function clearUserSubscriptions(){try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}if(state.gameRealtimePoll){clearInterval(state.gameRealtimePoll);state.gameRealtimePoll=null}state.gameRealtimeSyncing=false;clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.blackjack.privateUnsub){try{state.blackjack.privateUnsub()}catch{}state.blackjack.privateUnsub=null}if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonAudio={encounterId:'',resultId:''};state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.private=null;state.blackjack.subscribedGameId='';state.blackjack.privateUid='';state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.notificationDismissed={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null;state.watchRtc.peerVolumes.clear()}
+function clearUserSubscriptions(){try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}if(state.gameRealtimePoll){clearInterval(state.gameRealtimePoll);state.gameRealtimePoll=null}state.gameRealtimeSyncing=false;clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.blackjack.privateUnsub){try{state.blackjack.privateUnsub()}catch{}state.blackjack.privateUnsub=null}if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonAudio={encounterId:'',resultId:''};state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.siteRaidBattle=null;state.siteRaidBattleLoading=false;state.siteRaidBattleCheckedId='';state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.private=null;state.blackjack.subscribedGameId='';state.blackjack.privateUid='';state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.notificationDismissed={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null;state.watchRtc.peerVolumes.clear()}
 async function syncSiteGameRealtimeState(){
   if(!state.user||state.gameRealtimeSyncing)return;
   const uid=state.user.uid;
@@ -434,7 +434,7 @@ function startUserSubscriptions(){
   state.userUnsubs.push(onValue(ref(db,`pokemonSiteDuelIndex/${uid}`),s=>handleDuelIndex(s.exists()?s.val():{})));
   state.userUnsubs.push(onValue(ref(db,`pokemonSiteEncounter/${uid}`),s=>{state.pokemonEncounter=s.exists()?s.val():null;renderWildEncounter()}));
   state.userUnsubs.push(onValue(ref(db,`pokemonHealing/${uid}`),s=>{state.pokemonHealing=s.exists()?s.val():{};renderHealingList();renderCollection()}));
-  state.userUnsubs.push(onValue(ref(db,'pokemonSiteRaid/current'),s=>{state.siteRaid=s.exists()?s.val():null;renderSiteRaid()}));
+  state.userUnsubs.push(onValue(ref(db,'pokemonSiteRaid/current'),s=>{const previousId=state.siteRaid?.id||'';state.siteRaid=s.exists()?s.val():null;if(previousId&&previousId!==state.siteRaid?.id){state.siteRaidBattle=null;state.siteRaidBattleCheckedId=''}loadSiteRaidBattle().catch(()=>{});renderSiteRaid()}));
   state.userUnsubs.push(onValue(ref(db,'pokemonSiteRaidConfig'),s=>{state.siteRaidConfig=s.exists()?s.val():{};renderSiteRaid()}));
 
   state.userUnsubs.push(onValue(ref(db,`ticTacToeIndex/${uid}`),s=>{state.ttt.index=s.exists()?s.val():{};handleTttIndex(state.ttt.index)},e=>gameRealtimeListenerError('ticTacToeIndex',e)));
@@ -457,7 +457,6 @@ function startUserSubscriptions(){
   // Fallback leve: se um listener do Firebase for cancelado (ex.: regras foram publicadas com o site aberto),
   // convites e partidas continuam aparecendo sem precisar recarregar a página.
   scheduleGameRealtimeSync(350);
-  state.gameRealtimePoll=setInterval(()=>syncSiteGameRealtimeState().catch(()=>{}),1200);
 }
 
 let extraGamesModulePromise=null;
@@ -655,12 +654,11 @@ let slotSettlementStop=null;
 function watchSlotSettlement(jobId,bet,payout,spinId=''){
   slotSettlementStop?.();
   const uid=state.user?.uid;if(!uid)return;
-  slotBusy=true;if($('slotsSpinBtn'))$('slotsSpinBtn').disabled=true;
   let finished=false,stops=[];
   const notice=setTimeout(()=>{
     if($('slotsStatus'))$('slotsStatus').textContent='Aguardando confirmação da carteira';
     if($('slotsLastWin'))$('slotsLastWin').textContent='A aposta está pendente. O giro parou; a confirmação aparecerá automaticamente.';
-  },30000);
+  },12000);
   const cleanup=()=>{clearTimeout(notice);for(const stop of stops.splice(0))stop()};
   slotSettlementStop=cleanup;
   const receive=(value,durable=false)=>{
@@ -680,7 +678,6 @@ function watchSlotSettlement(jobId,bet,payout,spinId=''){
       if($('slotsStatus'))$('slotsStatus').textContent='Saldo confirmado';
       if($('slotsLastWin'))$('slotsLastWin').textContent=`Aposta ₹${formatNumber(value.bet??bet)} • prêmio ₹${formatNumber(value.payout??payout)} • saldo ₹${formatNumber(balance)}`;
     }
-    slotBusy=review;if($('slotsSpinBtn'))$('slotsSpinBtn').disabled=review;
   };
   const listen=path=>{
     const stop=onValue(ref(db,path),sn=>{if(sn.exists())receive(sn.val(),path.startsWith('siteSlotsSettlements/'))},error=>{
@@ -720,7 +717,7 @@ async function runSlotsSpin(){
   let timer=setInterval(()=>els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]}),78);
   const stopVisual=()=>{if(timer){clearInterval(timer);timer=null;}try{stopSound()}catch{}els.forEach(e=>e?.classList.remove('spinning'));};
 
-  const visualDeadline=setTimeout(()=>{stopVisual();if($('slotsStatus'))$('slotsStatus').textContent='Confirmando aposta...'},4000);
+  const visualDeadline=setTimeout(()=>{stopVisual();if($('slotsStatus'))$('slotsStatus').textContent='Resultado recebido • sincronizando carteira...'},2200);
   let handedOff=false,r=null;
   try{
     const idToken=await withTimeout(state.user.getIdToken(),10000,'AUTH_TIMEOUT');
@@ -740,11 +737,12 @@ async function runSlotsSpin(){
       playGameSfx('reelStop');
       if(i<symbols.length-1)await slotWait(105);
     }
-    const payout=Number(r.payout||0),jackpot=!!r.jackpot;
-    if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':payout>0?'Você ganhou!':'Sem prêmio';
-    if($('slotsLastWin'))$('slotsLastWin').textContent=(payout>0
-      ? `${symbols.join(' ')} • prêmio ₹${formatNumber(payout)}`
-      : `${symbols.join(' ')} • perdeu ₹${formatNumber(bet)}`)+' • saldo atualiza automaticamente';
+    const payout=Number(r.payout||0),jackpot=!!r.jackpot,profit=payout-bet;
+    if(hasSnapshot){state.charlotteSync=state.charlotteSync||{};state.charlotteSync.account=state.charlotteSync.account||{};state.charlotteSync.account.balance=Math.max(0,mirroredBalance+profit);renderAccount()}
+    if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':payout>0?'Você ganhou!':'Você perdeu';
+    if($('slotsLastWin'))$('slotsLastWin').textContent=payout>0
+      ? `${symbols.join(' ')} • lucro ${profit>=0?'+':''}₹${formatNumber(profit)} • retorno ₹${formatNumber(payout)} • sincronizando carteira...`
+      : `${symbols.join(' ')} • você perdeu ₹${formatNumber(bet)} • sincronizando carteira...`;
     if(jackpot){
       playGameSfx('jackpot');setTimeout(()=>playGameSfx('coins'),240);
       showGameResult({title:'JACKPOT!',text:`${symbols.join(' ')} • prêmio ₹${formatNumber(payout)}. Crédito em processamento.`,win:true,icon:'7'});
@@ -757,8 +755,7 @@ async function runSlotsSpin(){
     if($('slotsLastWin'))$('slotsLastWin').textContent=['AbortError','TimeoutError'].includes(e?.name)?'A conexão foi interrompida. Confira o saldo antes de repetir a aposta.':String(e?.message||'Não foi possível registrar a aposta.');
     toast(e?.message||'Não foi possível registrar o giro.',5500);
   }finally{
-    clearTimeout(visualDeadline);stopVisual();
-    if(!handedOff){slotBusy=false;if(btn)btn.disabled=false;}
+    clearTimeout(visualDeadline);stopVisual();slotBusy=false;if(btn)btn.disabled=false;
   }
 }
 // Delegação também funciona no mobile.
@@ -1239,7 +1236,19 @@ function addTeamMon(mon){const p=normalizeMon(mon);if(state.teamDraft.some(x=>St
 $('savePokemonTeamBtn')?.addEventListener('click',async()=>{try{if(!state.teamDraft.length)throw new Error('Escolha pelo menos um Pokémon.');const teamUids=state.teamDraft.slice(0,6).map(x=>x.uid);await bridgeRequest('pokemon_set_team',{teamUids},30000);await requestAccountSync();toast('Equipe salva no site e na Charlotte.')}catch(e){toast(e.message)}});
 $('resetPokemonTeamBtn')?.addEventListener('click',()=>loadPokemonSources());
 $('pokemonSyncBtn')?.addEventListener('click',async()=>{try{await requestAccountSync();toast('Pokémon sincronizados.')}catch(e){toast(e.message)}});
-$('pokemonExploreBotBtn').onclick=async()=>{try{const r=await bridgeRequest('pokemon_explore',{},30000);if(r.encounter)state.pokemonEncounter=r.encounter;renderWildEncounter();toast('Um Pokémon selvagem apareceu!')}catch(e){toast(e.message)}};
+$('pokemonExploreBotBtn').onclick=async()=>{
+  const btn=$('pokemonExploreBotBtn');if(!state.user||btn?.disabled)return;
+  try{
+    if(!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');
+    if(btn){btn.disabled=true;btn.textContent='Explorando...'}
+    let r=null,lastError=null;
+    for(let attempt=0;attempt<3;attempt++){
+      try{r=await sitePostAction('pokemon_explore_site',{},7000);break}catch(e){lastError=e;if(e.status!==409||!e.payload?.prefetching||attempt===2)throw e;await slotWait(550+attempt*250)}
+    }
+    if(!r)throw lastError||new Error('Exploração indisponível.');
+    if(r.encounter)state.pokemonEncounter=r.encounter;renderWildEncounter();toast(r.reused?'Você voltou ao encontro atual.':'Um Pokémon selvagem apareceu!');
+  }catch(e){toast(e.message)}finally{if(btn){btn.disabled=false;btn.textContent='Explorar'}}
+};
 
 // Duelo Pokémon 6x6 via bridge do bot
 function renderDuelFriendSelect(){const sel=$('duelFriendSelect');if(!sel)return;const current=sel.value;sel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';sel.appendChild(o)});if(state.friends[current])sel.value=current;renderGameFriendSelects()}
@@ -1294,6 +1303,14 @@ $('duelExitBtn')?.addEventListener('click',async()=>{if(!state.duel)return;if(!c
 
 // Bridge / ações do site
 function linkedCharlotte(){return state.charlottePublic?.status==='linked'}
+async function sitePostAction(action,data={},timeoutMs=8000){
+  if(!state.user)throw new Error('Entre na sua conta.');
+  let idToken='';try{idToken=await withTimeout(state.user.getIdToken(),5000,'AUTH_TIMEOUT')}catch{throw new Error('Sua sessão demorou para responder. Reabra o site e tente novamente.')}
+  let response;try{response=await fetch(`/api/main?action=${encodeURIComponent(action)}`,{method:'POST',headers:{'content-type':'application/json'},cache:'no-store',signal:AbortSignal.timeout(timeoutMs),body:JSON.stringify({idToken,...data})})}catch(e){if(['AbortError','TimeoutError'].includes(e?.name))throw new Error('O servidor do site demorou para responder. Tente novamente.');throw e}
+  const payload=await response.json().catch(()=>({}));if(!response.ok){const err=new Error(payload.erro||'Não foi possível concluir agora.');err.status=response.status;err.payload=payload;throw err}return payload;
+}
+function applyServerBalance(balance){const n=Number(balance);if(!Number.isFinite(n))return;state.charlotteSync=state.charlotteSync||{};state.charlotteSync.account=state.charlotteSync.account||{};state.charlotteSync.account.balance=n;renderAccount()}
+
 async function bridgeRequest(type,data={},timeoutMs=22000,requireLink=true){
   if(!state.user)throw new Error('Entre na sua conta.');
   if(requireLink&&!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');
@@ -1520,10 +1537,11 @@ function renderWildEncounter(){
       if(e.result==='victory'){
         playVictoryTone();
         if(Number(e.reward?.rupias||0)>0)setTimeout(()=>playGameSfx('coins'),220);
-      }else if(e.result==='defeat')playDefeatTone();
+      }else if(e.result==='captured')playPokemonSound('capture');
+      else if(e.result==='defeat')playDefeatTone();
       else playGameSfx('reject');
     }
-    const labels={victory:'Vitória',defeat:'Derrota',escaped:'Você fugiu'};
+    const labels={victory:'Vitória',defeat:'Derrota',escaped:'Você fugiu',captured:'Pokémon capturado'};
     $('wildStatusPill').textContent=labels[e.result]||'Encerrado';
     box.innerHTML='';
     const done=document.createElement('div');done.className='wild-finished';
@@ -1538,27 +1556,50 @@ function renderWildEncounter(){
   $('wildStatusPill').textContent='Batalha';box.innerHTML='';
   const stage=document.createElement('div');stage.className='wild-battle-stage';stage.innerHTML=`<div class="wild-mon"><img src="${escText(wild.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${wild.id}.png`)}" alt=""><strong>${escText(wild.name)}</strong><div class="pokemon-type-row">${typeBadgesHtml(wild.types)}</div><small>Lv.${wild.level} • HP ${Math.max(0,wild.hp)}/${wild.maxHp}</small></div><div class="wild-vs">VS</div><div class="wild-mon mine"><img src="${escText(mine.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${mine.id}.png`)}" alt=""><strong>${escText(mine.name||'Sua equipe')}</strong><div class="pokemon-type-row">${typeBadgesHtml(mine.types)}</div><small>${mine.uid?`HP ${Math.max(0,mine.hp)}/${mine.maxHp}`:'Escolha uma equipe saudável'}</small></div>`;
   const acts=document.createElement('div');acts.className='wild-actions';
-  if(mine.uid){(mine.moves.length?mine.moves:[{name:'Ataque rápido'},{name:'Investida'}]).slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn';b.textContent=`${m.nome||m.name||`Golpe ${i+1}`} • ${typeLabel(m.type||m.tipo||'normal')}`;b.onclick=async()=>{try{await bridgeRequest('pokemon_wild_move',{moveIndex:i},30000);playPokemonSound('hit')}catch(er){toast(er.message)}};acts.appendChild(b)})}
-  ['pokebola','greatball','ultraball',...(Number(pokemonItems().premierball||0)>0?['premierball']:[])].forEach(ball=>{const b=document.createElement('button');b.className=['ultraball','premierball'].includes(ball)?'btn primary':'btn';b.textContent=ball==='pokebola'?'Pokébola':ball==='greatball'?'Great Ball':ball==='ultraball'?'Ultra Ball':'Premier Ball';b.onclick=async()=>{try{playPokemonSound('ball');const r=await bridgeRequest('pokemon_capture',{ball},30000);toast(r.captured?'Pokémon capturado!':`Escapou! Chance ${r.chance||'?'}%.`);if(r.captured){playPokemonSound('capture');await requestAccountSync().catch(()=>{})}}catch(er){toast(er.message)}};acts.appendChild(b)});
-  const flee=document.createElement('button');flee.className='btn danger-ghost';flee.type='button';flee.textContent='Fugir';flee.onclick=async()=>{try{await bridgeRequest('pokemon_wild_exit',{},20000);toast('Você saiu da batalha.')}catch(er){toast(er.message)}};acts.appendChild(flee);
+  if(mine.uid){(mine.moves.length?mine.moves:[{name:'Ataque rápido'},{name:'Investida'}]).slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn';b.textContent=`${m.nome||m.name||`Golpe ${i+1}`} • ${typeLabel(m.type||m.tipo||'normal')}`;b.onclick=async()=>{try{b.disabled=true;const r=await sitePostAction('pokemon_wild_move_site',{moveIndex:i},7000);if(r.encounter)state.pokemonEncounter=r.encounter;renderWildEncounter();playPokemonSound('hit')}catch(er){toast(er.message)}finally{setTimeout(()=>{if(document.body.contains(b))b.disabled=false},350)}};acts.appendChild(b)})}
+  ['pokebola','greatball','ultraball',...(Number(pokemonItems().premierball||0)>0?['premierball']:[])].forEach(ball=>{const b=document.createElement('button');b.className=['ultraball','premierball'].includes(ball)?'btn primary':'btn';b.textContent=ball==='pokebola'?'Pokébola':ball==='greatball'?'Great Ball':ball==='ultraball'?'Ultra Ball':'Premier Ball';b.onclick=async()=>{try{b.disabled=true;playPokemonSound('ball');const r=await sitePostAction('pokemon_capture_site',{ball},7000);if(r.encounter)state.pokemonEncounter=r.encounter;renderWildEncounter();toast(r.captured?'Pokémon capturado! Salvando na Charlotte...':`Escapou! Chance ${r.chance||'?'}%.`);if(r.captured)playPokemonSound('capture')}catch(er){toast(er.message)}finally{setTimeout(()=>{if(document.body.contains(b))b.disabled=false},350)}};acts.appendChild(b)});
+  const flee=document.createElement('button');flee.className='btn danger-ghost';flee.type='button';flee.textContent='Fugir';flee.onclick=async()=>{try{flee.disabled=true;const r=await sitePostAction('pokemon_wild_exit_site',{},7000);if(r.encounter)state.pokemonEncounter=r.encounter;renderWildEncounter();toast('Você saiu da batalha.')}catch(er){toast(er.message)}finally{flee.disabled=false}};acts.appendChild(flee);
   box.append(stage,acts);
 }
 
 
 
 function raidTimeLeft(raid){const ms=Math.max(0,Number(raid?.expiresAt||0)-Date.now());const min=Math.floor(ms/60000),sec=Math.floor((ms%60000)/1000);return `${min}:${String(sec).padStart(2,'0')}`}
+async function loadSiteRaidBattle(){
+  if(!state.user||!state.siteRaid?.id||state.siteRaidBattleLoading||state.siteRaidBattleCheckedId===state.siteRaid.id)return;
+  state.siteRaidBattleLoading=true;state.siteRaidBattleCheckedId=state.siteRaid.id;
+  try{const sn=await get(ref(db,`pokemonSiteRaidBattles/${state.siteRaid.id}/${state.user.uid}`));state.siteRaidBattle=sn.exists()?sn.val():null;renderSiteRaid()}catch{}finally{state.siteRaidBattleLoading=false}
+}
+function raidTeamRows(battle){return Array.isArray(battle?.team)?battle.team:Object.values(battle?.team||{})}
 function renderSiteRaid(){
-  const box=$('siteRaidStage');if(!box)return;const raid=state.siteRaid,cfg=state.siteRaidConfig||{};
+  const box=$('siteRaidStage');if(!box)return;const raid=state.siteRaid,cfg=state.siteRaidConfig||{},battle=state.siteRaidBattle;
   if($('siteRaidAutoToggle'))$('siteRaidAutoToggle').checked=Boolean(cfg.auto);
   if($('raidWhatsappNotify'))$('raidWhatsappNotify').checked=Boolean(state.profile?.raidWhatsappNotify);
   if($('siteRaidAdmin'))$('siteRaidAdmin').hidden=!isSiteAdmin();
   if(!raid||raid.status!=='active'||Number(raid.expiresAt||0)<=Date.now()){$('siteRaidStatus').textContent='Aguardando';box.innerHTML='<div class="empty-state small">Nenhuma raid ativa. O modo automático pode iniciar uma nova raid a cada hora.</div>';return}
   $('siteRaidStatus').textContent=`Tier ${raid.tier||1}`;
-  const boss=normalizeMon(raid.boss||{}),max=Math.max(1,Number(raid.maxHp||boss.maxHp||1)),hp=Math.max(0,Number(raid.hp||0)),pct=Math.max(0,Math.min(100,hp/max*100));const mine=raid.participants?.[state.user?.uid]||{};
+  const boss=normalizeMon(raid.boss||{}),max=Math.max(1,Number(raid.maxHp||boss.maxHp||1)),hp=Math.max(0,Number(raid.hp||0)),pct=Math.max(0,Math.min(100,hp/max*100)),mine=raid.participants?.[state.user?.uid]||{};
   box.innerHTML=`<div class="site-raid-boss"><img src="${escText(boss.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${boss.id}.png`)}" alt=""><div class="site-raid-copy"><strong>${escText(boss.name)}</strong><div class="pokemon-type-row">${typeBadgesHtml(boss.types)}</div><small>Lv.${boss.level} • termina em ${raidTimeLeft(raid)}</small><div class="hpbar raid-hp"><i style="width:${pct}%"></i></div><b>${formatNumber(hp)} / ${formatNumber(max)} HP</b><small>Seu dano: ${formatNumber(mine.damage||0)} • ${Object.keys(raid.participants||{}).length} participante(s)</small></div></div>`;
-  const acts=document.createElement('div');acts.className='site-raid-actions';const team=(state.charlotteSync?.pokemon?.team||[]).map(normalizeMon),active=team.find(x=>x.hp>0&&!x.fainted)||team[0];const moves=active?.moves?.length?active.moves:[{name:'Ataque rápido',power:40,type:'normal'}];
-  if(!linkedCharlotte()){const b=document.createElement('button');b.className='btn primary';b.textContent='Vincular Charlotte para atacar';b.onclick=()=>navigate('charlotte');acts.appendChild(b)}else moves.slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn'+(i===0?' primary':'');b.innerHTML=`<b>${escText(m.nome||m.name||`Golpe ${i+1}`)}</b><small>${escText(typeLabel(m.type||m.tipo||'normal'))} • ${Number(m.power||m.poder||0)}</small>`;b.onclick=async()=>{try{playGameSfx('select');b.disabled=true;const r=await bridgeRequest('site_raid_attack',{moveIndex:i},30000);if(r?.damage){playPokemonSound('hit');toast(`Ataque: ${r.damage} de dano${r.effectText?' • '+r.effectText:''}`)}}catch(e){toast(e.message)}finally{setTimeout(()=>b.disabled=false,1200)}};acts.appendChild(b)});
-  box.appendChild(acts);
+  if(!linkedCharlotte()){const acts=document.createElement('div');acts.className='site-raid-actions';const b=document.createElement('button');b.className='btn primary';b.textContent='Vincular Charlotte para entrar';b.onclick=()=>navigate('charlotte');acts.appendChild(b);box.appendChild(acts);return}
+  if(!battle||battle.raidId!==raid.id){
+    const enter=document.createElement('div');enter.className='site-raid-enter';enter.innerHTML='<strong>Pronto para lutar?</strong><span>Entre com os 6 Pokémon que estão na sua equipe agora.</span>';
+    const b=document.createElement('button');b.className='btn primary';b.textContent='Entrar na batalha';b.onclick=async()=>{try{b.disabled=true;const r=await sitePostAction('site_raid_enter_site',{},7000);state.siteRaidBattle=r.battle||null;state.siteRaidBattleCheckedId=raid.id;renderSiteRaid();playPokemonSound('encounter')}catch(e){toast(e.message)}finally{b.disabled=false}};enter.appendChild(b);box.appendChild(enter);loadSiteRaidBattle().catch(()=>{});return
+  }
+  const team=raidTeamRows(battle),active=team.find(x=>String(x.uid)===String(battle.activeUid))||team.find(x=>Number(x.hp)>0&&!x.fainted)||team[0];
+  const battleWrap=document.createElement('div');battleWrap.className='site-raid-battle-v15';
+  const slots=document.createElement('div');slots.className='site-raid-team-slots';
+  team.forEach((m,i)=>{const mon=normalizeMon(m),slot=document.createElement('button');slot.type='button';slot.className='site-raid-team-slot'+(String(mon.uid)===String(battle.activeUid)?' active':'')+(mon.fainted||mon.hp<=0?' fainted':'');slot.disabled=mon.fainted||mon.hp<=0||battle.status!=='active';const hpPct=Math.max(0,Math.min(100,Number(mon.hp||0)/Math.max(1,Number(mon.maxHp||1))*100));slot.innerHTML=`<span class="raid-slot-number">${i+1}</span><img src="${escText(mon.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${mon.id}.png`)}" alt=""><strong>${escText(mon.name)}</strong><small>${Math.max(0,mon.hp)}/${mon.maxHp} HP</small><i><b style="width:${hpPct}%"></b></i>`;slot.onclick=async()=>{if(String(mon.uid)===String(battle.activeUid))return;try{slot.disabled=true;const r=await sitePostAction('site_raid_switch_site',{monUid:mon.uid},6000);state.siteRaidBattle=r.battle||state.siteRaidBattle;renderSiteRaid();playGameSfx('select')}catch(e){toast(e.message)}};slots.appendChild(slot)});
+  battleWrap.appendChild(slots);
+  if(battle.status==='team_defeated'||!active||active.fainted||active.hp<=0){
+    const defeated=document.createElement('div');defeated.className='site-raid-defeated';defeated.innerHTML='<strong>Sua equipe foi derrotada.</strong><span>Cure todos agora com rúpias ou saia, reorganize sua equipe no Centro Pokémon e volte para a Raid.</span>';
+    const heal=document.createElement('button');heal.className='btn primary';heal.textContent=`Curar equipe • ₹${formatNumber(Number(battle.healCost||Math.max(1,team.length)*100))}`;heal.onclick=async()=>{try{heal.disabled=true;const r=await bridgeRequest('site_raid_heal',{},18000);state.siteRaidBattle=r.battle||null;applyServerBalance(r.balance);toast(`Equipe curada. Saldo: ₹${formatNumber(r.balance||0)}.`);renderSiteRaid()}catch(e){toast(e.message)}finally{heal.disabled=false}};
+    const exit=document.createElement('button');exit.className='btn';exit.textContent='Sair e trocar equipe';exit.onclick=async()=>{try{await sitePostAction('site_raid_exit_site',{raidId:raid.id},6000);state.siteRaidBattle=null;navigate('pokemon');toast('Você saiu da batalha. Escolha sua equipe e entre novamente.')}catch(e){toast(e.message)}};
+    const row=document.createElement('div');row.className='site-raid-defeated-actions';row.append(heal,exit);defeated.appendChild(row);battleWrap.appendChild(defeated);box.appendChild(battleWrap);return
+  }
+  const activeMon=normalizeMon(active),activeCard=document.createElement('div');activeCard.className='site-raid-active-mon';activeCard.innerHTML=`<img src="${escText(activeMon.sprite||`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${activeMon.id}.png`)}" alt=""><div><small>EM CAMPO</small><strong>${escText(activeMon.name)}</strong><span>Lv.${activeMon.level} • HP ${Math.max(0,activeMon.hp)}/${activeMon.maxHp}</span><div class="pokemon-type-row">${typeBadgesHtml(activeMon.types)}</div></div>`;battleWrap.appendChild(activeCard);
+  const acts=document.createElement('div');acts.className='site-raid-actions';const moves=activeMon.moves?.length?activeMon.moves:[{name:'Ataque rápido',power:40,type:'normal'}];
+  moves.slice(0,4).forEach((m,i)=>{const b=document.createElement('button');b.className='btn'+(i===0?' primary':'');b.innerHTML=`<b>${escText(m.nome||m.name||`Golpe ${i+1}`)}</b><small>${escText(typeLabel(m.type||m.tipo||'normal'))} • ${Number(m.power||m.poder||0)}</small>`;b.onclick=async()=>{try{b.disabled=true;playGameSfx('select');const oldHtml=b.innerHTML;b.innerHTML='<b>Atacando...</b><small>Registrando no servidor</small>';const r=await sitePostAction('site_raid_attack_site',{raidId:raid.id,moveIndex:i},7000);state.siteRaidBattle=r.battle||state.siteRaidBattle;if(r.damage){playPokemonSound('hit');const counter=Number(r.counterDamage||0);toast(counter?`${activeMon.name} causou ${r.damage}. ${boss.name} revidou com ${counter}.`:`${activeMon.name} causou ${r.damage} de dano.`)}renderSiteRaid();if(document.body.contains(b))b.innerHTML=oldHtml}catch(e){toast(e.message)}finally{setTimeout(()=>{if(document.body.contains(b))b.disabled=false},350)}};acts.appendChild(b)});
+  const exit=document.createElement('button');exit.className='btn danger-ghost';exit.type='button';exit.textContent='Sair da batalha';exit.onclick=async()=>{try{await sitePostAction('site_raid_exit_site',{raidId:raid.id},6000);state.siteRaidBattle=null;renderSiteRaid();toast('Você saiu da batalha.')}catch(e){toast(e.message)}};acts.appendChild(exit);battleWrap.appendChild(acts);box.appendChild(battleWrap);
 }
 $('siteRaidStartBtn')?.addEventListener('click',async()=>{try{await bridgeRequest('site_raid_start',{},30000,false);toast('Raid iniciada.')}catch(e){toast(e.message)}});
 $('siteRaidAutoToggle')?.addEventListener('change',async e=>{try{await bridgeRequest('site_raid_auto',{enabled:e.target.checked},20000,false);toast(e.target.checked?'Raids automáticas ativadas.':'Raids automáticas desativadas.')}catch(err){e.target.checked=!e.target.checked;toast(err.message)}});

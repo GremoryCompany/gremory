@@ -97,10 +97,10 @@ function createFirebaseAdmin() {
   if(!projectId||!clientEmail||!privateKey||!databaseURL)throw new Error('Firebase incompleto. Configure FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_DATABASE_URL e FIREBASE_PRIVATE_KEY (ou SERVICE_ACCOUNT_JSON).');
   if(!validatePrivateKey(privateKey))throw new Error('FIREBASE_PRIVATE_KEY inválida: a chave precisa conter BEGIN PRIVATE KEY e END PRIVATE KEY.');
   try{
-    const appApi=require('firebase-admin/app');const databaseApi=require('firebase-admin/database');
+    const appApi=require('firebase-admin/app');const databaseApi=require('firebase-admin/database');const authApi=require('firebase-admin/auth');
     if(typeof appApi.getApps==='function'&&typeof appApi.initializeApp==='function'&&typeof appApi.cert==='function'&&typeof databaseApi.getDatabase==='function'){
       if(appApi.getApps().length===0)appApi.initializeApp({credential:appApi.cert({projectId,clientEmail,privateKey}),databaseURL});
-      const app=typeof appApi.getApp==='function'?appApi.getApp():appApi.getApps()[0];return{database:()=>databaseApi.getDatabase(app)};
+      const app=typeof appApi.getApp==='function'?appApi.getApp():appApi.getApps()[0];return{database:()=>databaseApi.getDatabase(app),auth:()=>authApi.getAuth(app)};
     }
   }catch(e){ if(String(e?.message||'').includes('Failed to parse private key'))throw e; }
   const admin=safeRequire('firebase-admin');if(!admin)throw new Error('Instale no bot: npm i firebase-admin');
@@ -206,6 +206,8 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   const HEAL_MS_FREE=5*60*1000;
   const HEAL_MS_PREMIUM=2*60*1000;
   const watchedUsers=new Set(),watchedRefs=new Map(),userQueues=new Map();
+  const jobRetryTimers=new Map();
+  const accountSyncTimers=new Map(),explorePrefetchInFlight=new Map();
   const bridgeInstanceId=`bridge_${process.pid}_${crypto.randomBytes(6).toString('hex')}`;
   let rootWatcher=null,healingTimer=null,syncTimer=null,raidTimer=null,backupTimer=null,syncingLinked=false,backupRunning=false;
 
@@ -422,7 +424,13 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     const account={registered:registeredFor(jid),balance:balanceFor(jid),...readLevel(jid),premium:readPremium(jid).active};
     await backupAccountSnapshot(uid,jid,account,true).catch(()=>{});return{identity:{name,username},account}
   }
-  async function syncAccount(uid,jid){const pokemon=await syncPokemon(uid,jid).catch(()=>null),lvl=readLevel(jid),prem=readPremium(jid),ach=readAchievements(jid),account={registered:registeredFor(jid),balance:balanceFor(jid),level:lvl.level,xp:lvl.xp,messages:lvl.messages,premium:prem.active};const patch={account,achievements:ach,updatedAt:now()};if(pokemon)patch.pokemon=pokemon;await rtdb.ref(`charlotteSync/${uid}`).update(patch);backupAccountSnapshot(uid,jid,account,false).catch(()=>{});return{account,achievements:ach,pokemon};}
+  async function syncAccount(uid,jid){const pokemon=await syncPokemon(uid,jid).catch(()=>null),lvl=readLevel(jid),prem=readPremium(jid),ach=readAchievements(jid),account={registered:registeredFor(jid),balance:balanceFor(jid),level:lvl.level,xp:lvl.xp,messages:lvl.messages,premium:prem.active};const patch={account,achievements:ach,updatedAt:now()};if(pokemon)patch.pokemon=pokemon;await rtdb.ref(`charlotteSync/${uid}`).update(patch);backupAccountSnapshot(uid,jid,account,false).catch(()=>{});ensureExploreReady(uid,jid).catch(()=>{});return{account,achievements:ach,pokemon};}
+  function scheduleAccountSync(uid,jid,delay=180){
+    if(!uid||!jid)return;
+    const key=String(uid),old=accountSyncTimers.get(key);if(old)clearTimeout(old);
+    const timer=setTimeout(()=>{accountSyncTimers.delete(key);syncAccount(uid,jid).catch(e=>logger.log('[SITE BRIDGE] sync assíncrono:',e.message))},Math.max(20,Number(delay)||180));
+    timer.unref?.();accountSyncTimers.set(key,timer);
+  }
   async function findLinkCode(code){const snap=await rtdb.ref('charlotteLinkRequests').orderByChild('code').equalTo(String(code||'').trim().toUpperCase()).once('value');for(const[uid,req]of Object.entries(snap.val()||{}))if(Number(req.expiresAt||0)>=Date.now())return{uid,req};return null;}
   async function linkAccount(code,sender){const found=await findLinkCode(code);if(!found)throw new Error('Código inválido ou expirado. Gere outro no site.');const jid=cleanJid(sender);await rtdb.ref(`charlottePrivate/${found.uid}`).set({whatsappJid:jid,linkedAt:now()});await rtdb.ref(`charlottePublic/${found.uid}`).set({status:'linked',whatsappMasked:maskJid(jid),linkedAt:now()});await rtdb.ref(`charlotteLinkRequests/${found.uid}`).remove();try{await syncAccount(found.uid,jid)}catch(e){logger.log('[SITE BRIDGE] sync inicial:',e.message)}return found.uid;}
   async function reciprocalFriends(a,b){const[x,y]=await Promise.all([rtdb.ref(`friends/${a}/${b}`).once('value'),rtdb.ref(`friends/${b}/${a}`).once('value')]);return x.exists()&&y.exists();}
@@ -471,12 +479,51 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   }
   async function processSetTeam(uid,jid,data){const ids=[...new Set((Array.isArray(data.teamUids)?data.teamUids:[]).map(String).filter(Boolean))].slice(0,6);if(!ids.length)throw new Error('Escolha pelo menos um Pokémon.');const{db,user}=pokemonState(jid),all=new Map(user.monsters.map(m=>[String(m.uid),m]));for(const x of ids)if(!all.has(x))throw new Error('Um Pokémon da equipe não existe mais.');user.party=ids;user.activeUid=ids[0];user.active=Math.max(0,user.monsters.findIndex(m=>String(m.uid)===ids[0]));savePokemonDb(db);return{pokemon:await syncPokemon(uid,jid),teamUids:ids};}
 
+  async function ensureExploreReady(uid,jid){
+    if(!uid||!jid||!sortearSelvagem)return null;
+    const key=String(uid),existingTask=explorePrefetchInFlight.get(key);if(existingTask)return existingTask;
+    const task=(async()=>{
+      const rr=rtdb.ref(`pokemonSiteExploreReady/${uid}`),sn=await rr.once('value').catch(()=>null),existing=sn?.val?.()||null;
+      if(existing?.mon&&Number(existing.expiresAt||0)>Date.now()+30000)return existing;
+      const raw=await sortearSelvagem(true),wild=publicMon(raw||{});if(!wild.uid)wild.uid=id('wild');wild.hp=wild.maxHp;wild.fainted=false;
+      const ready={id:id('ready'),mon:wild,createdAt:Date.now(),expiresAt:Date.now()+30*60*1000};await rr.set(ready);return ready;
+    })().finally(()=>explorePrefetchInFlight.delete(key));
+    explorePrefetchInFlight.set(key,task);return task;
+  }
+  async function processExplorePrefetch(uid,jid){return{ready:await ensureExploreReady(uid,jid)};}
+  function applySiteTeamState(jid,team=[],activeUid='',reason='site'){
+    const{db,user}=pokemonState(jid),rows=Array.isArray(team)?team:Object.values(team||{});let changed=false;
+    for(const row of rows){const mon=findMon(user,String(row?.uid||''));if(!mon)continue;ensureMon(mon);const hp=Math.max(0,Math.min(Number(mon.maxHp||1),Number(row?.hp??row?.hpAtual??mon.hpAtual??0)));mon.hpAtual=hp;if(hp<=0){faintRaw(mon,reason)}else{mon.fainted=false;mon.faintedAt=null;mon.faintedReason=null}changed=true;}
+    const wanted=String(activeUid||'');if(wanted){const idx=user.monsters.findIndex(m=>String(m.uid)===wanted);if(idx>=0){user.active=idx;user.activeUid=user.monsters[idx].uid;changed=true}}
+    if(changed)savePokemonDb(db);return{db,user,changed};
+  }
+  async function processPokemonSiteCommit(uid,jid,data){
+    const syncId=String(data.syncId||'').trim();if(!syncId)throw new Error('Commit Pokémon inválido.');
+    const pendingRef=rtdb.ref(`pokemonSiteSyncPending/${uid}/${syncId}`),pendingSn=await pendingRef.once('value');if(!pendingSn.exists())return{synced:true,duplicate:true};
+    const pending=pendingSn.val()||{};if(String(pending.uid||uid)!==String(uid))throw new Error('Commit Pokémon inválido.');
+    const receiptRef=rtdb.ref(`pokemonSiteSyncReceipts/${uid}/${syncId}`),claim=await receiptRef.transaction(cur=>cur?undefined:{status:'processing',startedAt:Date.now()},undefined,false);
+    if(!claim?.committed)return{synced:true,duplicate:true};
+    try{
+      const applied=applySiteTeamState(jid,pending.team||[],pending.activeUid||'',String(pending.reason||'site')),{user}=applied;
+      const capture=pending.capture&&typeof pending.capture==='object'?pending.capture:null;
+      if(capture){
+        const ball=String(capture.ball||'').toLowerCase(),allowed=new Set(['pokebola','greatball','ultraball','premierball']);if(!allowed.has(ball))throw new Error('Pokébola inválida no commit.');
+        user.items=user.items&&typeof user.items==='object'?user.items:{};const aliases=ball==='premierball'?['premierball','premierBall']:[ball],key=aliases.find(k=>Number(user.items[k]||0)>0)||ball,qty=Math.max(0,Number(user.items[key]||0));if(qty<1)throw new Error(`Sem ${ball} para concluir a captura.`);user.items[key]=qty-1;if(key!==ball)user.items[ball]=user.items[key];
+        if(capture.captured&&capture.mon){const src=capture.mon,monUid=String(src.uid||id('pk'));if(!findMon(user,monUid)){const mon={uid:monUid,dex:Number(src.dex||src.id||0),nome:src.nome||src.name||'Pokémon',level:Math.max(1,Number(src.level||1)),shiny:!!src.shiny,maxHp:Math.max(1,Number(src.maxHp||src.hp||40)),hpAtual:Math.max(1,Number(src.maxHp||src.hp||40)),fainted:false,attack:Number(src.attack||80),defense:Number(src.defense||80),sprite:String(src.sprite||''),types:Array.isArray(src.types)?src.types:[],moves:Array.isArray(src.moves)?src.moves:[]};user.monsters.push(mon);user.party=Array.isArray(user.party)?user.party:[];if(user.party.length<6&&!user.party.some(x=>String(x?.uid||x)===monUid))user.party.push(monUid)}}
+        savePokemonDb(applied.db);
+      }
+      const reward=pending.reward&&typeof pending.reward==='object'?pending.reward:null;
+      if(reward){const rupias=Math.max(0,Math.floor(Number(reward.rupias||0)));if(rupias&&typeof economy.addkoin==='function')await economy.addkoin(jid,rupias);const xp=Math.max(0,Math.floor(Number(reward.pokemonXp||0)));if(xp){const target=findMon(user,String(reward.monUid||pending.activeUid||''));if(target)addPokemonXpRaw(target,xp)}if(applied.changed||xp)savePokemonDb(applied.db);}
+      await receiptRef.set({status:'done',finishedAt:Date.now(),reason:String(pending.reason||'')});await pendingRef.remove();scheduleAccountSync(uid,jid,40);return{synced:true,balance:balanceFor(jid)};
+    }catch(e){await receiptRef.update({status:'error',error:String(e.message||e).slice(0,180),failedAt:Date.now()}).catch(()=>{});throw e}
+  }
+
   async function processExplore(uid,jid){await processDueHealingJobs().catch(()=>{});const old=await rtdb.ref(`pokemonSiteEncounter/${uid}`).once('value');if(old.exists()&&Number(old.val()?.expiresAt||0)>Date.now()&&old.val()?.status!=='finished')return{encounter:old.val(),reused:true};const meta=await rtdb.ref(`pokemonSiteMeta/${uid}/lastExplore`).once('value');const exploreCooldown=readPremium(jid).active?8000:15000;if(Date.now()-Number(meta.val()||0)<exploreCooldown)throw new Error('Aguarde alguns segundos para explorar de novo.');const{user}=pokemonState(jid),mine=firstHealthy(user);if(!mine)throw new Error('Sua equipe está toda desmaiada. Use o Hospital Pokémon.');if(!sortearSelvagem)throw new Error('Sistema de exploração Pokémon não disponível.');const raw=await sortearSelvagem(true),wild=publicMon(raw||{});if(!wild.uid)wild.uid=id('wild');wild.hp=wild.maxHp;wild.fainted=false;const encounter={id:id('enc'),status:'battle',mon:wild,player:publicMon(mine),createdAt:now(),expiresAt:Date.now()+10*60*1000,log:{}};await Promise.all([rtdb.ref(`pokemonSiteEncounter/${uid}`).set(encounter),rtdb.ref(`pokemonSiteMeta/${uid}/lastExplore`).set(Date.now())]);return{encounter};}
   function calcDamage(attacker,defender,move){return damageDetail(attacker,defender,move).dano;}
   function calcDamageDetailed(attacker,defender,move,opts={}){return damageDetail(attacker,defender,move,opts);}
   async function processWildMove(uid,jid,data){const er=rtdb.ref(`pokemonSiteEncounter/${uid}`),sn=await er.once('value');if(!sn.exists())throw new Error('Explore primeiro.');const e=sn.val();if(e.status!=='battle'||Number(e.expiresAt||0)<Date.now())throw new Error('Esse encontro terminou.');const{db,user}=pokemonState(jid);let mine=findMon(user,e.player?.uid);if(!mine||mine.fainted||Number(mine.hpAtual)<=0)mine=firstHealthy(user);if(!mine)throw new Error('Sua equipe está desmaiada.');let minePub=publicMon(mine),wild={...e.mon};const moves=minePub.moves.length?minePub.moves:[{name:'Ataque rápido',power:40},{name:'Investida',power:45}],move=moves[clamp(data.moveIndex,0,moves.length-1)]||moves[0],hit=calcDamageDetailed(minePub,wild,move),damage=hit.dano;wild.hp=Math.max(0,Number(wild.hp||wild.maxHp)-damage);let text=`${minePub.name} usou ${move.name} (${typeName(move.type)}) e causou ${damage} de dano${hit.effectText?` • ${hit.effectText}`:''}.`;let reward=0;if(wild.hp<=0){wild.fainted=true;reward=crypto.randomInt(45,121);if(readPremium(jid).active)reward=Math.floor(reward*1.25);if(typeof economy.addkoin==='function')await economy.addkoin(jid,reward);const xpReward=crypto.randomInt(20,46);addPokemonXpRaw(mine,xpReward);e.reward={rupias:reward,pokemonXp:xpReward,premium:readPremium(jid).active};e.status='finished';e.result='victory';e.finishedAt=now();text+=` ${wild.name} desmaiou. +₹${reward}.`;e.expiresAt=Date.now()+60000;}else{const wildMoves=wild.moves?.length?wild.moves:[{name:'Investida',power:40}],wm=wildMoves[crypto.randomInt(0,wildMoves.length)],counterHit=calcDamageDetailed(wild,minePub,wm),counter=counterHit.dano;mine.hpAtual=Math.max(0,Number(mine.hpAtual||mine.maxHp)-counter);if(mine.hpAtual<=0){faintRaw(mine,'selvagem');text+=` ${wild.name} usou ${wm.name} (${typeName(wm.type)}) e causou ${counter}${counterHit.effectText?` • ${counterHit.effectText}`:''}. ${minePub.name} desmaiou.`;const next=firstHealthy(user);if(next){mine=next;minePub=publicMon(next);text+=` Você enviou ${minePub.name}.`;await setBotActive(jid,next.uid)}else{e.status='finished';e.result='defeat';e.finishedAt=now();e.expiresAt=Date.now()+60000;text+=' Sua equipe inteira desmaiou.'}}else{text+=` ${wild.name} usou ${wm.name} (${typeName(wm.type)}) e causou ${counter}${counterHit.effectText?` • ${counterHit.effectText}`:''}.`;}}savePokemonDb(db);e.mon=wild;e.player=publicMon(mine);e.updatedAt=now();e.log=e.log||{};e.log[id('log')]={text,at:now()};await er.set(e);await syncAccount(uid,jid).catch(()=>{});return{encounter:e,reward};}
   async function processWildExit(uid){const er=rtdb.ref(`pokemonSiteEncounter/${uid}`),sn=await er.once('value');if(!sn.exists())return{left:true};const e=sn.val()||{};e.status='finished';e.result='escaped';e.finishedAt=now();e.expiresAt=Date.now()+15000;e.updatedAt=now();e.log=e.log||{};e.log[id('log')]={text:'Você fugiu do encontro selvagem.',at:now()};await er.set(e);return{left:true};}
-  async function processCapture(uid,jid,data){const er=rtdb.ref(`pokemonSiteEncounter/${uid}`),sn=await er.once('value');if(!sn.exists())throw new Error('Explore primeiro.');const e=sn.val();if(Number(e.expiresAt||0)<Date.now()||e.status==='finished')throw new Error('Esse encontro terminou.');const ball=String(data.ball||'pokebola').toLowerCase(),allowed=new Set(['pokebola','greatball','ultraball','premierball']);if(!allowed.has(ball))throw new Error('Pokébola inválida.');const{db,user}=pokemonState(jid);user.items=user.items||{};if(Number(user.items[ball]||0)<=0)throw new Error(`Você não possui ${ball}.`);user.items[ball]=Number(user.items[ball])-1;const wild=e.mon||{},hpRate=Number(wild.hp||wild.maxHp)/Math.max(1,Number(wild.maxHp||1)),base=32+Math.round((1-hpRate)*38),bonus=ball==='greatball'?15:ball==='ultraball'?30:ball==='premierball'?38:0,chance=Math.max(5,Math.min(92,base+bonus)),captured=crypto.randomInt(1,101)<=chance;if(captured){const mon={uid:id('pk'),dex:wild.dex,nome:wild.name,level:wild.level,shiny:!!wild.shiny,maxHp:wild.maxHp,hpAtual:wild.maxHp,fainted:false,attack:wild.attack,defense:wild.defense,sprite:wild.sprite,types:wild.types,moves:wild.moves};user.monsters.push(mon);if(!Array.isArray(user.party)||user.party.length<6){user.party=Array.isArray(user.party)?user.party:[];user.party.push(mon.uid)}await er.remove();}else{e.updatedAt=now();e.log=e.log||{};e.log[id('log')]={text:`A ${ball} falhou. ${wild.name} escapou.`,at:now()};await er.set(e)}savePokemonDb(db);await syncAccount(uid,jid).catch(()=>{});return{captured,chance,pokemon:captured?wild:null};}
+  async function processCapture(uid,jid,data){const er=rtdb.ref(`pokemonSiteEncounter/${uid}`),sn=await er.once('value');if(!sn.exists())throw new Error('Explore primeiro.');const e=sn.val();if(Number(e.expiresAt||0)<Date.now()||e.status==='finished')throw new Error('Esse encontro terminou.');const ball=String(data.ball||'pokebola').toLowerCase(),allowed=new Set(['pokebola','greatball','ultraball','premierball']);if(!allowed.has(ball))throw new Error('Pokébola inválida.');if(e.team)applySiteTeamState(jid,e.team,e.activeUid||e.player?.uid,'selvagem');const{db,user}=pokemonState(jid);user.items=user.items||{};if(Number(user.items[ball]||0)<=0)throw new Error(`Você não possui ${ball}.`);user.items[ball]=Number(user.items[ball])-1;const wild=e.mon||{},hpRate=Number(wild.hp||wild.maxHp)/Math.max(1,Number(wild.maxHp||1)),base=32+Math.round((1-hpRate)*38),bonus=ball==='greatball'?15:ball==='ultraball'?30:ball==='premierball'?38:0,chance=Math.max(5,Math.min(92,base+bonus)),captured=crypto.randomInt(1,101)<=chance;if(captured){const mon={uid:id('pk'),dex:wild.dex,nome:wild.name,level:wild.level,shiny:!!wild.shiny,maxHp:wild.maxHp,hpAtual:wild.maxHp,fainted:false,attack:wild.attack,defense:wild.defense,sprite:wild.sprite,types:wild.types,moves:wild.moves};user.monsters.push(mon);if(!Array.isArray(user.party)||user.party.length<6){user.party=Array.isArray(user.party)?user.party:[];user.party.push(mon.uid)}await er.remove();}else{e.updatedAt=now();e.log=e.log||{};e.log[id('log')]={text:`A ${ball} falhou. ${wild.name} escapou.`,at:now()};await er.set(e)}savePokemonDb(db);scheduleAccountSync(uid,jid,40);return{captured,chance,pokemon:captured?wild:null};}
 
   function teamForJid(jid){const{user}=pokemonState(jid);return orderedTeamRaw(user).map(publicMon);}
   function currentDuelMon(player){const team=Array.isArray(player.team)?player.team:[];return team.find(m=>String(m.uid)===String(player.currentUid))||team[Math.max(0,Number(player.activeIndex||0))]||team[0]||null;}
@@ -634,7 +681,72 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     return{sent:true,title:name,message:'Arquivo enviado no WhatsApp pela Charlotte.'};
   }
 
-  async function processTttCreate(uid,data){const targetUid=String(data.targetUid||'');if(!targetUid||targetUid===uid)throw new Error('Amigo inválido.');if(!(await reciprocalFriends(uid,targetUid)))throw new Error('Jogue apenas com amigos confirmados.');const[a,b]=await Promise.all([rtdb.ref(`directory/${uid}`).once('value'),rtdb.ref(`directory/${targetUid}`).once('value')]),gameId=id('ttt'),first=crypto.randomInt(0,2)===0?uid:targetUid,createdAt=Date.now(),game={id:gameId,status:'active',createdAt,updatedAt:createdAt,turnUid:first,board:['','','','','','','','',''],players:{[uid]:{uid,name:a.val()?.nome||'Jogador',symbol:'X'},[targetUid]:{uid:targetUid,name:b.val()?.nome||'Jogador',symbol:'O'}},log:{}};await rtdb.ref(`ticTacToeGames/${gameId}`).set(game);await Promise.all([rtdb.ref(`ticTacToeIndex/${uid}/${gameId}`).set({status:'active',createdAt,updatedAt:createdAt}),rtdb.ref(`ticTacToeIndex/${targetUid}/${gameId}`).set({status:'active',createdAt,updatedAt:createdAt})]);await notifySite(targetUid,{type:'ttt',title:'Convite para jogar',text:`${a.val()?.nome||'Um amigo'} te chamou para o jogo da velha.`,link:'#games'}).catch(()=>{});return{gameId};}
+  // ======================================================
+  // APOSTAS PVP — carteira Charlotte + escrow server-only
+  // ======================================================
+  const gameWagerLocks=new Map();
+  async function withGameWagerLocks(uids,fn){
+    const keys=[...new Set((uids||[]).map(String))].sort(),locks=[];
+    for(const key of keys){
+      const prev=gameWagerLocks.get(key)||Promise.resolve();
+      let release;
+      const gate=new Promise(r=>{release=r});
+      const chain=prev.then(()=>gate);
+      gameWagerLocks.set(key,chain);
+      await prev;
+      locks.push({key,chain,release});
+    }
+    try{return await fn()}
+    finally{
+      for(const lock of locks.reverse())lock.release();
+      for(const lock of locks)if(gameWagerLocks.get(lock.key)===lock.chain)gameWagerLocks.delete(lock.key);
+    }
+  }
+  function normalizeGameWager(raw){const amount=Math.floor(Number(raw||0));if(!amount)return 0;if(!Number.isSafeInteger(amount)||amount<10||amount>100000||amount%10!==0)throw new Error('A aposta deve ser 0 ou ficar entre ₹10 e ₹100.000 em múltiplos de 10.');return amount}
+  async function reserveGameWager(kind,gameId,uids,rawAmount){
+    const amount=normalizeGameWager(rawAmount);if(!amount)return null;
+    if(typeof economy.delkoin!=='function'||typeof economy.addkoin!=='function')throw new Error('Sistema de Rupias indisponível.');
+    return withGameWagerLocks(uids,async()=>{
+      const jids={};for(const playerUid of uids){const jid=await linkedJidByUid(playerUid);if(!jid)throw new Error('Os dois jogadores precisam vincular a Charlotte para apostar.');if(!registeredFor(jid))throw new Error('Os dois jogadores precisam usar /reg na Charlotte antes de apostar.');jids[playerUid]=jid}
+      for(const playerUid of uids){const balance=balanceFor(jids[playerUid]);if(balance<amount)throw new Error(`${playerUid===uids[0]?'Você':'Seu adversário'} não possui ₹${amount} para essa aposta.`)}
+      const debited=[];
+      try{for(const playerUid of uids){await economy.delkoin(jids[playerUid],amount);debited.push(playerUid)}}catch(e){for(const playerUid of debited)try{await economy.addkoin(jids[playerUid],amount)}catch{};throw e}
+      const escrow={kind,gameId,amount,pot:amount*uids.length,players:Object.fromEntries(uids.map(playerUid=>[playerUid,{uid:playerUid,jid:jids[playerUid]}])),status:'reserved',createdAt:Date.now()};
+      try{await rtdb.ref(`gameWagerEscrows/${kind}/${gameId}`).set(escrow)}catch(e){for(const playerUid of debited)try{await economy.addkoin(jids[playerUid],amount)}catch{};throw e}
+      for(const playerUid of uids)syncAccount(playerUid,jids[playerUid]).catch(()=>{});
+      return{amount,pot:escrow.pot};
+    })
+  }
+  async function cancelGameWager(kind,gameId){
+    const er=rtdb.ref(`gameWagerEscrows/${kind}/${gameId}`),sn=await er.once('value').catch(()=>null),esc=sn?.val?.();if(!esc||esc.status!=='reserved')return;
+    const uids=Object.keys(esc.players||{});await withGameWagerLocks(uids,async()=>{for(const playerUid of uids){const jid=esc.players[playerUid]?.jid;if(jid&&typeof economy.addkoin==='function')await economy.addkoin(jid,Number(esc.amount||0))}await er.update({status:'canceled',canceledAt:Date.now()});for(const playerUid of uids){const jid=esc.players[playerUid]?.jid;if(jid)syncAccount(playerUid,jid).catch(()=>{})}})
+  }
+  async function settleGameWager(kind,gameId,winnerUid=null){
+    const er=rtdb.ref(`gameWagerEscrows/${kind}/${gameId}`),es=await er.once('value').catch(()=>null),esc=es?.val?.();if(!esc||!Number(esc.amount||0))return{amount:0,pot:0};
+    if(esc.status==='settled')return{amount:Number(esc.amount),pot:Number(esc.pot),winnerUid:esc.winnerUid||null,alreadySettled:true};
+    if(esc.status!=='reserved')throw new Error('A liquidação desta aposta precisa de revisão antes de continuar.');
+    const sr=rtdb.ref(`gameWagerSettlements/${kind}/${gameId}`),token=id('settle'),claim=await sr.transaction(cur=>cur?undefined:{status:'processing',token,startedAt:Date.now(),winnerUid:winnerUid||null});
+    if(!claim.committed){const current=claim.snapshot?.val?.()||{};if(current.status==='paid')return{amount:Number(esc.amount),pot:Number(esc.pot),winnerUid:current.winnerUid||null,alreadySettled:true};throw new Error('A aposta desta partida já está sendo liquidada.')}
+    const uids=Object.keys(esc.players||{}),amount=Number(esc.amount||0),pot=Number(esc.pot||amount*uids.length);
+    try{
+      await withGameWagerLocks(uids,async()=>{
+        if(winnerUid){const jid=esc.players?.[winnerUid]?.jid;if(!jid)throw new Error('Carteira do vencedor indisponível.');await economy.addkoin(jid,pot)}
+        else{for(const playerUid of uids){const jid=esc.players?.[playerUid]?.jid;if(!jid)throw new Error('Carteira de um jogador indisponível.');await economy.addkoin(jid,amount)}}
+      });
+      const paidAt=Date.now();await sr.set({status:'paid',token,paidAt,winnerUid:winnerUid||null,amount,pot});await er.update({status:'settled',settledAt:paidAt,winnerUid:winnerUid||null});
+      for(const playerUid of uids){const jid=esc.players?.[playerUid]?.jid;if(jid)syncAccount(playerUid,jid).catch(()=>{})}
+      return{amount,pot,winnerUid:winnerUid||null};
+    }catch(e){await sr.update({status:'review',failedAt:Date.now(),error:String(e.message||e).slice(0,240)}).catch(()=>{});throw e}
+  }
+
+  async function processTttCreate(uid,data){
+    const targetUid=String(data.targetUid||'');if(!targetUid||targetUid===uid)throw new Error('Amigo inválido.');if(!(await reciprocalFriends(uid,targetUid)))throw new Error('Jogue apenas com amigos confirmados.');await ensureNoActiveGame('ticTacToeIndex',[uid,targetUid]);
+    const[a,b]=await Promise.all([rtdb.ref(`directory/${uid}`).once('value'),rtdb.ref(`directory/${targetUid}`).once('value')]),gameId=id('ttt'),first=crypto.randomInt(0,2)===0?uid:targetUid,createdAt=Date.now();
+    const wager=await reserveGameWager('ttt',gameId,[uid,targetUid],data.bet);
+    const game={id:gameId,status:'active',createdAt,updatedAt:createdAt,turnUid:first,board:['','','','','','','','',''],players:{[uid]:{uid,name:a.val()?.nome||'Jogador',symbol:'X'},[targetUid]:{uid:targetUid,name:b.val()?.nome||'Jogador',symbol:'O'}},wager:wager?{amount:wager.amount,pot:wager.pot}:null,log:{}};
+    try{await rtdb.ref(`ticTacToeGames/${gameId}`).set(game);await Promise.all([rtdb.ref(`ticTacToeIndex/${uid}/${gameId}`).set({status:'active',createdAt,updatedAt:createdAt}),rtdb.ref(`ticTacToeIndex/${targetUid}/${gameId}`).set({status:'active',createdAt,updatedAt:createdAt})])}catch(e){await cancelGameWager('ttt',gameId).catch(()=>{});throw e}
+    await notifySite(targetUid,{type:'ttt',title:'Convite para jogar',text:`${a.val()?.nome||'Um amigo'} te chamou para o jogo da velha${wager?` valendo ₹${wager.amount}`:''}.`,link:'#games'}).catch(()=>{});return{gameId,wager};
+  }
   function tttWinner(board){const lines=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];for(const[a,b,c]of lines)if(board[a]&&board[a]===board[b]&&board[a]===board[c])return board[a];return null;}
   async function grantTttReward(uid){
     const jid=await linkedJidByUid(uid);if(!jid||typeof economy.addkoin!=='function')return{rupias:0,limitReached:false};
@@ -654,6 +766,7 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     const winner=tttWinner(board),draw=!winner&&board.every(Boolean),patch={board,updatedAt:Date.now(),[`log/${id('log')}`]:{text:`${me.name} marcou ${me.symbol}.`,at:now()}};
     let reward=null;
     if(winner||draw){
+      await settleGameWager('ttt',gameId,winner?uid:null);
       patch.status='finished';patch.winnerUid=winner?uid:null;patch.finishedAt=Date.now();patch.turnUid=null;
       if(winner){reward=await grantTttReward(uid);patch.reward=reward}
     }else patch.turnUid=otherUid;
@@ -664,37 +777,65 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     }
     return{winnerUid:winner?uid:null,draw,reward};
   }
-  async function processTttExit(uid,data){const gameId=String(data.gameId||''),gr=rtdb.ref(`ticTacToeGames/${gameId}`),sn=await gr.once('value');if(!sn.exists())return{};const g={id:gameId,...sn.val()};if(g.status!=='active'||!g.players?.[uid])return{};const winnerUid=Object.keys(g.players).find(x=>x!==uid),up=Date.now();await gr.update({status:'finished',winnerUid,finishedAt:up,updatedAt:up,turnUid:null,[`log/${id('log')}`]:{text:`${g.players[uid].name} saiu da partida.`,at:now()}});await Promise.all(Object.keys(g.players).map(x=>rtdb.ref(`ticTacToeIndex/${x}/${gameId}`).update({status:'finished',winnerUid,updatedAt:up})));return{winnerUid};}
+  async function processTttExit(uid,data){const gameId=String(data.gameId||''),gr=rtdb.ref(`ticTacToeGames/${gameId}`),sn=await gr.once('value');if(!sn.exists())return{};const g={id:gameId,...sn.val()};if(g.status!=='active'||!g.players?.[uid])return{};const winnerUid=Object.keys(g.players).find(x=>x!==uid),up=Date.now();await settleGameWager('ttt',gameId,winnerUid);await gr.update({status:'finished',winnerUid,finishedAt:up,updatedAt:up,turnUid:null,[`log/${id('log')}`]:{text:`${g.players[uid].name} saiu da partida.`,at:now()}});await Promise.all(Object.keys(g.players).map(x=>rtdb.ref(`ticTacToeIndex/${x}/${gameId}`).update({status:'finished',winnerUid,updatedAt:up})));return{winnerUid};}
 
   // ======================================================
-  // 21 PVP — baralho protegido no bridge
+  // 21 PVP — estado público seguro + mão privada por UID
   // ======================================================
   const BJ_SUITS=['♠','♥','♦','♣'],BJ_RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
   function bjDeck(){const deck=BJ_SUITS.flatMap(s=>BJ_RANKS.map(r=>({s,r})));for(let i=deck.length-1;i>0;i--){const j=crypto.randomInt(0,i+1);[deck[i],deck[j]]=[deck[j],deck[i]]}return deck}
   function bjScore(cards=[]){let total=cards.reduce((n,c)=>n+(c.r==='A'?11:['J','Q','K'].includes(c.r)?10:Number(c.r||0)),0),aces=cards.filter(c=>c.r==='A').length;while(total>21&&aces-->0)total-=10;return total}
   async function ensureNoActiveGame(indexRoot,uids=[]){for(const playerUid of uids){const sn=await rtdb.ref(`${indexRoot}/${playerUid}`).once('value');if(Object.values(sn.val()||{}).some(x=>x?.status==='active'))throw new Error('Um dos jogadores já está em uma partida desse jogo.')}}
-  function blackjackWinner(players={}){const rows=Object.values(players),valid=rows.filter(p=>Number(p.score||0)<=21);if(!valid.length)return null;if(valid.length===1)return valid[0].uid;const [a,b]=valid;if(Number(a.score||0)===Number(b.score||0))return null;return Number(a.score||0)>Number(b.score||0)?a.uid:b.uid}
-  async function finishBlackjack(gr,g,winnerUid,reason='Partida encerrada.'){
-    const finishedAt=Date.now();g.status='finished';g.winnerUid=winnerUid||null;g.turnUid=null;g.finishedAt=finishedAt;g.updatedAt=finishedAt;g.log=g.log||{};g.log[id('log')]={text:reason,at:now()};await gr.set(g);await rtdb.ref(`gameSecrets/blackjack/${g.id}`).remove().catch(()=>{});await Promise.all(Object.keys(g.players||{}).map(x=>rtdb.ref(`blackjackIndex/${x}/${g.id}`).update({status:'finished',winnerUid:winnerUid||null,updatedAt:finishedAt})));
-    for(const playerUid of Object.keys(g.players||{})){const won=winnerUid===playerUid,draw=!winnerUid;await notifySite(playerUid,{type:'blackjack',title:draw?'Empate no 21':won?'Vitória no 21!':'Partida de 21 encerrada',text:draw?'A partida terminou empatada.':won?'Você venceu a partida de 21.':`${g.players[winnerUid]?.name||'Seu amigo'} venceu a partida.`,link:'#games'}).catch(()=>{})}
-    return{winnerUid:winnerUid||null,draw:!winnerUid}
+  function blackjackPublicPlayer(uid,name,privateHand={}){return{uid,name:String(name||'Jogador').slice(0,40),cardCount:Array.isArray(privateHand.cards)?privateHand.cards.length:0,stood:!!privateHand.stood,busted:!!privateHand.busted}}
+  function blackjackWinnerPrivate(rows={}){const hands=Object.entries(rows).map(([uid,h])=>({uid,score:Number(h?.score||0),busted:!!h?.busted})),valid=hands.filter(h=>!h.busted&&h.score<=21);if(!valid.length)return null;if(valid.length===1)return valid[0].uid;const best=Math.max(...valid.map(h=>h.score)),winners=valid.filter(h=>h.score===best);return winners.length===1?winners[0].uid:null}
+  async function readBlackjackPrivate(gameId,uids=[]){const out={};await Promise.all(uids.map(async playerUid=>{const sn=await rtdb.ref(`blackjackPrivate/${gameId}/${playerUid}`).once('value');if(sn.exists())out[playerUid]=sn.val()}));return out}
+  function blackjackReveal(rows={}){const out={};for(const[uid,h]of Object.entries(rows)){out[uid]={cards:Array.isArray(h?.cards)?h.cards:[],score:Number(h?.score||0),stood:!!h?.stood,busted:!!h?.busted}}return out}
+  async function finishBlackjack(gr,g,privateRows,winnerUid,reason='Partida encerrada.',extra={}){
+    await settleGameWager('blackjack',g.id,winnerUid);
+    const finishedAt=Date.now(),uids=Object.keys(g.players||{}),revealedHands=blackjackReveal(privateRows);
+    const publicPlayers={};for(const playerUid of uids){const pub=g.players[playerUid]||{},hand=privateRows[playerUid]||{};publicPlayers[playerUid]=blackjackPublicPlayer(playerUid,pub.name,hand)}
+    const log={...(g.log||{}),[id('log')]:{text:reason,at:now()}};
+    const finalGame={...g,...extra,players:publicPlayers,status:'finished',winnerUid:winnerUid||null,turnUid:null,finishedAt,updatedAt:finishedAt,revealedHands,log};
+    // Atualização multi-path: revela apenas quando terminou, limpa privados e deck
+    // e atualiza os índices no mesmo commit do Realtime Database.
+    const updates={};updates[`blackjackGames/${g.id}`]=finalGame;updates[`gameSecrets/blackjack/${g.id}`]=null;updates[`blackjackPrivate/${g.id}`]=null;
+    for(const playerUid of uids)updates[`blackjackIndex/${playerUid}/${g.id}`]={status:'finished',winnerUid:winnerUid||null,updatedAt:finishedAt,finishedAt,finishReason:extra.finishReason||null,leftUid:extra.leftUid||null};
+    await rtdb.ref().update(updates);
+    for(const playerUid of uids){const won=winnerUid===playerUid,draw=!winnerUid;await notifySite(playerUid,{type:'blackjack',title:draw?'Empate no 21':won?'Vitória no 21!':'Partida de 21 encerrada',text:draw?'A partida terminou empatada.':won?'Você venceu a partida de 21.':`${g.players[winnerUid]?.name||'Seu amigo'} venceu a partida.`,link:'#games'}).catch(()=>{})}
+    return{winnerUid:winnerUid||null,draw:!winnerUid};
   }
   async function processBlackjackCreate(uid,data){
     const targetUid=String(data.targetUid||'');if(!targetUid||targetUid===uid)throw new Error('Amigo inválido.');if(!(await reciprocalFriends(uid,targetUid)))throw new Error('Jogue apenas com amigos confirmados.');await ensureNoActiveGame('blackjackIndex',[uid,targetUid]);
-    const[a,b]=await Promise.all([rtdb.ref(`directory/${uid}`).once('value'),rtdb.ref(`directory/${targetUid}`).once('value')]),gameId=id('bj'),deck=bjDeck(),cardsA=[deck.pop(),deck.pop()],cardsB=[deck.pop(),deck.pop()],first=crypto.randomInt(0,2)===0?uid:targetUid,createdAt=Date.now();
-    const game={id:gameId,status:'active',createdAt,updatedAt:createdAt,turnUid:first,players:{[uid]:{uid,name:a.val()?.nome||'Jogador',cards:cardsA,score:bjScore(cardsA),stood:false,busted:false},[targetUid]:{uid:targetUid,name:b.val()?.nome||'Jogador',cards:cardsB,score:bjScore(cardsB),stood:false,busted:false}},log:{}};
-    await Promise.all([rtdb.ref(`gameSecrets/blackjack/${gameId}`).set({deck}),rtdb.ref(`blackjackGames/${gameId}`).set(game),rtdb.ref(`blackjackIndex/${uid}/${gameId}`).set({status:'active',createdAt,updatedAt:createdAt}),rtdb.ref(`blackjackIndex/${targetUid}/${gameId}`).set({status:'active',createdAt,updatedAt:createdAt})]);
-    await notifySite(targetUid,{type:'blackjack',title:'Desafio de 21',text:`${a.val()?.nome||'Um amigo'} te desafiou para uma partida de 21.`,link:'#games'}).catch(()=>{});return{gameId};
+    const[a,b]=await Promise.all([rtdb.ref(`directory/${uid}`).once('value'),rtdb.ref(`directory/${targetUid}`).once('value')]),gameId=id('bj'),deck=bjDeck(),cardsA=[deck.pop(),deck.pop()],cardsB=[deck.pop(),deck.pop()],createdAt=Date.now();
+    const wager=await reserveGameWager('blackjack',gameId,[uid,targetUid],data.bet);
+    const handA={cards:cardsA,score:bjScore(cardsA),stood:bjScore(cardsA)===21,busted:false,updatedAt:createdAt},handB={cards:cardsB,score:bjScore(cardsB),stood:bjScore(cardsB)===21,busted:false,updatedAt:createdAt};
+    const candidates=[uid,targetUid].filter(x=>!(x===uid?handA:handB).stood),first=candidates.length?candidates[crypto.randomInt(0,candidates.length)]:null;
+    const players={[uid]:blackjackPublicPlayer(uid,a.val()?.nome||'Jogador',handA),[targetUid]:blackjackPublicPlayer(targetUid,b.val()?.nome||'Jogador',handB)};
+    const game={id:gameId,status:'active',createdAt,updatedAt:createdAt,turnUid:first,players,wager:wager?{amount:wager.amount,pot:wager.pot}:null,log:{[id('log')]:{text:'As cartas foram distribuídas.',at:now()}}};
+    const updates={[`gameSecrets/blackjack/${gameId}`]:{deck},[`blackjackGames/${gameId}`]:game,[`blackjackPrivate/${gameId}/${uid}`]:handA,[`blackjackPrivate/${gameId}/${targetUid}`]:handB,[`blackjackIndex/${uid}/${gameId}`]:{status:'active',createdAt,updatedAt:createdAt},[`blackjackIndex/${targetUid}/${gameId}`]:{status:'active',createdAt,updatedAt:createdAt}};
+    try{await rtdb.ref().update(updates)}catch(e){await cancelGameWager('blackjack',gameId).catch(()=>{});throw e}
+    if(!first){const privateRows={[uid]:handA,[targetUid]:handB},winnerUid=blackjackWinnerPrivate(privateRows);await finishBlackjack(rtdb.ref(`blackjackGames/${gameId}`),game,privateRows,winnerUid,winnerUid?`${players[winnerUid].name} venceu com 21.`:'Os dois começaram com 21. Empate.')}
+    await notifySite(targetUid,{type:'blackjack',title:'Desafio de 21',text:`${a.val()?.nome||'Um amigo'} te desafiou para uma partida de 21${wager?` valendo ₹${wager.amount}`:''}.`,link:'#games'}).catch(()=>{});return{gameId,wager};
   }
   async function processBlackjackMove(uid,data){
-    const gameId=String(data.gameId||''),action=String(data.action||'').toLowerCase(),gr=rtdb.ref(`blackjackGames/${gameId}`),sn=await gr.once('value');if(!sn.exists())throw new Error('Partida não encontrada.');const g={id:gameId,...sn.val()};if(g.status!=='active'||!g.players?.[uid])throw new Error('Partida encerrada.');if(g.turnUid!==uid)throw new Error('Ainda não é sua vez.');const me=g.players[uid];if(me.stood||me.busted)throw new Error('Sua jogada já terminou.');g.log=g.log||{};
+    const gameId=String(data.gameId||''),action=String(data.action||'').toLowerCase(),gr=rtdb.ref(`blackjackGames/${gameId}`),sn=await gr.once('value');if(!sn.exists())throw new Error('Partida não encontrada.');const g={id:gameId,...sn.val()};if(g.status!=='active'||!g.players?.[uid])throw new Error('Partida encerrada.');if(g.turnUid!==uid)throw new Error('Ainda não é sua vez.');
+    const playerUids=Object.keys(g.players||{}),privateRows=await readBlackjackPrivate(gameId,playerUids),me=privateRows[uid];if(!me)throw new Error('Sua mão privada não foi encontrada. Entre novamente na partida.');if(me.stood||me.busted)throw new Error('Sua jogada já terminou.');g.log=g.log||{};
+    let deck=null;
     if(action==='hit'){
-      const secret=(await rtdb.ref(`gameSecrets/blackjack/${gameId}`).once('value')).val()||{},deck=Array.isArray(secret.deck)?secret.deck:[];if(!deck.length)throw new Error('Baralho indisponível.');const card=deck.pop();me.cards=Array.isArray(me.cards)?me.cards:[];me.cards.push(card);me.score=bjScore(me.cards);if(me.score>=21){me.stood=true;me.busted=me.score>21}g.log[id('log')]={text:`${me.name} pediu uma carta${me.busted?' e estourou.':me.score===21?' e fez 21!':'.'}`,at:now()};await rtdb.ref(`gameSecrets/blackjack/${gameId}`).set({deck});
-    }else if(action==='stand'){me.stood=true;g.log[id('log')]={text:`${me.name} parou com ${me.score}.`,at:now()};}else throw new Error('Jogada inválida.');
-    const playerUids=Object.keys(g.players),done=playerUids.every(x=>g.players[x].stood||g.players[x].busted);if(done){const winnerUid=blackjackWinner(g.players);return finishBlackjack(gr,g,winnerUid,winnerUid?`${g.players[winnerUid].name} venceu a partida de 21.`:'A partida terminou empatada.')}
-    const otherUid=playerUids.find(x=>x!==uid);g.turnUid=otherUid&&!g.players[otherUid].stood&&!g.players[otherUid].busted?otherUid:uid;g.updatedAt=Date.now();await gr.set(g);return{turnUid:g.turnUid,score:me.score,busted:!!me.busted};
+      const secret=(await rtdb.ref(`gameSecrets/blackjack/${gameId}`).once('value')).val()||{};deck=Array.isArray(secret.deck)?secret.deck:[];if(!deck.length)throw new Error('Baralho indisponível.');const card=deck.pop();me.cards=Array.isArray(me.cards)?[...me.cards,card]:[card];me.score=bjScore(me.cards);me.busted=me.score>21;if(me.score>=21)me.stood=true;me.updatedAt=Date.now();g.log[id('log')]={text:`${g.players[uid].name} pediu uma carta${me.busted?' e estourou.':me.score===21?' e fez 21!':'.'}`,at:now()};
+    }else if(action==='stand'){
+      me.stood=true;me.updatedAt=Date.now();g.log[id('log')]={text:`${g.players[uid].name} parou.`,at:now()};
+    }else throw new Error('Jogada inválida.');
+    privateRows[uid]=me;g.players[uid]=blackjackPublicPlayer(uid,g.players[uid].name,me);
+    const done=playerUids.every(x=>privateRows[x]&&(privateRows[x].stood||privateRows[x].busted));
+    if(done){const winnerUid=blackjackWinnerPrivate(privateRows);return finishBlackjack(gr,g,privateRows,winnerUid,winnerUid?`${g.players[winnerUid].name} venceu a partida de 21.`:'A partida terminou empatada.');}
+    const otherUid=playerUids.find(x=>x!==uid),other=privateRows[otherUid];g.turnUid=other&&!(other.stood||other.busted)?otherUid:uid;g.updatedAt=Date.now();
+    const updates={};updates[`blackjackPrivate/${gameId}/${uid}`]=me;updates[`blackjackGames/${gameId}/players/${uid}`]=g.players[uid];updates[`blackjackGames/${gameId}/turnUid`]=g.turnUid;updates[`blackjackGames/${gameId}/updatedAt`]=g.updatedAt;updates[`blackjackGames/${gameId}/log`]=g.log;if(deck)updates[`gameSecrets/blackjack/${gameId}/deck`]=deck;await rtdb.ref().update(updates);
+    return{turnUid:g.turnUid,score:me.score,busted:!!me.busted,cardCount:me.cards.length};
   }
-  async function processBlackjackExit(uid,data){const gameId=String(data.gameId||''),gr=rtdb.ref(`blackjackGames/${gameId}`),sn=await gr.once('value');if(!sn.exists())return{};const g={id:gameId,...sn.val()};if(g.status!=='active'||!g.players?.[uid])return{};const winnerUid=Object.keys(g.players).find(x=>x!==uid);return finishBlackjack(gr,g,winnerUid,`${g.players[uid].name} saiu da partida.`)}
+  async function processBlackjackExit(uid,data){
+    const gameId=String(data.gameId||''),gr=rtdb.ref(`blackjackGames/${gameId}`),sn=await gr.once('value');if(!sn.exists())return{};const g={id:gameId,...sn.val()};if(g.status!=='active'||!g.players?.[uid])return{};const uids=Object.keys(g.players),privateRows=await readBlackjackPrivate(gameId,uids),winnerUid=uids.find(x=>x!==uid);return finishBlackjack(gr,g,privateRows,winnerUid,`${g.players[uid].name} saiu da partida.`,{finishReason:'exit',leftUid:uid});
+  }
 
   // ======================================================
   // FORCA PVP — palavra secreta só no bridge
@@ -704,12 +845,16 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   function hangmanMask(word,guessed={}){return [...word].map(ch=>guessed[ch]==='hit'?ch:'_').join('')}
   function hangmanWinner(players={}){const rows=Object.values(players);if(rows.length<2)return rows[0]?.uid||null;const [a,b]=rows,sa=Number(a.score||0),sb=Number(b.score||0);return sa===sb?null:(sa>sb?a.uid:b.uid)}
   async function finishHangman(gr,g,winnerUid,answer,reason='Partida encerrada.'){
+    await settleGameWager('hangman',g.id,winnerUid);
     const finishedAt=Date.now();g.status='finished';g.winnerUid=winnerUid||null;g.answer=answer;g.turnUid=null;g.finishedAt=finishedAt;g.updatedAt=finishedAt;g.log=g.log||{};g.log[id('log')]={text:reason,at:now()};await gr.set(g);await rtdb.ref(`gameSecrets/hangman/${g.id}`).remove().catch(()=>{});await Promise.all(Object.keys(g.players||{}).map(x=>rtdb.ref(`hangmanIndex/${x}/${g.id}`).update({status:'finished',winnerUid:winnerUid||null,updatedAt:finishedAt})));
     for(const playerUid of Object.keys(g.players||{})){const won=winnerUid===playerUid,draw=!winnerUid;await notifySite(playerUid,{type:'hangman',title:draw?'Empate na Forca':won?'Vitória na Forca!':'Forca encerrada',text:`A palavra era ${answer}. ${draw?'A partida terminou empatada.':won?'Você venceu.':`${g.players[winnerUid]?.name||'Seu amigo'} venceu.`}`,link:'#games'}).catch(()=>{})}return{winnerUid:winnerUid||null,draw:!winnerUid,answer};
   }
   async function processHangmanCreate(uid,data){
-    const targetUid=String(data.targetUid||'');if(!targetUid||targetUid===uid)throw new Error('Amigo inválido.');if(!(await reciprocalFriends(uid,targetUid)))throw new Error('Jogue apenas com amigos confirmados.');await ensureNoActiveGame('hangmanIndex',[uid,targetUid]);const[a,b]=await Promise.all([rtdb.ref(`directory/${uid}`).once('value'),rtdb.ref(`directory/${targetUid}`).once('value')]),gameId=id('hang'),word=HANGMAN_WORDS[crypto.randomInt(0,HANGMAN_WORDS.length)],first=crypto.randomInt(0,2)===0?uid:targetUid,createdAt=Date.now(),players={[uid]:{uid,name:a.val()?.nome||'Jogador',score:0},[targetUid]:{uid:targetUid,name:b.val()?.nome||'Jogador',score:0}},game={id:gameId,status:'active',createdAt,updatedAt:createdAt,turnUid:first,mask:'_'.repeat(word.length),guessed:{},misses:[],maxMisses:6,players,log:{}};
-    await Promise.all([rtdb.ref(`gameSecrets/hangman/${gameId}`).set({word}),rtdb.ref(`hangmanGames/${gameId}`).set(game),rtdb.ref(`hangmanIndex/${uid}/${gameId}`).set({status:'active',createdAt,updatedAt:createdAt}),rtdb.ref(`hangmanIndex/${targetUid}/${gameId}`).set({status:'active',createdAt,updatedAt:createdAt})]);await notifySite(targetUid,{type:'hangman',title:'Desafio de Forca',text:`${a.val()?.nome||'Um amigo'} te desafiou para uma partida de Forca.`,link:'#games'}).catch(()=>{});return{gameId};
+    const targetUid=String(data.targetUid||'');if(!targetUid||targetUid===uid)throw new Error('Amigo inválido.');if(!(await reciprocalFriends(uid,targetUid)))throw new Error('Jogue apenas com amigos confirmados.');await ensureNoActiveGame('hangmanIndex',[uid,targetUid]);
+    const[a,b]=await Promise.all([rtdb.ref(`directory/${uid}`).once('value'),rtdb.ref(`directory/${targetUid}`).once('value')]),gameId=id('hang'),word=HANGMAN_WORDS[crypto.randomInt(0,HANGMAN_WORDS.length)],first=crypto.randomInt(0,2)===0?uid:targetUid,createdAt=Date.now();
+    const wager=await reserveGameWager('hangman',gameId,[uid,targetUid],data.bet),players={[uid]:{uid,name:a.val()?.nome||'Jogador',score:0},[targetUid]:{uid:targetUid,name:b.val()?.nome||'Jogador',score:0}},game={id:gameId,status:'active',createdAt,updatedAt:createdAt,turnUid:first,mask:'_'.repeat(word.length),guessed:{},misses:[],maxMisses:6,players,wager:wager?{amount:wager.amount,pot:wager.pot}:null,log:{}};
+    try{await Promise.all([rtdb.ref(`gameSecrets/hangman/${gameId}`).set({word}),rtdb.ref(`hangmanGames/${gameId}`).set(game),rtdb.ref(`hangmanIndex/${uid}/${gameId}`).set({status:'active',createdAt,updatedAt:createdAt}),rtdb.ref(`hangmanIndex/${targetUid}/${gameId}`).set({status:'active',createdAt,updatedAt:createdAt})])}catch(e){await cancelGameWager('hangman',gameId).catch(()=>{});throw e}
+    await notifySite(targetUid,{type:'hangman',title:'Desafio de Forca',text:`${a.val()?.nome||'Um amigo'} te desafiou para uma partida de Forca${wager?` valendo ₹${wager.amount}`:''}.`,link:'#games'}).catch(()=>{});return{gameId,wager};
   }
   async function processHangmanGuess(uid,data){
     const gameId=String(data.gameId||''),letter=normalizeGameLetter(data.letter),gr=rtdb.ref(`hangmanGames/${gameId}`),sn=await gr.once('value');if(!sn.exists())throw new Error('Partida não encontrada.');const g={id:gameId,...sn.val()};if(g.status!=='active'||!g.players?.[uid])throw new Error('Partida encerrada.');if(g.turnUid!==uid)throw new Error('Ainda não é sua vez.');if(!letter)throw new Error('Letra inválida.');g.guessed=g.guessed||{};if(g.guessed[letter])throw new Error('Essa letra já foi usada.');const secret=(await rtdb.ref(`gameSecrets/hangman/${gameId}`).once('value')).val()||{},word=String(secret.word||'');if(!word)throw new Error('Palavra secreta indisponível.');const hits=[...word].filter(ch=>ch===letter).length;g.log=g.log||{};g.misses=Array.isArray(g.misses)?g.misses:[];
@@ -717,6 +862,87 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     g.mask=hangmanMask(word,g.guessed);const completed=!g.mask.includes('_'),failed=g.misses.length>=Number(g.maxMisses||6);if(completed){g.players[uid].score=Number(g.players[uid].score||0)+2;const winnerUid=hangmanWinner(g.players);return finishHangman(gr,g,winnerUid,word,`${g.players[uid].name} completou a palavra ${word}.`)}if(failed){const winnerUid=hangmanWinner(g.players);return finishHangman(gr,g,winnerUid,word,`A forca chegou ao limite. A palavra era ${word}.`)}const otherUid=Object.keys(g.players).find(x=>x!==uid);g.turnUid=otherUid;g.updatedAt=Date.now();await gr.set(g);return{turnUid:otherUid,hits,mask:g.mask};
   }
   async function processHangmanExit(uid,data){const gameId=String(data.gameId||''),gr=rtdb.ref(`hangmanGames/${gameId}`),sn=await gr.once('value');if(!sn.exists())return{};const g={id:gameId,...sn.val()};if(g.status!=='active'||!g.players?.[uid])return{};const secret=(await rtdb.ref(`gameSecrets/hangman/${gameId}`).once('value').catch(()=>null))?.val?.()||{},winnerUid=Object.keys(g.players).find(x=>x!==uid);return finishHangman(gr,g,winnerUid,String(secret.word||''),`${g.players[uid].name} saiu da partida.`)}
+
+
+  // ======================================================
+  // NOVOS JOGOS — estado do jogo no Firebase; segredos no bridge
+  // ======================================================
+  const EXTRA_SUITS=['♠','♥','♦','♣'],EXTRA_RANKS=['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+  function standardDeck(){const d=EXTRA_SUITS.flatMap(s=>EXTRA_RANKS.map(r=>({s,r})));for(let i=d.length-1;i>0;i--){const j=crypto.randomInt(0,i+1);[d[i],d[j]]=[d[j],d[i]]}return d}
+  async function gameNames(uid,targetUid){const[a,b]=await Promise.all([rtdb.ref(`directory/${uid}`).once('value'),rtdb.ref(`directory/${targetUid}`).once('value')]);return{a:a.val()?.nome||'Jogador',b:b.val()?.nome||'Jogador'}}
+  async function finishSimpleIndexes(root,g,winnerUid){const t=Date.now(),updates={};for(const u of Object.keys(g.players||{}))updates[`${root}/${u}/${g.id}`]={status:'finished',winnerUid:winnerUid||null,updatedAt:t,finishedAt:t};await rtdb.ref().update(updates)}
+
+  // ---------- Corrida de Cavalos ----------
+  const HORSES=[{id:'nebula',name:'Nébula',odds:2},{id:'onyx',name:'Ônix',odds:3},{id:'valkyrie',name:'Valquíria',odds:4},{id:'comet',name:'Cometa',odds:5},{id:'phantom',name:'Fantasma',odds:8}];
+  async function processHorseRace(uid,jid,data){
+    const horseId=String(data.horseId||''),horse=HORSES.find(h=>h.id===horseId),bet=Math.floor(Number(data.bet||0));if(!horse)throw new Error('Cavalo inválido.');if(!Number.isSafeInteger(bet)||bet<10||bet>5000)throw new Error('A aposta deve ficar entre ₹10 e ₹5.000.');if(!registeredFor(jid))throw new Error('Use /reg na Charlotte antes de apostar.');if(typeof economy.delkoin!=='function'||typeof economy.addkoin!=='function')throw new Error('Sistema de rúpias indisponível.');const before=balanceFor(jid);if(before<bet)throw new Error(`Saldo insuficiente. Você possui ₹${before}.`);
+    const winner=HORSES[crypto.randomInt(0,HORSES.length)],won=winner.id===horse.id,payout=won?bet*horse.odds:0,net=payout-bet;if(net<0)await economy.delkoin(jid,-net);else if(net>0)await economy.addkoin(jid,net);const balance=balanceFor(jid),result={id:id('race'),horseId:horse.id,horseName:horse.name,winnerId:winner.id,winnerName:winner.name,bet,payout,net,balance,won,createdAt:Date.now()};await rtdb.ref(`horseRaceLast/${uid}`).set(result);syncAccount(uid,jid).catch(()=>{});return result;
+  }
+
+  // ---------- Pesca ----------
+  const FISH_TABLE=[{id:'lambari',name:'Lambari',rarity:'Comum',value:20,w:38},{id:'tilapia',name:'Tilápia',rarity:'Comum',value:35,w:30},{id:'dourado',name:'Dourado',rarity:'Raro',value:90,w:17},{id:'pirarucu',name:'Pirarucu',rarity:'Épico',value:220,w:10},{id:'celestial',name:'Peixe Celestial',rarity:'Lendário',value:650,w:5}];
+  function weightedPick(rows){const total=rows.reduce((n,x)=>n+Number(x.w||1),0);let roll=crypto.randomInt(1,total+1);for(const row of rows){roll-=Number(row.w||1);if(roll<=0)return row}return rows[0]}
+  function refillEnergy(row,max,ms){const t=Date.now(),last=Number(row.energyAt||t),gained=Math.floor(Math.max(0,t-last)/ms);if(gained>0){row.energy=Math.min(max,Number(row.energy??max)+gained);row.energyAt=last+gained*ms}if(row.energy==null){row.energy=max;row.energyAt=t}return row}
+  async function processFishingCast(uid){const rr=rtdb.ref(`siteFishing/${uid}`),row=refillEnergy((await rr.once('value')).val()||{},5,5*60*1000);if(Number(row.energy||0)<1)throw new Error('Sua energia de pesca acabou. Ela recupera 1 ponto a cada 5 minutos.');row.energy--;const rod=Math.max(1,Number(row.rodLevel||1)),table=FISH_TABLE.map(x=>({...x,w:x.rarity==='Lendário'?x.w+Math.min(rod-1,4):x.w})),fish=weightedPick(table),qty=fish.rarity==='Comum'&&crypto.randomInt(0,100)<20?2:1;row.rodLevel=rod;row.inventory=row.inventory||{};const old=row.inventory[fish.id]||{id:fish.id,name:fish.name,rarity:fish.rarity,value:fish.value,qty:0};row.inventory[fish.id]={...old,qty:Number(old.qty||0)+qty};row.lastCatch={...fish,qty,at:Date.now()};row.updatedAt=Date.now();await rr.set(row);return{state:row,catch:row.lastCatch}}
+  async function processFishingSell(uid,jid){if(!registeredFor(jid))throw new Error('Use /reg na Charlotte antes de vender.');if(typeof economy.addkoin!=='function')throw new Error('Sistema de rúpias indisponível.');const rr=rtdb.ref(`siteFishing/${uid}`),row=(await rr.once('value')).val()||{},inv=row.inventory||{},total=Object.values(inv).reduce((n,x)=>n+Number(x.value||0)*Number(x.qty||0),0);if(total<=0)throw new Error('Você não tem peixes para vender.');await economy.addkoin(jid,total);row.inventory={};row.lastSale={total,at:Date.now()};row.updatedAt=Date.now();await rr.set(row);syncAccount(uid,jid).catch(()=>{});return{state:row,total,balance:balanceFor(jid)}}
+  async function processFishingUpgrade(uid,jid){if(!registeredFor(jid))throw new Error('Use /reg na Charlotte antes de melhorar a vara.');if(typeof economy.delkoin!=='function')throw new Error('Sistema de rúpias indisponível.');const rr=rtdb.ref(`siteFishing/${uid}`),row=(await rr.once('value')).val()||{},level=Math.max(1,Number(row.rodLevel||1));if(level>=5)throw new Error('Sua vara já está no nível máximo.');const cost=level*800;if(balanceFor(jid)<cost)throw new Error(`Você precisa de ₹${cost}.`);await economy.delkoin(jid,cost);row.rodLevel=level+1;row.updatedAt=Date.now();await rr.set(row);syncAccount(uid,jid).catch(()=>{});return{state:row,cost,balance:balanceFor(jid)}}
+
+  // ---------- Mineração ----------
+  const ORE_TABLE=[{id:'ferro',name:'Ferro',rarity:'Comum',value:25,w:42},{id:'prata',name:'Prata',rarity:'Comum',value:45,w:28},{id:'ouro',name:'Ouro',rarity:'Raro',value:110,w:17},{id:'rubi',name:'Rubi',rarity:'Épico',value:260,w:9},{id:'eterita',name:'Eterita',rarity:'Lendário',value:800,w:4}];
+  async function processMiningMine(uid){const rr=rtdb.ref(`siteMining/${uid}`),row=refillEnergy((await rr.once('value')).val()||{},6,4*60*1000);if(Number(row.energy||0)<1)throw new Error('Sua energia de mineração acabou. Ela recupera 1 ponto a cada 4 minutos.');row.energy--;const pick=Math.max(1,Number(row.pickaxeLevel||1)),table=ORE_TABLE.map(x=>({...x,w:x.rarity==='Lendário'?x.w+Math.min(pick-1,4):x.w})),ore=weightedPick(table),qty=1+(pick>=3&&ore.rarity==='Comum'&&crypto.randomInt(0,100)<35?1:0);row.pickaxeLevel=pick;row.inventory=row.inventory||{};const old=row.inventory[ore.id]||{id:ore.id,name:ore.name,rarity:ore.rarity,value:ore.value,qty:0};row.inventory[ore.id]={...old,qty:Number(old.qty||0)+qty};row.lastMine={...ore,qty,at:Date.now()};row.updatedAt=Date.now();await rr.set(row);return{state:row,ore:row.lastMine}}
+  async function processMiningSell(uid,jid){if(!registeredFor(jid))throw new Error('Use /reg na Charlotte antes de vender.');if(typeof economy.addkoin!=='function')throw new Error('Sistema de rúpias indisponível.');const rr=rtdb.ref(`siteMining/${uid}`),row=(await rr.once('value')).val()||{},inv=row.inventory||{},total=Object.values(inv).reduce((n,x)=>n+Number(x.value||0)*Number(x.qty||0),0);if(total<=0)throw new Error('Você não tem minérios para vender.');await economy.addkoin(jid,total);row.inventory={};row.lastSale={total,at:Date.now()};row.updatedAt=Date.now();await rr.set(row);syncAccount(uid,jid).catch(()=>{});return{state:row,total,balance:balanceFor(jid)}}
+  async function processMiningUpgrade(uid,jid){if(!registeredFor(jid))throw new Error('Use /reg na Charlotte antes de melhorar a picareta.');if(typeof economy.delkoin!=='function')throw new Error('Sistema de rúpias indisponível.');const rr=rtdb.ref(`siteMining/${uid}`),row=(await rr.once('value')).val()||{},level=Math.max(1,Number(row.pickaxeLevel||1));if(level>=5)throw new Error('Sua picareta já está no nível máximo.');const cost=level*1000;if(balanceFor(jid)<cost)throw new Error(`Você precisa de ₹${cost}.`);await economy.delkoin(jid,cost);row.pickaxeLevel=level+1;row.updatedAt=Date.now();await rr.set(row);syncAccount(uid,jid).catch(()=>{});return{state:row,cost,balance:balanceFor(jid)}}
+
+  // ---------- 21 Pesadelo ----------
+  const NIGHTMARE_POWER=['shield','omen','order','lock','swap'];
+  function nightmarePowerName(x){return({shield:'Escudo',omen:'Presságio',order:'Ordem',lock:'Trava',swap:'Troca'})[x]||x}
+  async function processNightmareCreate(uid,data){
+    const targetUid=String(data.targetUid||'');if(!targetUid||targetUid===uid)throw new Error('Amigo inválido.');if(!(await reciprocalFriends(uid,targetUid)))throw new Error('Jogue apenas com amigos confirmados.');await ensureNoActiveGame('nightmare21Index',[uid,targetUid]);
+    const names=await gameNames(uid,targetUid),gameId=id('n21'),deck=bjDeck(),createdAt=Date.now(),wager=await reserveGameWager('nightmare21',gameId,[uid,targetUid],data.bet),a={cards:[deck.pop(),deck.pop()],powers:[NIGHTMARE_POWER[crypto.randomInt(0,NIGHTMARE_POWER.length)],NIGHTMARE_POWER[crypto.randomInt(0,NIGHTMARE_POWER.length)]],stood:false,busted:false,shield:false},b={cards:[deck.pop(),deck.pop()],powers:[NIGHTMARE_POWER[crypto.randomInt(0,NIGHTMARE_POWER.length)],NIGHTMARE_POWER[crypto.randomInt(0,NIGHTMARE_POWER.length)]],stood:false,busted:false,shield:false};
+    a.score=bjScore(a.cards);b.score=bjScore(b.cards);const first=crypto.randomInt(0,2)===0?uid:targetUid,players={[uid]:blackjackPublicPlayer(uid,names.a,a),[targetUid]:blackjackPublicPlayer(targetUid,names.b,b)},game={id:gameId,status:'active',turnUid:first,players,wager:wager?{amount:wager.amount,pot:wager.pot}:null,createdAt,updatedAt:createdAt,log:{[id('log')]:{text:'A partida Pesadelo começou.',at:now()}}},updates={};
+    updates[`gameSecrets/nightmare21/${gameId}`]={deck};updates[`nightmare21Games/${gameId}`]=game;updates[`nightmare21Private/${gameId}/${uid}`]=a;updates[`nightmare21Private/${gameId}/${targetUid}`]=b;updates[`nightmare21Index/${uid}/${gameId}`]={status:'active',createdAt,updatedAt:createdAt};updates[`nightmare21Index/${targetUid}/${gameId}`]={status:'active',createdAt,updatedAt:createdAt};
+    try{await rtdb.ref().update(updates)}catch(e){await cancelGameWager('nightmare21',gameId).catch(()=>{});throw e}return{gameId,wager}
+  }
+  async function finishNightmare(gameId,g,rows,winnerUid,reason){await settleGameWager('nightmare21',gameId,winnerUid);const t=Date.now(),updates={},revealed=blackjackReveal(rows),players={};for(const u of Object.keys(g.players))players[u]=blackjackPublicPlayer(u,g.players[u].name,rows[u]);updates[`nightmare21Games/${gameId}`]={...g,players,status:'finished',winnerUid:winnerUid||null,turnUid:null,revealedHands:revealed,finishedAt:t,updatedAt:t,log:{...(g.log||{}),[id('log')]:{text:reason,at:now()}}};updates[`nightmare21Private/${gameId}`]=null;updates[`gameSecrets/nightmare21/${gameId}`]=null;for(const u of Object.keys(players))updates[`nightmare21Index/${u}/${gameId}`]={status:'finished',winnerUid:winnerUid||null,updatedAt:t,finishedAt:t};await rtdb.ref().update(updates);return{winnerUid:winnerUid||null}}
+  async function processNightmareMove(uid,data){const gameId=String(data.gameId||''),action=String(data.action||''),gr=rtdb.ref(`nightmare21Games/${gameId}`),snap=await gr.once('value');if(!snap.exists())throw new Error('Partida não encontrada.');const g={id:gameId,...snap.val()};if(g.status!=='active'||g.turnUid!==uid||!g.players?.[uid])throw new Error('Ainda não é sua vez.');const uids=Object.keys(g.players),rows={};for(const u of uids)rows[u]=(await rtdb.ref(`nightmare21Private/${gameId}/${u}`).once('value')).val()||null;const me=rows[uid],otherUid=uids.find(x=>x!==uid),other=rows[otherUid];if(!me||!other)throw new Error('Mão privada indisponível.');const secret=(await rtdb.ref(`gameSecrets/nightmare21/${gameId}`).once('value')).val()||{},deck=Array.isArray(secret.deck)?secret.deck:[];g.log=g.log||{};
+    const drawOne=(hand)=>{if(!deck.length)throw new Error('Baralho indisponível.');hand.cards.push(deck.pop());hand.score=bjScore(hand.cards);if(hand.score>21&&hand.shield){hand.shield=false;hand.cards.pop();hand.score=bjScore(hand.cards);return'shield'}if(hand.score>=21){hand.stood=true;hand.busted=hand.score>21}return''};
+    if(action==='hit'){const shielded=drawOne(me);g.log[id('log')]={text:`${g.players[uid].name} pediu uma carta${shielded?' e o Escudo anulou o estouro.':me.busted?' e estourou.':'.'}`,at:now()}}
+    else if(action==='stand'){if(g.lockStandUid===uid)throw new Error('A Trava impede você de parar neste turno.');me.stood=true;g.log[id('log')]={text:`${g.players[uid].name} parou.`,at:now()}}
+    else if(action==='power'){const power=String(data.power||''),idx=me.powers?.indexOf(power)??-1;if(idx<0)throw new Error('Carta especial indisponível.');me.powers.splice(idx,1);if(power==='shield')me.shield=true;else if(power==='omen'){const next=deck.at(-1);me.omenText=next?`Próxima carta parece valer entre ${Math.max(1,(next.r==='A'?11:['J','Q','K'].includes(next.r)?10:Number(next.r))-2)} e ${Math.min(11,(next.r==='A'?11:['J','Q','K'].includes(next.r)?10:Number(next.r))+2)}.`:'O baralho está quase vazio.'}else if(power==='order'){drawOne(other)}else if(power==='lock'){g.lockStandUid=otherUid}else if(power==='swap'){if(!me.cards.length||!deck.length)throw new Error('Não há carta para trocar.');me.cards[me.cards.length-1]=deck.pop();me.score=bjScore(me.cards);me.busted=me.score>21;me.stood=me.score>=21}g.log[id('log')]={text:`${g.players[uid].name} usou ${nightmarePowerName(power)}.`,at:now()}}
+    else throw new Error('Jogada inválida.');
+    rows[uid]=me;rows[otherUid]=other;g.players[uid]=blackjackPublicPlayer(uid,g.players[uid].name,me);g.players[otherUid]=blackjackPublicPlayer(otherUid,g.players[otherUid].name,other);if(g.lockStandUid===uid&&action!=='stand')g.lockStandUid=null;const done=uids.every(u=>rows[u].stood||rows[u].busted);if(done){const winner=blackjackWinnerPrivate(rows);return finishNightmare(gameId,g,rows,winner,winner?`${g.players[winner].name} venceu o 21 Pesadelo.`:'Empate no 21 Pesadelo.')}
+    g.turnUid=other.stood||other.busted?uid:otherUid;g.updatedAt=Date.now();const updates={};updates[`nightmare21Games/${gameId}`]=g;updates[`nightmare21Private/${gameId}/${uid}`]=me;updates[`nightmare21Private/${gameId}/${otherUid}`]=other;updates[`gameSecrets/nightmare21/${gameId}/deck`]=deck;await rtdb.ref().update(updates);return{turnUid:g.turnUid}}
+  async function processNightmareExit(uid,data){const gameId=String(data.gameId||''),sn=await rtdb.ref(`nightmare21Games/${gameId}`).once('value');if(!sn.exists())return{};const g={id:gameId,...sn.val()};if(g.status!=='active'||!g.players?.[uid])return{};const uids=Object.keys(g.players),rows={};for(const u of uids)rows[u]=(await rtdb.ref(`nightmare21Private/${gameId}/${u}`).once('value')).val()||{};const winner=uids.find(x=>x!==uid);return finishNightmare(gameId,g,rows,winner,`${g.players[uid].name} saiu da partida.`)}
+
+  // ---------- Cores & Caos (primeira versão 2 jogadores) ----------
+  const CHAOS_COLORS=['red','blue','green','yellow'];
+  function chaosDeck(){const d=[];for(const c of CHAOS_COLORS){for(let n=0;n<=9;n++){d.push({color:c,kind:'number',value:n});if(n)d.push({color:c,kind:'number',value:n})}for(const k of ['block','reverse','plus2']){d.push({color:c,kind:k});d.push({color:c,kind:k})}}for(let i=0;i<4;i++)d.push({color:'wild',kind:'wild'});for(let i=d.length-1;i>0;i--){const j=crypto.randomInt(0,i+1);[d[i],d[j]]=[d[j],d[i]]}return d}
+  function chaosPlayable(card,top,currentColor){return card.color==='wild'||card.color===currentColor||card.kind===top.kind||(card.kind==='number'&&top.kind==='number'&&card.value===top.value)}
+  async function processChaosCreate(uid,data){const targetUid=String(data.targetUid||'');if(!targetUid||targetUid===uid)throw new Error('Amigo inválido.');if(!(await reciprocalFriends(uid,targetUid)))throw new Error('Jogue apenas com amigos confirmados.');await ensureNoActiveGame('chaosIndex',[uid,targetUid]);const names=await gameNames(uid,targetUid),gameId=id('chaos'),deck=chaosDeck(),handA=deck.splice(-7),handB=deck.splice(-7);let top=deck.pop();while(top.color==='wild'){deck.unshift(top);top=deck.pop()}const createdAt=Date.now(),first=crypto.randomInt(0,2)===0?uid:targetUid,players={[uid]:{uid,name:names.a,cardCount:7},[targetUid]:{uid:targetUid,name:names.b,cardCount:7}},game={id:gameId,status:'active',turnUid:first,topCard:top,currentColor:top.color,players,createdAt,updatedAt:createdAt,log:{}},updates={};updates[`gameSecrets/chaos/${gameId}`]={deck};updates[`chaosGames/${gameId}`]=game;updates[`chaosPrivate/${gameId}/${uid}`]={cards:handA};updates[`chaosPrivate/${gameId}/${targetUid}`]={cards:handB};updates[`chaosIndex/${uid}/${gameId}`]={status:'active',createdAt,updatedAt:createdAt};updates[`chaosIndex/${targetUid}/${gameId}`]={status:'active',createdAt,updatedAt:createdAt};await rtdb.ref().update(updates);return{gameId}}
+  async function finishChaos(gameId,g,winnerUid,reason){const t=Date.now(),updates={};updates[`chaosGames/${gameId}`]={...g,status:'finished',winnerUid:winnerUid||null,turnUid:null,finishedAt:t,updatedAt:t,log:{...(g.log||{}),[id('log')]:{text:reason,at:now()}}};updates[`chaosPrivate/${gameId}`]=null;updates[`gameSecrets/chaos/${gameId}`]=null;for(const u of Object.keys(g.players))updates[`chaosIndex/${u}/${gameId}`]={status:'finished',winnerUid:winnerUid||null,updatedAt:t,finishedAt:t};await rtdb.ref().update(updates);return{winnerUid}}
+  async function processChaosMove(uid,data){const gameId=String(data.gameId||''),action=String(data.action||''),gr=rtdb.ref(`chaosGames/${gameId}`),sn=await gr.once('value');if(!sn.exists())throw new Error('Partida não encontrada.');const g={id:gameId,...sn.val()};if(g.status!=='active'||g.turnUid!==uid||!g.players?.[uid])throw new Error('Ainda não é sua vez.');const uids=Object.keys(g.players),otherUid=uids.find(x=>x!==uid),meRef=rtdb.ref(`chaosPrivate/${gameId}/${uid}`),otherRef=rtdb.ref(`chaosPrivate/${gameId}/${otherUid}`),me=(await meRef.once('value')).val()||{cards:[]},other=(await otherRef.once('value')).val()||{cards:[]},secret=(await rtdb.ref(`gameSecrets/chaos/${gameId}`).once('value')).val()||{},deck=Array.isArray(secret.deck)?secret.deck:[];me.cards=Array.isArray(me.cards)?me.cards:[];other.cards=Array.isArray(other.cards)?other.cards:[];g.log=g.log||{};let skip=false;
+    if(action==='draw'){if(!deck.length)throw new Error('Monte vazio.');me.cards.push(deck.pop());g.log[id('log')]={text:`${g.players[uid].name} comprou uma carta.`,at:now()}}
+    else if(action==='play'){const idx=Number(data.index);if(!Number.isInteger(idx)||idx<0||idx>=me.cards.length)throw new Error('Carta inválida.');const card=me.cards[idx];if(!chaosPlayable(card,g.topCard,g.currentColor))throw new Error('Essa carta não pode ser jogada agora.');me.cards.splice(idx,1);g.topCard=card;g.currentColor=card.color==='wild'?(CHAOS_COLORS.includes(String(data.color))?String(data.color):CHAOS_COLORS[crypto.randomInt(0,CHAOS_COLORS.length)]):card.color;if(card.kind==='block'||card.kind==='reverse')skip=true;if(card.kind==='plus2'){for(let i=0;i<2;i++)if(deck.length)other.cards.push(deck.pop());skip=true}g.log[id('log')]={text:`${g.players[uid].name} jogou ${card.kind==='number'?card.value:card.kind}.`,at:now()};if(!me.cards.length){g.players[uid].cardCount=0;g.players[otherUid].cardCount=other.cards.length;return finishChaos(gameId,g,uid,`${g.players[uid].name} ficou sem cartas e venceu.`)}}else throw new Error('Jogada inválida.');
+    g.players[uid].cardCount=me.cards.length;g.players[otherUid].cardCount=other.cards.length;g.turnUid=skip?uid:otherUid;g.updatedAt=Date.now();const updates={};updates[`chaosGames/${gameId}`]=g;updates[`chaosPrivate/${gameId}/${uid}`]=me;updates[`chaosPrivate/${gameId}/${otherUid}`]=other;updates[`gameSecrets/chaos/${gameId}/deck`]=deck;await rtdb.ref().update(updates);return{turnUid:g.turnUid}}
+  async function processChaosExit(uid,data){const gameId=String(data.gameId||''),sn=await rtdb.ref(`chaosGames/${gameId}`).once('value');if(!sn.exists())return{};const g={id:gameId,...sn.val()};if(g.status!=='active'||!g.players?.[uid])return{};const winner=Object.keys(g.players).find(x=>x!==uid);return finishChaos(gameId,g,winner,`${g.players[uid].name} saiu da partida.`)}
+
+  // ---------- Poker Texas Hold'em Beta (2 jogadores, fichas virtuais) ----------
+  function pokerValue(r){return{'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,J:11,Q:12,K:13,A:14}[r]||0}
+  function pokerRank5(cards){const vals=cards.map(c=>pokerValue(c.r)).sort((a,b)=>b-a),counts={};vals.forEach(v=>counts[v]=(counts[v]||0)+1);const groups=Object.entries(counts).map(([v,n])=>({v:+v,n})).sort((a,b)=>b.n-a.n||b.v-a.v),flush=cards.every(c=>c.s===cards[0].s),uniq=[...new Set(vals)],wheel=uniq.includes(14)&&uniq.includes(5)&&uniq.includes(4)&&uniq.includes(3)&&uniq.includes(2),straightHigh=wheel?5:uniq.find(v=>[v,v-1,v-2,v-3,v-4].every(x=>uniq.includes(x)))||0;let cat=0,tie=[];if(flush&&straightHigh){cat=8;tie=[straightHigh]}else if(groups[0].n===4){cat=7;tie=[groups[0].v,...groups.filter(x=>x.n===1).map(x=>x.v)]}else if(groups[0].n===3&&groups[1]?.n>=2){cat=6;tie=[groups[0].v,groups[1].v]}else if(flush){cat=5;tie=vals}else if(straightHigh){cat=4;tie=[straightHigh]}else if(groups[0].n===3){cat=3;tie=[groups[0].v,...groups.filter(x=>x.n===1).map(x=>x.v).sort((a,b)=>b-a)]}else if(groups[0].n===2&&groups[1]?.n===2){cat=2;const ps=[groups[0].v,groups[1].v].sort((a,b)=>b-a);tie=[...ps,...groups.filter(x=>x.n===1).map(x=>x.v)]}else if(groups[0].n===2){cat=1;tie=[groups[0].v,...groups.filter(x=>x.n===1).map(x=>x.v).sort((a,b)=>b-a)]}else tie=vals;return{cat,tie}}
+  function pokerBest(cards){let best=null;for(let a=0;a<cards.length-4;a++)for(let b=a+1;b<cards.length-3;b++)for(let c=b+1;c<cards.length-2;c++)for(let d=c+1;d<cards.length-1;d++)for(let e=d+1;e<cards.length;e++){const r=pokerRank5([cards[a],cards[b],cards[c],cards[d],cards[e]]);if(!best||pokerCmp(r,best)>0)best=r}return best}
+  function pokerCmp(a,b){if(a.cat!==b.cat)return a.cat-b.cat;for(let i=0;i<Math.max(a.tie.length,b.tie.length);i++){const d=Number(a.tie[i]||0)-Number(b.tie[i]||0);if(d)return d}return 0}
+  function pokerLabel(r){return['Carta alta','Um par','Dois pares','Trinca','Sequência','Flush','Full house','Quadra','Straight flush'][r?.cat||0]}
+  async function processPokerCreate(uid,data){const targetUid=String(data.targetUid||'');if(!targetUid||targetUid===uid)throw new Error('Amigo inválido.');if(!(await reciprocalFriends(uid,targetUid)))throw new Error('Jogue apenas com amigos confirmados.');await ensureNoActiveGame('pokerIndex',[uid,targetUid]);const names=await gameNames(uid,targetUid),gameId=id('poker'),deck=standardDeck(),a=[deck.pop(),deck.pop()],b=[deck.pop(),deck.pop()],createdAt=Date.now(),first=crypto.randomInt(0,2)===0?uid:targetUid,players={[uid]:{uid,name:names.a,stack:980,streetBet:20,totalBet:20,folded:false,allIn:false,acted:false},[targetUid]:{uid:targetUid,name:names.b,stack:990,streetBet:10,totalBet:10,folded:false,allIn:false,acted:false}},game={id:gameId,status:'active',street:'preflop',board:[],pot:30,currentBet:20,turnUid:first,players,createdAt,updatedAt:createdAt,log:{[id('log')]:{text:'Mesa iniciada com fichas virtuais. Blinds 10/20.',at:now()}}},updates={};updates[`gameSecrets/poker/${gameId}`]={deck};updates[`pokerGames/${gameId}`]=game;updates[`pokerPrivate/${gameId}/${uid}`]={cards:a};updates[`pokerPrivate/${gameId}/${targetUid}`]={cards:b};updates[`pokerIndex/${uid}/${gameId}`]={status:'active',createdAt,updatedAt:createdAt};updates[`pokerIndex/${targetUid}/${gameId}`]={status:'active',createdAt,updatedAt:createdAt};await rtdb.ref().update(updates);return{gameId}}
+  function pokerRoundDone(g){const active=Object.values(g.players).filter(p=>!p.folded);return active.every(p=>p.allIn||(p.acted&&Number(p.streetBet||0)===Number(g.currentBet||0)))}
+  async function finishPoker(gameId,g,winnerUid,reason,privateRows={},showdown=false){const t=Date.now(),updates={};if(winnerUid&&g.players[winnerUid])g.players[winnerUid].stack=Number(g.players[winnerUid].stack||0)+Number(g.pot||0);const revealed=showdown?Object.fromEntries(Object.entries(privateRows).map(([u,h])=>[u,{cards:h.cards||[]}])):{};updates[`pokerGames/${gameId}`]={...g,status:'finished',winnerUid:winnerUid||null,turnUid:null,revealedHands:revealed,finishedAt:t,updatedAt:t,log:{...(g.log||{}),[id('log')]:{text:reason,at:now()}}};updates[`pokerPrivate/${gameId}`]=null;updates[`gameSecrets/poker/${gameId}`]=null;for(const u of Object.keys(g.players))updates[`pokerIndex/${u}/${gameId}`]={status:'finished',winnerUid:winnerUid||null,updatedAt:t,finishedAt:t};await rtdb.ref().update(updates);return{winnerUid}}
+  async function processPokerMove(uid,data){const gameId=String(data.gameId||''),action=String(data.action||''),gr=rtdb.ref(`pokerGames/${gameId}`),sn=await gr.once('value');if(!sn.exists())throw new Error('Mesa não encontrada.');const g={id:gameId,...sn.val()};if(g.status!=='active'||g.turnUid!==uid||!g.players?.[uid])throw new Error('Ainda não é sua vez.');const uids=Object.keys(g.players),me=g.players[uid],otherUid=uids.find(x=>x!==uid),other=g.players[otherUid];if(me.folded||me.allIn)throw new Error('Você não pode agir agora.');const need=Math.max(0,Number(g.currentBet||0)-Number(me.streetBet||0));g.log=g.log||{};
+    if(action==='fold'){me.folded=true;return finishPoker(gameId,g,otherUid,`${me.name} desistiu. ${other.name} venceu o pote.`)}
+    if(action==='check'){if(need>0)throw new Error(`Você precisa pagar ${need} fichas ou desistir.`);me.acted=true;g.log[id('log')]={text:`${me.name} passou.`,at:now()}}
+    else if(action==='call'){const pay=Math.min(need,Number(me.stack||0));if(pay<=0)throw new Error('Nada para pagar.');me.stack-=pay;me.streetBet+=pay;me.totalBet+=pay;g.pot=Number(g.pot||0)+pay;me.allIn=me.stack===0;me.acted=true;g.log[id('log')]={text:`${me.name} pagou ${pay}.`,at:now()}}
+    else if(action==='raise'||action==='allin'){let target=action==='allin'?Number(me.streetBet||0)+Number(me.stack||0):Number(data.amount||0);if(action==='raise'&&(!Number.isInteger(target)||target<=Number(g.currentBet||0)))throw new Error('Aumente para um valor maior que a aposta atual.');const pay=Math.min(Number(me.stack||0),Math.max(0,target-Number(me.streetBet||0)));if(pay<=0)throw new Error('Aumento inválido.');me.stack-=pay;me.streetBet+=pay;me.totalBet+=pay;g.pot=Number(g.pot||0)+pay;g.currentBet=Math.max(Number(g.currentBet||0),Number(me.streetBet||0));me.allIn=me.stack===0;me.acted=true;other.acted=false;g.log[id('log')]={text:`${me.name} aumentou para ${me.streetBet}${me.allIn?' (all-in)':''}.`,at:now()}}
+    else throw new Error('Ação inválida.');
+    if(pokerRoundDone(g)){const secret=(await rtdb.ref(`gameSecrets/poker/${gameId}`).once('value')).val()||{},deck=Array.isArray(secret.deck)?secret.deck:[];for(const p of Object.values(g.players)){p.streetBet=0;p.acted=false}g.currentBet=0;if(g.street==='preflop'){g.board=[deck.pop(),deck.pop(),deck.pop()];g.street='flop'}else if(g.street==='flop'){g.board.push(deck.pop());g.street='turn'}else if(g.street==='turn'){g.board.push(deck.pop());g.street='river'}else if(g.street==='river'){const rows={};for(const u of uids)rows[u]=(await rtdb.ref(`pokerPrivate/${gameId}/${u}`).once('value')).val()||{cards:[]};const ra=pokerBest([...(rows[uid]?.cards||[]),...(g.board||[])]),rb=pokerBest([...(rows[otherUid]?.cards||[]),...(g.board||[])]),cmp=pokerCmp(ra,rb),winner=cmp===0?null:(cmp>0?uid:otherUid);if(!winner){for(const p of Object.values(g.players))p.stack=Number(p.stack||0)+Math.floor(Number(g.pot||0)/uids.length);g.pot=0;return finishPoker(gameId,g,null,`Empate: ${pokerLabel(ra)}.`,rows,true)}return finishPoker(gameId,g,winner,`${g.players[winner].name} venceu com ${pokerLabel(winner===uid?ra:rb)}.`,rows,true)}await rtdb.ref(`gameSecrets/poker/${gameId}/deck`).set(deck);g.turnUid=Object.values(g.players).find(p=>!p.folded&&!p.allIn)?.uid||uid}else g.turnUid=other.folded||other.allIn?uid:otherUid;g.updatedAt=Date.now();await gr.set(g);return{turnUid:g.turnUid,street:g.street}}
+  async function processPokerExit(uid,data){const gameId=String(data.gameId||''),sn=await rtdb.ref(`pokerGames/${gameId}`).once('value');if(!sn.exists())return{};const g={id:gameId,...sn.val()};if(g.status!=='active'||!g.players?.[uid])return{};const winner=Object.keys(g.players).find(x=>x!==uid);return finishPoker(gameId,g,winner,`${g.players[uid].name} saiu da mesa.`)}
 
   // ======================================================
   // SLOTS SOLO — o SITE sorteia; bot só liquida a carteira.
@@ -730,7 +956,10 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     if(!/^spin_[a-f0-9]{32}$/.test(spinId))throw new Error('Identificador da aposta inválido.');
     const receiptRef=rtdb.ref(`siteSlotsSettlements/${uid}/${spinId}`);
     const prior=(await receiptRef.once('value')).val()||null;
-    if(prior?.status==='done')return{bet:prior.bet,payout:prior.payout,balance:prior.balance,spinId};
+    if(prior?.status==='done'){
+      await rtdb.ref(`siteSlotsPending/${uid}`).transaction(current=>current?.spinId===spinId?null:undefined,undefined,false);
+      return{bet:prior.bet,payout:prior.payout,balance:prior.balance,spinId};
+    }
     if(prior)throw new Error('Essa aposta está em análise; nenhum débito adicional será feito.');
     const pendingRef=rtdb.ref(`siteSlotsPending/${uid}`);
     const pending=(await pendingRef.once('value')).val()||null;
@@ -759,7 +988,7 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
       await receiptRef.update({status:'done',balance,finishedAt:Date.now()});
       await pendingRef.transaction(current=>current?.spinId===spinId?null:undefined,undefined,false);
       try{if(net>0)await achievements.registrarEventoConquista?.({sender:jid,evento:'dinheiro_ganho',qtd:net})}catch{}
-      await syncAccount(uid,jid).catch(()=>{});
+      syncAccount(uid,jid).catch(e=>logger.log('[SLOTS] sync complementar:',e.message));
       return{bet,payout,net,balance,spinId,symbols,jackpot:valid.jackpot,label:valid.label};
     }catch(e){
       // Falha após reservar a carteira: nunca cobrar duas vezes automaticamente.
@@ -879,34 +1108,49 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     if(!roomSn.exists())throw new Error('Sala não encontrada.');
     const room=roomSn.val()||{};
     if(!room.members?.[uid])throw new Error('Entre na sala antes de usar música.');
-    const voiceSn=await rtdb.ref(`watchVoice/${roomCode}/${uid}/audio`).once('value');
-    if(voiceSn.val()!==true)throw new Error('Entre na chamada de voz para usar a música da sala.');
     return room;
+  }
+  function legacyWatchMusicPlan(room={}){
+    const rows=Object.entries(room.musicAccess||{}).filter(([,v])=>v?.active);
+    if(!rows.length)return null;
+    rows.sort((a,b)=>Number(a[1]?.activatedAt||0)-Number(b[1]?.activatedAt||0));
+    const[activatedBy,row]=rows[0];
+    return{active:true,activatedBy,activatedAt:Number(row.activatedAt||Date.now()),activationCost:Number(row.activationCost||50),premiumAtActivation:!!row.premiumAtActivation,used:Math.max(0,Number(row.used||0)),migratedFromLegacy:true};
+  }
+  async function ensureWatchMusicPlan(roomCode,room={}){
+    if(room.musicPlan?.active)return room.musicPlan;
+    const legacy=legacyWatchMusicPlan(room);if(!legacy)return null;
+    await rtdb.ref(`watchRooms/${roomCode}/musicPlan`).set(legacy);return legacy;
   }
   async function processWatchMusicActivate(uid,jid,data){
     const roomCode=String(data.roomCode||'').trim().toUpperCase();
     if(!roomCode)throw new Error('Sala inválida.');
-    const room=await watchMusicRoomState(roomCode,uid);
-    const existing=room.musicAccess?.[uid];
-    if(existing?.active)return{alreadyActive:true,cost:0,access:existing,premium:readPremium(jid).active};
+    let room=await watchMusicRoomState(roomCode,uid),existing=await ensureWatchMusicPlan(roomCode,room);
+    if(existing?.active)return{alreadyActive:true,cost:0,plan:existing,premium:!!existing.premiumAtActivation};
 
-    const cost=50,balance=balanceFor(jid);
-    if(balance<cost)throw new Error(`Você precisa de ₹${cost} para ativar a música nesta sala. Saldo: ₹${balance}.`);
-    if(typeof economy.delkoin!=='function')throw new Error('Sistema de rúpias não disponível.');
-    await economy.delkoin(jid,cost);
-
-    const premium=readPremium(jid).active;
-    const access={active:true,activatedAt:Date.now(),activationCost:cost,used:0,premiumAtActivation:premium};
-    await rtdb.ref(`watchRooms/${roomCode}/musicAccess/${uid}`).set(access);
-    await syncAccount(uid,jid).catch(()=>{});
-    return{alreadyActive:false,cost,access,premium};
+    // Lock curto por sala: evita dois participantes pagarem ₹50 ao mesmo tempo.
+    const lockRef=rtdb.ref(`watchRooms/${roomCode}/musicActivationLock`),lockAt=Date.now();
+    const tx=await lockRef.transaction(cur=>{if(cur&&Number(cur.at||0)>Date.now()-30000)return;return{uid,at:lockAt}});
+    if(!tx.committed)throw new Error('A ativação desta sala já está sendo processada.');
+    try{
+      room=await watchMusicRoomState(roomCode,uid);existing=await ensureWatchMusicPlan(roomCode,room);
+      if(existing?.active)return{alreadyActive:true,cost:0,plan:existing,premium:!!existing.premiumAtActivation};
+      const cost=50,balance=balanceFor(jid);if(balance<cost)throw new Error(`Você precisa de ₹${cost} para ativar a música nesta sala. Saldo: ₹${balance}.`);
+      if(typeof economy.delkoin!=='function')throw new Error('Sistema de rúpias não disponível.');
+      await economy.delkoin(jid,cost);
+      const premium=readPremium(jid).active,plan={active:true,activatedBy:uid,activatedAt:Date.now(),activationCost:cost,used:0,premiumAtActivation:premium};
+      try{await rtdb.ref(`watchRooms/${roomCode}/musicPlan`).set(plan)}catch(e){if(typeof economy.addkoin==='function')try{await economy.addkoin(jid,cost)}catch{};throw e}
+      syncAccount(uid,jid).catch(()=>{});
+      return{alreadyActive:false,cost,plan,premium,balance:balanceFor(jid)};
+    }finally{
+      const lock=await lockRef.once('value').catch(()=>null);if(lock?.val?.()?.uid===uid&&Number(lock.val()?.at||0)===lockAt)await lockRef.remove().catch(()=>{});
+    }
   }
   async function processWatchMusicAdd(uid,jid,data,jobId=''){
     const roomCode=String(data.roomCode||'').trim().toUpperCase(),query=String(data.query||'').trim().slice(0,160);
     if(!roomCode||!query)throw new Error('Informe a sala e a música.');
-    const room=await watchMusicRoomState(roomCode,uid);
-    const access=room.musicAccess?.[uid];
-    if(!access?.active)throw new Error('Ative a música nesta sala por ₹50 antes de adicionar faixas.');
+    const room=await watchMusicRoomState(roomCode,uid),plan=await ensureWatchMusicPlan(roomCode,room);
+    if(!plan?.active)throw new Error('Ative a música desta sala por ₹50 antes de adicionar faixas.');
 
     const yts=safeRequire('yt-search');if(!yts)throw new Error('Busca de música não disponível.');
     let video=null;
@@ -919,45 +1163,27 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
       }catch{}
       return'';
     })();
-    if(ytId){
-      try{video=await yts({videoId:ytId})}catch{}
-    }
-    if(!video?.videoId){
-      const result=await yts(query);video=result?.videos?.[0];
-    }
+    if(ytId){try{video=await yts({videoId:ytId})}catch{}}
+    if(!video?.videoId){const result=await yts(query);video=result?.videos?.[0]}
     if(!video?.videoId)throw new Error('Música não encontrada.');
 
-    const premium=readPremium(jid).active,used=Math.max(0,Number(access.used||0));
-    const cost=premium?0:(used<10?0:5);
-    if(cost>0){
-      const balance=balanceFor(jid);
-      if(balance<cost)throw new Error(`As 10 músicas inclusas acabaram. Você precisa de ₹${cost} para adicionar esta faixa.`);
-      await economy.delkoin(jid,cost);
+    // A cota Free pertence à sala. Premium é o do ativador no momento da ativação.
+    const premium=!!plan.premiumAtActivation,usedRef=rtdb.ref(`watchRooms/${roomCode}/musicPlan/used`);
+    const usedTx=await usedRef.transaction(cur=>Math.max(0,Number(cur||0))+1);if(!usedTx.committed)throw new Error('Não foi possível reservar a música na fila.');
+    const used=Math.max(1,Number(usedTx.snapshot.val()||1)),previousUsed=used-1,cost=premium?0:(previousUsed<10?0:5);
+    let charged=false;
+    try{
+      if(cost>0){const balance=balanceFor(jid);if(balance<cost)throw new Error(`As 10 músicas inclusas acabaram. Você precisa de ₹${cost} para adicionar esta faixa.`);await economy.delkoin(jid,cost);charged=true}
+      const queueRows=await compactWatchMusicQueue(roomCode,room.musicQueue||{}),qref=rtdb.ref(`watchRooms/${roomCode}/musicQueue`).push(),createdAt=Date.now();
+      const item={id:qref.key,title:String(video.title||query).slice(0,120),videoId:video.videoId,url:video.url||`https://youtube.com/watch?v=${video.videoId}`,requestedBy:uid,requestedName:(await rtdb.ref(`directory/${uid}/nome`).once('value')).val()||'Participante',createdAt,startedAt:queueRows.length?null:createdAt,durationSec:Math.max(0,Number(video.seconds||0)),cost,included:cost===0,sourceJobId:String(jobId||'')};
+      const patch={};patch[`watchRooms/${roomCode}/musicQueue/${qref.key}`]=item;patch[`watchRooms/${roomCode}/musicPlan/lastAddedAt`]=createdAt;await rtdb.ref().update(patch);
+      if(cost>0)syncAccount(uid,jid).catch(()=>{});
+      return{item,cost,premium,used,includedRemaining:premium?null:Math.max(0,10-used),balance:balanceFor(jid)};
+    }catch(e){
+      await usedRef.transaction(cur=>Math.max(0,Number(cur||0)-1)).catch(()=>{});
+      if(charged&&typeof economy.addkoin==='function')try{await economy.addkoin(jid,cost)}catch{};
+      throw e;
     }
-
-    const queueRows=await compactWatchMusicQueue(roomCode,room.musicQueue||{});const queueEntries=queueRows.map(x=>[x.id,x]);
-    const qref=rtdb.ref(`watchRooms/${roomCode}/musicQueue`).push(),createdAt=Date.now();
-    const item={
-      id:qref.key,
-      title:String(video.title||query).slice(0,120),
-      videoId:video.videoId,
-      url:video.url||`https://youtube.com/watch?v=${video.videoId}`,
-      requestedBy:uid,
-      requestedName:(await rtdb.ref(`directory/${uid}/nome`).once('value')).val()||'Participante',
-      createdAt,
-      startedAt:queueEntries.length?null:createdAt,
-      durationSec:Math.max(0,Number(video.seconds||0)),
-      cost,
-      included:cost===0,
-      sourceJobId:String(jobId||'')
-    };
-    const patch={};
-    patch[`watchRooms/${roomCode}/musicQueue/${qref.key}`]=item;
-    patch[`watchRooms/${roomCode}/musicAccess/${uid}/used`]=used+1;
-    patch[`watchRooms/${roomCode}/musicAccess/${uid}/lastAddedAt`]=createdAt;
-    await rtdb.ref().update(patch);
-    await syncAccount(uid,jid).catch(()=>{});
-    return{item,cost,premium,used:used+1,includedRemaining:premium?null:Math.max(0,10-(used+1))};
   }
   async function startNextWatchMusic(roomCode,room){
     const entries=Object.entries(room?.musicQueue||{}).sort((a,b)=>Number(a[1]?.createdAt||0)-Number(b[1]?.createdAt||0));
@@ -1034,8 +1260,9 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   async function processAdminBackupNow(uid){if(!await siteAdmin(uid))throw new Error('Apenas o host pode iniciar o backup.');return backupOperationalJsons(true)}
 
   async function siteAdmin(uid){
-    const sn=await rtdb.ref(`profiles/${uid}`).once('value').catch(()=>null);
-    return String(sn?.val?.()?.email||'').trim().toLowerCase()==='losermodder@gmail.com';
+    // Use the authenticated identity, even if the profile has not synchronized yet.
+    const user=await admin.auth().getUser(uid);
+    return !user.disabled&&String(user.email||'').trim().toLowerCase()==='losermodder@gmail.com';
   }
   function raidBossFromPool(){
     const base={...SITE_RAID_BOSSES[crypto.randomInt(0,SITE_RAID_BOSSES.length)]};
@@ -1063,15 +1290,30 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     const rr=rtdb.ref('pokemonSiteRaid/current'),sn=await rr.once('value'),existing=sn.val();
     if(existing?.status==='active'&&Number(existing.expiresAt||0)>Date.now()&&!force)throw new Error('Já existe uma raid ativa.');
     const pick=raidBossFromPool(),startedAt=Date.now(),raid={id:id('sraid'),status:'active',tier:pick.tier,boss:pick.boss,hp:pick.maxHp,maxHp:pick.maxHp,startedAt,expiresAt:startedAt+30*60*1000,startedBy:by,participants:{},log:{}};
-    await rr.set(raid);await rtdb.ref('pokemonSiteRaidConfig').update({lastStartedAt:startedAt,lastAutoAt:by==='auto'?startedAt:((await rtdb.ref('pokemonSiteRaidConfig/lastAutoAt').once('value')).val()||0)}).catch(()=>{});await notifyRaidStarted(raid);return raid;
+    const creation=await rr.transaction(current=>current?.status==='active'&&Number(current.expiresAt||0)>Date.now()&&!force?undefined:raid,undefined,false);
+    if(!creation.committed)throw new Error('Já existe uma raid ativa.');
+    await rtdb.ref('pokemonSiteRaidConfig').update({lastStartedAt:startedAt,lastAutoAt:by==='auto'?startedAt:((await rtdb.ref('pokemonSiteRaidConfig/lastAutoAt').once('value')).val()||0)}).catch(()=>{});notifyRaidStarted(raid).catch(e=>logger.log('[SITE RAID] avisos pendentes:',e.message));return raid;
   }
   async function finishSiteRaidRewards(raidId){
     const rr=rtdb.ref('pokemonSiteRaid/current');let claimed=null;
     const tx=await rr.transaction(cur=>{if(!cur||cur.id!==raidId||cur.status!=='defeated'||cur.rewardsClaimed)return;cur.status='finished';cur.finishedAt=Date.now();cur.rewardsClaimed=true;return cur},undefined,false);
     if(!tx?.committed)return;claimed=tx.snapshot.val();const rows=Object.entries(claimed.participants||{}).sort((a,b)=>Number(b[1].damage||0)-Number(a[1].damage||0));
     const teamBonus=Math.min(5,Math.floor(rows.length/2));
-    for(let i=0;i<rows.length;i++){const[uid,row]=rows[i],jid=await linkedJidByUid(uid).catch(()=>null);if(!jid)continue;const reward=150+(i===0?150:i===1?80:i===2?40:0),premier=3+Number(claimed.tier||1)+teamBonus+(i===0?2:i===1?1:0);if(typeof economy.addkoin==='function')await economy.addkoin(jid,reward);try{const{db,user}=pokemonState(jid);user.items=user.items&&typeof user.items==='object'?user.items:{};user.items.premierball=Math.max(0,Number(user.items.premierball||user.items.premierBall||0))+premier;if(user.items.premierBall!=null)user.items.premierBall=user.items.premierball;savePokemonDb(db)}catch(e){logger.log('[SITE RAID] Premier Ball:',e.message)}await syncAccount(uid,jid).catch(()=>{});await notifySite(uid,{type:'pokemon_raid',title:i===0?'🏆 Raid vencida • maior dano':'🏆 Raid vencida',text:`${claimed.boss.name} foi derrotado. Você causou ${row.damage||0} de dano, recebeu ₹${reward} e ${premier} Premier Ball${premier===1?'':'s'}${teamBonus?` • bônus de equipe +${teamBonus}`:''}.`,link:'#pokemon'}).catch(()=>{});}
+    for(let i=0;i<rows.length;i++){const[uid,row]=rows[i],jid=await linkedJidByUid(uid).catch(()=>null);if(!jid)continue;const reward=150+(i===0?150:i===1?80:i===2?40:0),premier=3+Number(claimed.tier||1)+teamBonus+(i===0?2:i===1?1:0);if(typeof economy.addkoin==='function')await economy.addkoin(jid,reward);try{const{db,user}=pokemonState(jid);user.items=user.items&&typeof user.items==='object'?user.items:{};user.items.premierball=Math.max(0,Number(user.items.premierball||user.items.premierBall||0))+premier;if(user.items.premierBall!=null)user.items.premierBall=user.items.premierball;savePokemonDb(db)}catch(e){logger.log('[SITE RAID] Premier Ball:',e.message)}scheduleAccountSync(uid,jid,40);await notifySite(uid,{type:'pokemon_raid',title:i===0?'🏆 Raid vencida • maior dano':'🏆 Raid vencida',text:`${claimed.boss.name} foi derrotado. Você causou ${row.damage||0} de dano, recebeu ₹${reward} e ${premier} Premier Ball${premier===1?'':'s'}${teamBonus?` • bônus de equipe +${teamBonus}`:''}.`,link:'#pokemon'}).catch(()=>{});}
     await notifyAllSiteUsers({title:'🏆 Raid concluída!',text:`${claimed.boss.name} foi derrotado por ${rows.length} treinador(es).`,type:'pokemon_raid',link:'#pokemon'}).catch(()=>{});
+  }
+  async function processSiteRaidHeal(uid,jid){
+    const raid=(await rtdb.ref('pokemonSiteRaid/current').once('value')).val();if(!raid||raid.status!=='active'||Number(raid.expiresAt||0)<=Date.now())throw new Error('Essa Raid terminou.');
+    const rr=rtdb.ref(`pokemonSiteRaidBattles/${raid.id}/${uid}`),battle=(await rr.once('value')).val();if(!battle)throw new Error('Entre na batalha primeiro.');
+    applySiteTeamState(jid,battle.team||[],battle.activeUid||'','raid');const{db,user}=pokemonState(jid),ids=(Array.isArray(battle.team)?battle.team:Object.values(battle.team||{})).map(x=>String(x?.uid||'')),team=ids.map(x=>findMon(user,x)).filter(Boolean);if(!team.length)throw new Error('Equipe da Raid não encontrada.');
+    const cost=Math.max(1,team.length)*HEAL_COST,balance=balanceFor(jid);if(balance<cost)throw new Error(`Você precisa de ₹${cost} para curar toda a equipe.`);if(typeof economy.delkoin!=='function')throw new Error('Sistema de rúpias indisponível.');await economy.delkoin(jid,cost);team.forEach(healRaw);savePokemonDb(db);
+    const healingJobs=readJson(healingPath,{});let healingChanged=false;if(healingJobs[jid]){for(const mon of team){if(healingJobs[jid]?.[mon.uid]){delete healingJobs[jid][mon.uid];healingChanged=true}await rtdb.ref(`pokemonHealing/${uid}/${mon.uid}`).remove().catch(()=>{})}if(!Object.keys(healingJobs[jid]||{}).length)delete healingJobs[jid]}if(healingChanged)writeJson(healingPath,healingJobs);
+    battle.status='active';battle.activeUid=team[0]?.uid||'';battle.team=team.map(publicMon);battle.healCost=cost;battle.updatedAt=Date.now();await rr.set(battle);scheduleAccountSync(uid,jid,40);return{battle,balance:balanceFor(jid),cost};
+  }
+  async function processSiteRaidFinalize(uid,data){
+    const raidId=String(data.raidId||'').trim();if(!raidId)return{finished:false};const raid=(await rtdb.ref('pokemonSiteRaid/current').once('value')).val();if(!raid||String(raid.id)!==raidId)return{finished:false};
+    for(const participantUid of Object.keys(raid.participants||{})){const jid=await linkedJidByUid(participantUid).catch(()=>null);if(!jid)continue;const battle=(await rtdb.ref(`pokemonSiteRaidBattles/${raidId}/${participantUid}`).once('value').catch(()=>null))?.val?.();if(battle?.team)try{applySiteTeamState(jid,battle.team,battle.activeUid||'','raid')}catch(e){logger.log('[SITE RAID] commit da equipe:',e.message)}}
+    await finishSiteRaidRewards(raidId);return{finished:true};
   }
   async function processSiteRaidAttack(uid,jid,data){
     const rr=rtdb.ref('pokemonSiteRaid/current'),sn=await rr.once('value');if(!sn.exists())throw new Error('Nenhuma raid ativa.');const raid=sn.val();if(raid.status!=='active'||Number(raid.expiresAt||0)<=Date.now())throw new Error('Essa raid terminou.');
@@ -1106,16 +1348,26 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
       return{...current,__processingBy:bridgeInstanceId,__processingAt:startedAt};
     },undefined,false);
     const value=tx?.snapshot?.val?.()||null;
-    return{claimed:!!tx?.committed&&value?.__processingBy===bridgeInstanceId,data:value};
+    return{claimed:!!tx?.committed&&value?.__processingBy===bridgeInstanceId,data:value,retryAfterMs:!tx?.committed&&value?.__processingBy?Math.max(100,120000-(Date.now()-Number(value.__processingAt||0))+100):0};
   }
   async function processJobNow(uid,jobId,data){
     const claim=await claimSiteBridgeJob(uid,jobId).catch(e=>{logger.log('[SITE BRIDGE] claim:',e.message);return{claimed:false,data:null}});
-    if(!claim.claimed)return;
+    if(!claim.claimed){
+      // On restart, child_added fires once for a locked job. Retry after its lease expires.
+      if(claim.retryAfterMs){
+        const retryKey=uid+'/'+jobId;
+        if(!jobRetryTimers.has(retryKey)){
+          const timer=setTimeout(()=>{jobRetryTimers.delete(retryKey);processJob(uid,jobId,data)},claim.retryAfterMs);
+          timer.unref?.();jobRetryTimers.set(retryKey,timer);
+        }
+      }
+      return;
+    }
     data=claim.data||data;
     const type=String(data?.type||'');
     try{
       if(!data||typeof data!=='object')return;
-      let payload={};const jid=await linkedJidByUid(uid);const noLink=new Set(['ttt_create','ttt_move','ttt_exit','blackjack_create','blackjack_move','blackjack_exit','hangman_create','hangman_guess','hangman_exit','site_raid_start','site_raid_auto','admin_grant_currency','admin_grant_premium','admin_store_upsert','admin_store_delete','admin_backup_now']);if(!jid&&!noLink.has(type))throw new Error('Conta não vinculada.');
+      let payload={};const jid=await linkedJidByUid(uid);const noLink=new Set(['ttt_create','ttt_move','ttt_exit','blackjack_create','blackjack_move','blackjack_exit','hangman_create','hangman_guess','hangman_exit','nightmare21_create','nightmare21_move','nightmare21_exit','chaos_create','chaos_move','chaos_exit','poker_create','poker_move','poker_exit','site_raid_start','site_raid_auto','site_raid_finalize','admin_grant_currency','admin_grant_premium','admin_store_upsert','admin_store_delete','admin_backup_now']);if(!jid&&!noLink.has(type))throw new Error('Conta não vinculada.');
       if(type==='sync_pokemon')payload={pokemon:await syncPokemon(uid,jid)};
       else if(type==='sync_account')payload=await syncAccount(uid,jid);
       else if(type==='daily_claim')payload=await processDaily(uid,jid);
@@ -1126,6 +1378,8 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
       else if(type==='youtube_bot_download')payload=await processYoutubeDownload(uid,jid,data);
       else if(type==='pokemon_set_team')payload=await processSetTeam(uid,jid,data);
       else if(type==='pokemon_explore')payload=await processExplore(uid,jid);
+      else if(type==='pokemon_explore_prefetch')payload=await processExplorePrefetch(uid,jid);
+      else if(type==='pokemon_site_commit')payload=await processPokemonSiteCommit(uid,jid,data);
       else if(type==='pokemon_wild_move')payload=await processWildMove(uid,jid,data);
       else if(type==='pokemon_wild_exit')payload=await processWildExit(uid);
       else if(type==='pokemon_capture')payload=await processCapture(uid,jid,data);
@@ -1141,6 +1395,8 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
       else if(type==='site_raid_start')payload=await processSiteRaidStart(uid);
       else if(type==='site_raid_auto')payload=await processSiteRaidAuto(uid,data);
       else if(type==='site_raid_attack')payload=await processSiteRaidAttack(uid,jid,data);
+      else if(type==='site_raid_heal')payload=await processSiteRaidHeal(uid,jid);
+      else if(type==='site_raid_finalize')payload=await processSiteRaidFinalize(uid,data);
       else if(type==='admin_grant_currency')payload=await processAdminGrantCurrency(uid,data);
       else if(type==='admin_grant_premium')payload=await processAdminGrantPremium(uid,data);
       else if(type==='admin_store_upsert')payload=await processAdminStoreUpsert(uid,data);
@@ -1155,6 +1411,22 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
       else if(type==='hangman_create')payload=await processHangmanCreate(uid,data);
       else if(type==='hangman_guess')payload=await processHangmanGuess(uid,data);
       else if(type==='hangman_exit')payload=await processHangmanExit(uid,data);
+      else if(type==='nightmare21_create')payload=await processNightmareCreate(uid,data);
+      else if(type==='nightmare21_move')payload=await processNightmareMove(uid,data);
+      else if(type==='nightmare21_exit')payload=await processNightmareExit(uid,data);
+      else if(type==='chaos_create')payload=await processChaosCreate(uid,data);
+      else if(type==='chaos_move')payload=await processChaosMove(uid,data);
+      else if(type==='chaos_exit')payload=await processChaosExit(uid,data);
+      else if(type==='poker_create')payload=await processPokerCreate(uid,data);
+      else if(type==='poker_move')payload=await processPokerMove(uid,data);
+      else if(type==='poker_exit')payload=await processPokerExit(uid,data);
+      else if(type==='horse_race')payload=await processHorseRace(uid,jid,data);
+      else if(type==='fishing_cast')payload=await processFishingCast(uid);
+      else if(type==='fishing_sell')payload=await processFishingSell(uid,jid);
+      else if(type==='fishing_upgrade')payload=await processFishingUpgrade(uid,jid);
+      else if(type==='mining_mine')payload=await processMiningMine(uid);
+      else if(type==='mining_sell')payload=await processMiningSell(uid,jid);
+      else if(type==='mining_upgrade')payload=await processMiningUpgrade(uid,jid);
       else if(type==='slots_settle')payload=await processSlotsSettle(uid,jid,data,jobId);
       else if(type==='sync_identity')payload=await syncIdentity(uid,jid,data);
       else if(type==='tinder_profile_get')payload=await processTinderProfileGet(uid,jid);
@@ -1189,8 +1461,17 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     userRef.on('child_added',handler);
     watchedRefs.set(uid,{userRef,handler});
   }
-  function start(){if(rootWatcher)return;rootWatcher=rtdb.ref('siteBridgeJobs');rootWatcher.on('child_added',sn=>watchUserJobs(sn.key));processDueHealingJobs().catch(()=>{});healingTimer=setInterval(()=>processDueHealingJobs().catch(()=>{}),30000);healingTimer.unref?.();setTimeout(()=>syncLinkedAccounts().catch(()=>{}),5000).unref?.();setTimeout(()=>restoreTinderFromFirebase().catch(()=>{}),7000).unref?.();setTimeout(()=>maybeAutoSiteRaid().catch(()=>{}),9000).unref?.();setTimeout(()=>backupOperationalJsons(false).catch(e=>logger.log('[FIREBASE BACKUP] inicial:',e.message)),12000).unref?.();syncTimer=setInterval(()=>syncLinkedAccounts().catch(()=>{}),180000);syncTimer.unref?.();raidTimer=setInterval(()=>maybeAutoSiteRaid().catch(()=>{}),60000);raidTimer.unref?.();backupTimer=setInterval(()=>backupOperationalJsons(false).catch(e=>logger.log('[FIREBASE BACKUP] ciclo:',e.message)),10*60*1000);backupTimer.unref?.();logger.log('✅ GREMORY SITE BRIDGE ATIVO');}
-  function stop(){try{if(rootWatcher)rootWatcher.off()}catch{}for(const{userRef,handler}of watchedRefs.values()){try{userRef.off('child_added',handler)}catch{}}watchedRefs.clear();watchedUsers.clear();userQueues.clear();rootWatcher=null;if(healingTimer){clearInterval(healingTimer);healingTimer=null;}if(syncTimer){clearInterval(syncTimer);syncTimer=null;}if(raidTimer){clearInterval(raidTimer);raidTimer=null;}if(backupTimer){clearInterval(backupTimer);backupTimer=null;}syncingLinked=false;}
+
+  async function migrateLegacyBlackjackGames(){
+    const sn=await rtdb.ref('blackjackGames').once('value').catch(()=>null);const games=sn?.val?.()||{},updates={};let changed=0;
+    for(const[gameId,game]of Object.entries(games)){if(!game||game.status!=='active'||!game.players)continue;let dirty=false;const projected={};for(const[playerUid,pub]of Object.entries(game.players)){const legacyCards=Array.isArray(pub?.cards)?pub.cards:null,legacyScore=pub?.score;if(legacyCards){const privateRef=rtdb.ref(`blackjackPrivate/${gameId}/${playerUid}`),privateSn=await privateRef.once('value');if(!privateSn.exists())updates[`blackjackPrivate/${gameId}/${playerUid}`]={cards:legacyCards,score:Number(legacyScore??bjScore(legacyCards)),stood:!!pub.stood,busted:!!pub.busted,updatedAt:Date.now()};projected[playerUid]=blackjackPublicPlayer(playerUid,pub.name,{cards:legacyCards,stood:!!pub.stood,busted:!!pub.busted});dirty=true}else projected[playerUid]={uid:playerUid,name:pub.name||'Jogador',cardCount:Number(pub.cardCount||0),stood:!!pub.stood,busted:!!pub.busted}}
+      if(Array.isArray(game.deck)){updates[`gameSecrets/blackjack/${gameId}/deck`]=game.deck;dirty=true}
+      if(dirty){const clean={...game,players:projected};delete clean.deck;updates[`blackjackGames/${gameId}`]=clean;changed++}
+    }
+    if(changed){await rtdb.ref().update(updates);logger.log(`✅ 21: ${changed} partida(s) antiga(s) migrada(s) para mãos privadas.`)}
+  }
+  function start(){if(rootWatcher)return;rootWatcher=rtdb.ref('siteBridgeJobs');rootWatcher.on('child_added',sn=>watchUserJobs(sn.key));migrateLegacyBlackjackGames().catch(e=>logger.log('[21 MIGRAÇÃO]:',e.message));processDueHealingJobs().catch(()=>{});healingTimer=setInterval(()=>processDueHealingJobs().catch(()=>{}),30000);healingTimer.unref?.();setTimeout(()=>syncLinkedAccounts().catch(()=>{}),5000).unref?.();setTimeout(()=>restoreTinderFromFirebase().catch(()=>{}),7000).unref?.();setTimeout(()=>maybeAutoSiteRaid().catch(()=>{}),9000).unref?.();setTimeout(()=>backupOperationalJsons(false).catch(e=>logger.log('[FIREBASE BACKUP] inicial:',e.message)),12000).unref?.();syncTimer=setInterval(()=>syncLinkedAccounts().catch(()=>{}),180000);syncTimer.unref?.();raidTimer=setInterval(()=>maybeAutoSiteRaid().catch(()=>{}),60000);raidTimer.unref?.();backupTimer=setInterval(()=>backupOperationalJsons(false).catch(e=>logger.log('[FIREBASE BACKUP] ciclo:',e.message)),10*60*1000);backupTimer.unref?.();logger.log('✅ GREMORY SITE BRIDGE ATIVO');}
+  function stop(){for(const timer of jobRetryTimers.values())clearTimeout(timer);jobRetryTimers.clear();for(const timer of accountSyncTimers.values())clearTimeout(timer);accountSyncTimers.clear();explorePrefetchInFlight.clear();try{if(rootWatcher)rootWatcher.off()}catch{}for(const{userRef,handler}of watchedRefs.values()){try{userRef.off('child_added',handler)}catch{}}watchedRefs.clear();watchedUsers.clear();userQueues.clear();rootWatcher=null;if(healingTimer){clearInterval(healingTimer);healingTimer=null;}if(syncTimer){clearInterval(syncTimer);syncTimer=null;}if(raidTimer){clearInterval(raidTimer);raidTimer=null;}if(backupTimer){clearInterval(backupTimer);backupTimer=null;}syncingLinked=false;}
   function rawIncomingText(info){
     return String(
       info?.message?.conversation||
