@@ -27,17 +27,23 @@ function fakeDb(seed){
  const get=p=>parts(p).reduce((v,k)=>v?.[k],value)??null;
  const set=(p,v)=>{const keys=parts(p),last=keys.pop();let o=value;for(const k of keys)o=o[k]??={};if(v===null)delete o[last];else o[last]=v};
  const snap=v=>({val:()=>v,exists:()=>v!=null});
- return{value,ref:p=>({once:async()=>snap(get(p)),transaction:async fn=>{const v=fn(get(p));if(v===undefined)return{committed:false,snapshot:snap(get(p))};set(p,v);return{committed:true,snapshot:snap(v)}}})};
+ return{value,ref:p=>({once:async()=>snap(get(p)),set:async v=>set(p,v),update:async v=>set(p,{...(get(p)||{}),...v}),transaction:async fn=>{const v=fn(get(p));if(v===undefined)return{committed:false,snapshot:snap(get(p))};set(p,v);return{committed:true,snapshot:snap(v)}}})};
 }
-test('Finance ledger is idempotent, atomic and cannot go negative',async()=>{
+test('Charlotte canonical wallet, receipts, retries and insufficient balance',async()=>{
  const db=fakeDb({siteWallets:{a:{balance:1000,version:0,syncedVersion:0,receipts:{}}}});
- const ctx={rtdb:db,siteWalletState:async()=>db.value.siteWallets.a,Date,Number};
+ let balance=1000,debits=0;
+ const economy={delkoin:async(_,n)=>{debits++;balance-=n;},addkoin:async(_,n)=>{balance+=n;}};
+ const ctx={rtdb:db,registeredFor:()=>true,balanceFor:()=>balance,economy,Date,Number};
  vm.createContext(ctx);vm.runInContext(block('  const SITE_MAX_BALANCE=','  function watchSiteWallet(uid){'),ctx);
- const x=await ctx.applySiteWalletEntry('a','jid','spin_'+'a'.repeat(32),-100,'slot',{bet:100});
- const y=await ctx.applySiteWalletEntry('a','jid','spin_'+'a'.repeat(32),-100,'slot',{bet:100});
- assert.equal(x.balance,900);assert.equal(y.balance,900);assert.equal(db.value.siteWallets.a.version,1);
+ const op='spin_'+'a'.repeat(32);
+ const x=await ctx.applySiteWalletEntry('a','jid',op,-100,'slot',{bet:100});
+ const y=await ctx.applySiteWalletEntry('a','jid',op,-100,'slot',{bet:100});
+ assert.equal(x.balance,900);assert.equal(y.balance,900);assert.equal(balance,900);assert.equal(debits,1);
+ assert.equal(db.value.siteWallets.a.version,1);assert.equal(db.value.siteWalletOps.a[op].status,'done');
  await assert.rejects(ctx.applySiteWalletEntry('a','jid','purchase_12345',-10000,'customization'),/Saldo insuficiente/);
- assert.equal(db.value.siteWallets.a.balance,900);
+ assert.equal(balance,900);
+ // Alteração no bot é refletida no site, e jamais o contrário.
+ balance=1400;await ctx.siteWalletState('a','jid');assert.equal(db.value.siteWallets.a.balance,1400);
 });
 test('Game invite acceptance checks invitation and uses server-side bet only',()=>{
  assert.match(bridge,/async function processSiteGameAccept/);

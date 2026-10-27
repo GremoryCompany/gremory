@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261023-v13-11-games-realtime">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261027-v14-recovery-v2">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -564,7 +564,7 @@
           <div class="games-grid">
             <article class="panel ttt-lobby" id="tttLobby">
               <div class="panel-head"><div><h3>Desafiar um amigo</h3><small class="muted">Partida sincronizada em tempo real</small></div><span class="pill" id="tttStatus">Livre</span></div>
-              <div class="duel-create"><label>Amigo<select id="tttFriendSelect"><option value="">Escolha um amigo</option></select></label><button class="btn primary" id="tttCreateBtn" type="button">Jogar</button></div>
+              <div class="duel-create game-bet-create"><label>Amigo<select id="tttFriendSelect"><option value="">Escolha um amigo</option></select></label><label>Aposta opcional<input id="tttBetInput" type="number" min="0" max="100000" step="10" value="0" placeholder="0 = sem aposta"></label><button class="btn primary" id="tttCreateBtn" type="button">Convidar</button></div>
               <div id="tttInvites" class="people-list" hidden></div>
             </article>
             <article class="panel ttt-game game-arena-large" id="tttGamePanel" hidden>
@@ -580,6 +580,8 @@
               <div class="panel-head"><div><span class="tag">21 PVP</span><h3>Vinte e um</h3><small class="muted">Chegue o mais perto de 21 sem estourar.</small></div><span class="pill" id="blackjackStatus">Livre</span></div>
               <div class="game-lobby-row" id="blackjackLobby">
                 <label>Adversário<select id="blackjackFriendSelect"><option value="">Escolha um amigo</option></select></label>
+                <label>Aposta opcional<input id="blackjackBetInput" type="number" min="0" max="100000" step="10" value="0" placeholder="0 = sem aposta"></label>
+                <label>Modo de jogo<select id="blackjackMode"><option value="classic">21 Clássico</option><option value="nightmare">21 Pesadelo — cartas especiais</option></select></label>
                 <button class="btn primary" id="blackjackCreateBtn" type="button">Desafiar</button>
               </div>
               <div id="blackjackInvites" class="people-list game-invites" hidden></div>
@@ -590,6 +592,14 @@
                   <div class="card-seat my-seat"><small>Você</small><div class="playing-cards" id="blackjackPlayer"></div><strong id="blackjackPlayerScore">0</strong><span id="blackjackMyState">Jogando</span></div>
                 </div>
                 <div class="arcade-actions game-primary-actions"><button class="btn primary" id="blackjackHitBtn" type="button">Pedir carta</button><button class="btn" id="blackjackStandBtn" type="button">Parar</button></div>
+                <div class="nightmare-cards" id="blackjackNightmareCards" hidden aria-label="Cartas especiais do modo Pesadelo">
+                  <button class="nightmare-card" type="button" data-nightmare-card="shield" title="Impede uma compra que estouraria sua mão"><b>🛡 Escudo</b><small>Evita 1 estouro</small></button>
+                  <button class="nightmare-card" type="button" data-nightmare-card="omen" title="Mostra somente a faixa de valor da carta seguinte"><b>☽ Presságio</b><small>Pressente a próxima</small></button>
+                  <button class="nightmare-card" type="button" data-nightmare-card="order" title="Força o adversário a comprar uma carta"><b>♠ Ordem</b><small>Rival compra carta</small></button>
+                  <button class="nightmare-card" type="button" data-nightmare-card="lock" title="Impede o adversário de parar antes de pedir carta"><b>⛓ Trava</b><small>Rival deve comprar</small></button>
+                  <button class="nightmare-card" type="button" data-nightmare-card="swap" title="Substitui a última carta de sua mão"><b>↻ Troca</b><small>Substitui última</small></button>
+                </div>
+                <div class="muted nightmare-hint" id="blackjackOmen" aria-live="polite"></div>
                 <div class="duel-log" id="blackjackLog"></div>
               </div>
             </article>
@@ -598,6 +608,7 @@
               <div class="panel-head"><div><span class="tag">FORCA PVP</span><h3>Forca</h3><small class="muted">O sistema escolhe a palavra. Cada letra certa vale pontos.</small></div><span class="pill" id="hangmanLives">Livre</span></div>
               <div class="game-lobby-row" id="hangmanLobby">
                 <label>Adversário<select id="hangmanFriendSelect"><option value="">Escolha um amigo</option></select></label>
+                <label>Aposta opcional<input id="hangmanBetInput" type="number" min="0" max="100000" step="10" value="0" placeholder="0 = sem aposta"></label>
                 <button class="btn primary" id="hangmanCreateBtn" type="button">Desafiar</button>
               </div>
               <div id="hangmanInvites" class="people-list game-invites" hidden></div>
@@ -616,13 +627,27 @@
             <div class="panel-head"><div><span class="tag">SLOTS</span><h3>Slots de Rupias</h3><small class="muted">A aposta é debitada da mesma carteira de Rupias vinculada à Charlotte.</small></div><span class="pill" id="slotsStatus">Pronto</span></div>
             <div class="slot-wallet"><span>Seu saldo</span><strong id="slotsBalance">₹ 0</strong></div>
             <div class="slot-bet-panel">
-              <label>Aposta<input id="slotsBetInput" type="number" min="10" max="5000" step="10" value="50"></label>
+              <label>Aposta<input id="slotsBetInput" type="number" min="10" max="1000000000" step="10" value="50"></label>
               <div class="slot-bet-presets" aria-label="Apostas rápidas"><button class="btn" data-slot-bet="10" type="button">₹10</button><button class="btn" data-slot-bet="50" type="button">₹50</button><button class="btn" data-slot-bet="100" type="button">₹100</button><button class="btn" data-slot-bet="500" type="button">₹500</button><button class="btn" data-slot-bet="1000" type="button">₹1.000</button></div>
             </div>
             <div class="slot-machine slot-machine-large"><div class="slot-reel" id="slotReel1">✦</div><div class="slot-reel" id="slotReel2">♛</div><div class="slot-reel" id="slotReel3">◆</div></div>
             <div class="slot-result-line"><strong id="slotsLastWin">Escolha sua aposta e gire.</strong><span>Trincas pagam mais • qualquer dupla devolve prêmio menor.</span></div>
             <div class="arcade-actions"><button class="btn primary full slots-spin-button" id="slotsSpinBtn" type="button">Girar Slots</button></div>
             <details class="slot-paytable"><summary>Tabela de prêmios</summary><div><span>777</span><b>25x</b><span>♛♛♛</span><b>12x</b><span>⚡⚡⚡</span><b>8x</b><span>◆◆◆</span><b>6x</b><span>☾☾☾</span><b>5x</b><span>♥♥♥</span><b>4x</b><span>✦✦✦</span><b>3x</b><span>Qualquer dupla</span><b>1,2x</b></div></details>
+          </article>
+
+          <div class="studio-section-label game-section-label"><span>ATIVIDADES</span><h3>Pesca, mineração e corridas</h3></div>
+          <article class="panel site-progression" aria-labelledby="progressionTitle">
+            <div class="panel-head"><div><span class="tag">JORNADA GREMORY</span><h3 id="progressionTitle">Suas atividades</h3><small class="muted">Recompensas de XP, calculadas no servidor. Sem apostas ou alterações de Rúpias.</small></div><span class="pill" id="siteProgressLevel">Nível 1</span></div>
+            <div class="site-progress-track"><span id="siteProgressXp">0 XP</span><div class="site-progress-bar"><i id="siteProgressBar" style="width:0%"></i></div></div>
+            <div class="site-activity-grid">
+              <div class="site-activity"><span class="activity-icon" aria-hidden="true">🐟</span><strong>Pesca</strong><small id="siteFishEnergy">Energia: —</small><button id="siteFishBtn" class="btn primary" type="button">Lançar isca</button></div>
+              <div class="site-activity"><span class="activity-icon" aria-hidden="true">◆</span><strong>Mineração</strong><small id="siteMineEnergy">Energia: —</small><button id="siteMineBtn" class="btn primary" type="button">Minerar</button></div>
+              <div class="site-activity"><span class="activity-icon" aria-hidden="true">♞</span><strong>Corrida de cavalos</strong><small>Corrida gratuita • +XP</small><button id="siteHorseBtn" class="btn" type="button">Correr</button></div>
+              <div class="site-activity"><span class="activity-icon" aria-hidden="true">🏎</span><strong>Corrida de carrinhos</strong><small>Corrida gratuita • +XP</small><button id="siteCarBtn" class="btn" type="button">Correr</button></div>
+            </div>
+            <p class="muted" id="siteActivityResult" role="status" aria-live="polite">A energia diária é restaurada 24 horas após sua primeira atividade. Premium recebe 2 energias adicionais e XP em dobro.</p>
+            <details class="site-inventory"><summary>Minha coleção e conquistas</summary><div id="siteProgressCollection" class="site-progress-collection">Nenhum item ainda.</div></details>
           </article>
         </section>
 
@@ -654,6 +679,7 @@
               </div>
               <div id="watchRoomsList" class="room-list watch-room-list"><div class="empty-state small">Nenhuma sala.</div></div>
             </article>
+            <article class="panel rooms-panel watch-public-card"><div class="panel-head"><div><span class="tag">PÚBLICAS</span><h3>Salas abertas</h3></div><button class="text-button" id="watchPublicRefreshBtn" type="button">Atualizar</button></div><div id="watchPublicRoomsList" class="room-list watch-room-list"><div class="empty-state small">Nenhuma sala pública.</div></div></article>
           </div>
 
           <div class="watch-room watch-room-v2" id="watchRoom" hidden>
@@ -662,7 +688,7 @@
               <div class="watch-room-identity">
                 <span class="tag">SALA ATIVA</span>
                 <h2 id="watchRoomName">Watch Party</h2>
-                <div class="watch-room-subline"><span class="watch-live-dot"></span><span id="watchRtcStatus">Preparando sala...</span></div>
+                <div class="watch-room-subline"><span class="watch-live-dot"></span><span id="watchRtcStatus">Preparando sala...</span><span class="pill" id="watchPrivacyPill">Privada</span></div>
               </div>
               <div class="watch-invite-box">
                 <span>Convite</span>
@@ -758,6 +784,8 @@
                     <iframe id="watchMusicEngine" title="Player da Charlotte" allow="autoplay; encrypted-media"></iframe>
                   </div>
                 </section>
+                <section class="panel watch-chat-panel"><div class="panel-head"><div><span class="tag">CHAT</span><h3>Conversa da sala</h3></div></div><div id="watchChatList" class="watch-chat-list"><div class="empty-state small">Sem mensagens ainda.</div></div><form id="watchChatForm" class="support-chat-form"><input id="watchChatInput" maxlength="500" autocomplete="off" placeholder="Mensagem para a sala"><button class="btn primary" type="submit">Enviar</button></form></section>
+                <section class="panel watch-invite-panel" id="watchInvitePanel" hidden><div class="panel-head"><div><span class="tag">CONVITES</span><h3>Convidar amigo</h3></div></div><div class="game-lobby-row"><select id="watchInviteFriendSelect"><option value="">Escolha um amigo</option></select><button class="btn" id="watchInviteFriendBtn" type="button">Convidar</button></div></section>
               </aside>
             </div>
           </div>
@@ -810,6 +838,7 @@
             <div><span class="tag">SUA CONTA</span><h3 id="premiumStatusTitle">Plano padrão</h3><p id="premiumStatusText">Vincule a Charlotte para comprar e sincronizar o Premium pelo site.</p></div>
             <span class="pill" id="premiumStatusPill">Padrão</span>
           </article>
+          <article class="panel premium-rupias-card"><div><span class="tag">RÚPIAS</span><h3>Premium por 7 dias</h3><p>Ative por <strong>₹200.000</strong>. O link de grupo é opcional; se informar, a Charlotte entra e sai quando o Premium terminar.</p></div><label>Link do grupo (opcional)<input id="premiumRupiasGroupLink" type="url" placeholder="https://chat.whatsapp.com/..."></label><div class="admin-row-actions"><button class="btn primary" id="premiumRupiasBuyBtn" type="button">Comprar por ₹200.000</button><button class="btn" id="premiumGroupSetBtn" type="button">Vincular grupo depois</button></div><small id="premiumRupiasStatus" class="muted">Sem link, o Premium é ativado normalmente.</small></article>
           <div class="plans-grid">
             <article class="plan-card"><small>1 DIA</small><strong>R$ 2</strong><span>1 dia</span><button class="btn" data-buy-plan="1">Comprar</button></article>
             <article class="plan-card"><small>7 DIAS</small><strong>R$ 5</strong><span>7 dias</span><button class="btn" data-buy-plan="7">Comprar</button></article>
@@ -932,12 +961,14 @@
               <div class="panel-head"><div><span class="tag">CONTAS</span><h3>Moderação de usuário</h3></div></div>
               <form id="adminUserLookupForm" class="stack-form compact">
                 <label>Usuário ou UID<input id="adminUserQuery" autocomplete="off" placeholder="@usuario ou UID"></label>
-                <label>Motivo do banimento<textarea id="adminBanReason" rows="3" maxlength="300" placeholder="Motivo da suspensão"></textarea></label>
+                <label>Motivo do banimento<textarea id="adminBanReason" rows="3" maxlength="300" placeholder="Motivo da suspensão"></textarea></label><label>Duração do banimento<select id="adminBanDuration"><option value="0">Permanente</option><option value="1">1 hora</option><option value="24">24 horas</option><option value="168">7 dias</option><option value="720">30 dias</option></select></label>
                 <div class="modal-actions">
                   <button class="btn" id="adminFindUserBtn" type="submit">Localizar</button>
                   <button class="btn danger-ghost" id="adminBanUserBtn" type="button">Suspender</button>
                   <button class="btn" id="adminUnbanUserBtn" type="button">Remover ban</button>
                 </div>
+                <div class="admin-row-actions"><button class="btn" id="adminCreateCharlotteLinkBtn" type="button">Gerar código de vínculo</button><button class="btn danger-ghost" id="adminResetCharlotteLinkBtn" type="button">Resetar vínculo Charlotte</button></div>
+                <p class="muted" id="adminCharlotteLinkHelp">Você pode gerar um código para o usuário selecionado. O reset limpa somente o pareamento/sincronização; não apaga Rúpias, Pokémon, perfil, amigos, compras ou backups.</p>
               </form>
               <div id="adminUserResult" class="admin-user-result"></div>
             </article>
@@ -950,6 +981,8 @@
                 <div class="admin-row-actions"><button class="btn primary" id="adminGiveCurrencyBtn" type="button">Adicionar</button><button class="btn danger-ghost" id="adminRemoveCurrencyBtn" type="button">Remover</button></div>
                 <label>Dias Premium<input id="adminPremiumDays" type="number" min="1" max="3650" value="30"></label>
                 <button class="btn primary" id="adminGivePremiumBtn" type="button">Dar Premium</button>
+                <label class="full-span">Grupo Premium do usuário selecionado<input id="adminPremiumGroupLink" type="url" placeholder="https://chat.whatsapp.com/..."></label>
+                <button class="btn full-span" id="adminPremiumGroupSetBtn" type="button">Vincular / trocar grupo Premium</button>
               </div>
             </article>
 
@@ -984,7 +1017,8 @@
             <article class="panel admin-panel">
               <div class="panel-head"><div><span class="tag">BACKUP</span><h3>Dados da Charlotte</h3></div><span class="pill" id="adminBackupStatus">Aguardando</span></div>
               <p class="muted" id="adminBackupMeta">Aguardando a primeira cópia de segurança da Charlotte.</p>
-              <button class="btn" id="adminBackupNowBtn" type="button">Criar backup agora</button>
+              <div class="admin-row-actions"><button class="btn" id="adminBackupNowBtn" type="button">Criar backup agora</button><button class="btn primary" id="adminRestoreBackupBtn" type="button">Restaurar backup do Firebase</button></div>
+              <p class="muted">Em uma Railway nova, restaure primeiro e depois reinicie a Charlotte. O sistema pausa o backup automático quando detecta arquivos locais diferentes do cofre remoto para não sobrescrever seus dados.</p>
             </article>
           </div>
         </section>
@@ -1031,15 +1065,15 @@
       <div class="profile-summary"><img id="profileAvatarPreview" src="/assets/img/profile.jpg" alt=""><div><strong id="profileNameView">Usuário</strong><span id="profileUsernameView">@usuario</span><span id="profilePlanView">Padrão</span></div></div>
       <form id="profileForm" class="profile-form">
         <label>Nome<input id="profileName" maxlength="40"></label><label>Nome de usuário<input id="profileUsername" maxlength="20" autocomplete="username" placeholder="usuario"><small class="field-hint" id="profileUsernameHint">Pode ser alterado uma vez a cada 7 dias.</small></label>
-        <label>Foto (URL)<input id="profileAvatar" type="url" placeholder="https://..."></label>
+        <label>Foto (URL)<input id="profileAvatar" type="url" placeholder="https://..."></label><label>Ou escolha do dispositivo<input id="profileAvatarFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><small class="field-hint" id="profileAvatarUploadStatus">Fotos de até 5 MB. Após enviar, salve o perfil.</small></label>
         <label>Bio<textarea id="profileBio" maxlength="500" rows="3" placeholder="Seu recado"></textarea></label>
-        <label>Anime favorito<input id="profileFavoriteAnime" maxlength="80"></label>
+        <label>Anime favorito<input id="profileFavoriteAnime" maxlength="80"></label><label>Música destaque<input id="profileSongTitle" maxlength="80" placeholder="Nome da música"></label><label>Link da música<input id="profileSongUrl" type="url" maxlength="500" placeholder="YouTube ou Spotify"></label><label>Playlist salva<input id="profilePlaylistUrl" type="url" maxlength="500" placeholder="Link da sua playlist"></label>
         <div class="profile-preferences">
           <label class="check-row"><input id="profileBrowserNotify" type="checkbox"><span>Notificações do navegador</span></label>
           <label class="check-row"><input id="profileWhatsappSiteNotify" type="checkbox"><span>Receber avisos do site no WhatsApp</span></label>
           <label class="check-row"><input id="profileRaidWhatsapp" type="checkbox"><span>Avisar novas raids no WhatsApp</span></label>
         </div>
-        <div class="profile-stats"><div><span>Nível</span><strong id="profileLevel">0</strong></div><div><span>Rupias</span><strong id="profileBalance">0</strong></div></div>
+        <div class="profile-stats"><div><span>Nível</span><strong id="profileLevel">0</strong></div><div><span>Rupias</span><strong id="profileBalance">0</strong></div></div><div class="site-profile-xp"><span>XP de atividades do site</span><strong id="profileSiteXp">0 XP • Nível 1</strong><small>XP do site separado do nível da Charlotte.</small><div id="profileSiteBadges" class="site-profile-badges"></div></div>
         <button class="btn primary full" type="submit">Salvar</button><button class="btn full" id="adminDrawerBtn" type="button" hidden>Administração</button><button class="btn full danger-ghost" id="logoutBtn" type="button">Sair</button>
       </form>
     </aside>
@@ -1065,6 +1099,7 @@
         </div>
       </div>
       <section class="public-profile-about"><span>Bio</span><p id="publicProfileBio">Conta Gremory</p></section>
+      <section class="public-profile-music" id="publicProfileMusic" hidden><span>Música do perfil</span><strong id="publicProfileSongTitle">—</strong><div class="modal-actions compact"><a class="mini-btn" id="publicProfileSongLink" target="_blank" rel="noopener noreferrer">Ouvir</a><a class="mini-btn" id="publicProfilePlaylistLink" target="_blank" rel="noopener noreferrer">Playlist</a></div></section>
       <div class="public-profile-details">
         <div><span>Anime favorito</span><strong id="publicProfileAnime">—</strong></div>
         <div><span>Na Gremory desde</span><strong id="publicProfileSince">—</strong></div>
@@ -1075,7 +1110,7 @@
     </div>
   </div>
 
-  <div class="modal" id="watchCreateModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="watchCreateModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="watchCreateModal">×</button><span class="tag">WATCH PARTY</span><h2>Criar sala</h2><form id="watchCreateForm" class="stack-form"><label>Nome da sala<input id="watchNameInput" maxlength="60" placeholder="Ex: Noite de filmes" required></label><button class="btn primary full" type="submit">Criar sala</button></form></div></div>
+  <div class="modal" id="watchCreateModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="watchCreateModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="watchCreateModal">×</button><span class="tag">WATCH PARTY</span><h2>Criar sala</h2><form id="watchCreateForm" class="stack-form"><label>Nome da sala<input id="watchNameInput" maxlength="60" placeholder="Ex: Noite de filmes" required></label><label>Privacidade<select id="watchPrivacyInput"><option value="public">Pública — aparece para todos</option><option value="private" selected>Privada — entra com código/link</option><option value="invite">Só por convite — somente convidados</option></select></label><button class="btn primary full" type="submit">Criar sala</button></form></div></div>
 
   <div class="modal" id="gameResultModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="gameResultModal"></button><div class="modal-card result-card"><button class="modal-close" data-close-modal="gameResultModal">×</button><div class="result-icon" id="gameResultIcon">★</div><span class="tag">RESULTADO</span><h2 id="gameResultTitle">Vitória!</h2><p id="gameResultText"></p><button class="btn primary full" data-close-modal="gameResultModal">Continuar</button></div></div>
 
@@ -1092,6 +1127,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261023-v13-11-games-realtime"></script>
+  <script type="module" src="/assets/js/app.js?v=20261027-v14-recovery-v2"></script>
 </body>
 </html>

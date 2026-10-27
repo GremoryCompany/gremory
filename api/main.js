@@ -1279,7 +1279,17 @@ module.exports = async (req, res) => {
     try{const got=await blobSdk.get(`backups/accounts/${uid}/latest.json`,{access:'private'});if(!got?.stream)return sendJson(res,404,{erro:'backup não encontrado'});const txt=await new Response(got.stream).text();return sendJson(res,200,{ok:true,snapshot:JSON.parse(txt)})}catch(e){return sendJson(res,404,{erro:'backup não encontrado',detalhe:e.message})}
   }
 
-  // slots_spin_site removido: o Slots usa diretamente o bridge/Rupias existentes.
+  // Progressão de atividades exclusivamente no servidor, com identidade verificada.
+  if(action==='site_progress'){
+    const {handleProgress}=require('./site-progress');
+    return handleProgress(req,res,{readJsonBody,sendJson});
+  }
+
+  // Mutating game/music/slots flows were migrated to siteBridgeJobs (Firebase RTDB)
+  // processed by the Railway/Highway Charlotte bridge. No Firebase Admin at Vercel.
+  if (['site_game','watch_music_activate_site','slots_spin_site','slots_status_site','pokemon_explore_site'].includes(action)) {
+    return sendJson(res,410,{code:'BRIDGE_REQUIRED',erro:'Esta ação usa o bridge da Charlotte no Firebase. Atualize o site (Ctrl+F5) para usar o fluxo novo.'});
+  }
 
   if(action === 'youtube_search'){
     if(req.method!=='GET')return sendJson(res,405,{erro:'Método inválido'});

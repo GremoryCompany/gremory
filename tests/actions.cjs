@@ -23,9 +23,18 @@ test('Slots stops animation and releases button when bridge rejects before debit
  vm.createContext(ctx);vm.runInContext(between('async function runSlotsSpin()','// Delegação'),ctx);
  await ctx.runSlotsSpin();assert.equal(cleared,true);assert.equal(node('slotsSpinBtn').disabled,false);assert.equal(calls,1);assert.equal(storage.size,0);
 });
-test('Current Firebase rules are preserved; slots receipts are owner-only and never writable',()=>{
- const old=JSON.parse(fs.readFileSync(__dirname+'/fixtures/firebase-rules-before.json','utf8')).rules,rules=JSON.parse(fs.readFileSync(root+'firebase.rules.production.json','utf8')).rules;
- for(const k of Object.keys(old)){if(['watchRooms','watchVoice','watchUserRooms','siteNotifications','siteBridgeJobs','siteGameChallenges'].includes(k))continue;assert.deepEqual(rules[k],old[k],k)}
+test('Firebase rules protect private balances and admin paths',()=>{
+ const rules=JSON.parse(fs.readFileSync(root+'firebase.rules.production.json','utf8')).rules;
  assert.equal(rules['.read'],false);assert.equal(rules['.write'],false);
- for(const k of ['siteSlotsPending','siteSlotsSettlements']){const row=rules[k].$uid,canRead=new Function('auth','$uid','return '+row['.read']);assert.equal(canRead({uid:'a'},'a'),true);assert.equal(canRead({uid:'a'},'b'),false);assert.equal(row['.write'],false)}
+ assert.equal(rules.siteProgress.$uid['.write'],false);
+ assert.equal(rules.siteWalletOps.$uid['.write'],false);
+ assert.equal(rules.siteWallets.$uid['.write'],false);
+ for(const k of ['siteSlotsPending','siteSlotsSettlements']){
+  const row=rules[k].$uid,canRead=new Function('auth','$uid','return '+row['.read']);
+  assert.equal(canRead({uid:'a'},'a'),true);assert.equal(canRead({uid:'a'},'b'),false);assert.equal(row['.write'],false);
+ }
+ for(const k of ['siteBans','profiles','siteReports','supportChats']){
+  assert.match(JSON.stringify(rules[k]),/email_verified/,k);
+ }
+ assert.match(rules.communityPosts.$post['.write'],/expiresAt/);
 });

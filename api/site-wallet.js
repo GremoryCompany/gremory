@@ -1,5 +1,7 @@
 'use strict';
-// Carteira primária do SITE. Somente Firebase Admin pode escrever.
+// Auxilia autenticação Firebase Admin da API de XP. As funções legadas de carteira
+// permanecem apenas para compatibilidade de importação; transações monetárias
+// do Gremory devem ir exclusivamente para o Bridge Charlotte.
 const {initializeApp,getApps,cert}=require('firebase-admin/app');
 const {getAuth}=require('firebase-admin/auth');
 const {getDatabase}=require('firebase-admin/database');
@@ -44,7 +46,6 @@ function applyEntry(current,opId,delta,kind,detail={}){
  if(!current||!validMoney(Number(current.balance)))return;
  current.receipts=current.receipts||{};
  if(current.receipts[opId])return current;
- if(kind==='slot'&&(!Number.isSafeInteger(detail.bet)||Number(current.balance)<detail.bet))return;
  const balance=Number(current.balance)+delta;
  if(!validMoney(balance))return;
  current.balance=balance;current.version=Number(current.version||0)+1;current.updatedAt=Date.now();
@@ -53,6 +54,9 @@ function applyEntry(current,opId,delta,kind,detail={}){
  return current;
 }
 async function applyWallet(db,uid,opId,delta,kind,detail={}){
+ // BLOQUEADO: siteWallets é espelho da carteira Charlotte, nunca origem de crédito/débito.
+ throw new SiteError(410,'CHARLOTTE_WALLET_ONLY','Operação financeira indisponível nesta API. Utilize o bridge Charlotte.');
+
  if(!/^[-_a-zA-Z0-9]{8,110}$/.test(opId)||!Number.isSafeInteger(delta)||Math.abs(delta)>MAX_BALANCE)throw new SiteError(400,'WALLET_OPERATION_INVALID','Operação financeira inválida.');
  const ref=db.ref(`siteWallets/${uid}`),tx=await ref.transaction(v=>applyEntry(v,opId,delta,kind,detail),undefined,false);
  if(!tx.committed){const value=tx.snapshot.val();if(!value)throw new SiteError(409,'WALLET_NOT_READY','Carteira não sincronizada com a Charlotte.');throw new SiteError(409,'INSUFFICIENT_BALANCE','Saldo insuficiente ou limite financeiro excedido.');}

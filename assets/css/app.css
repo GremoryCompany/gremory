@@ -1214,3 +1214,86 @@ body.watch-pseudo-fullscreen #watchScreenStage.watch-fullscreen-ui-hidden{cursor
 .watch-volume-inline,.watch-transmit-volume{display:flex;align-items:center;gap:8px;min-width:180px;padding:7px 9px;border:1px solid #2b323d;border-radius:11px;background:#0a0d12}.watch-volume-inline[hidden],.watch-transmit-volume[hidden]{display:none!important}.watch-volume-inline span,.watch-transmit-volume span{display:flex;align-items:center;justify-content:space-between;gap:6px;color:#dce2eb;font-size:9px;font-weight:700;white-space:nowrap}.watch-volume-inline b,.watch-transmit-volume b{color:#fff}.watch-volume-inline input[type="range"],.watch-transmit-volume input[type="range"]{width:92px;accent-color:#d85b73}.watch-transmit-volume{flex:1 1 280px;justify-content:space-between}.watch-transmit-volume input[type="range"]{width:min(220px,42vw)}
 @media(max-width:620px){.watch-volume-inline{min-width:0;padding:5px 7px;gap:5px}.watch-volume-inline span{font-size:8px}.watch-volume-inline input[type="range"]{width:74px}.watch-transmit-volume{display:grid;grid-template-columns:1fr;gap:7px;width:100%}.watch-transmit-volume input[type="range"]{width:100%}}
 #watchScreenStage:fullscreen .watch-volume-inline,#watchScreenStage:-webkit-full-screen .watch-volume-inline,body.watch-pseudo-fullscreen #watchScreenStage .watch-volume-inline{background:rgba(5,7,10,.78);border-color:rgba(255,255,255,.16)}
+
+/* Administração e perfis da atualização, com Watch Party original. */
+
+.profile-upload-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.profile-upload-row small{color:var(--muted)}
+.admin-account-tools{display:grid;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid #252b35}.admin-account-tools>label{display:grid;gap:6px}.admin-link-code{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #2b313c;border-radius:12px;background:#090c11;overflow:hidden}.admin-link-code code{flex:1;overflow-wrap:anywhere;color:#f0a1b0}
+.dynamic-store-preview{background-size:cover!important;background-position:center!important}.dynamic-store-item .dynamic-store-preview{min-height:112px}
+.support-chat-panel{margin-top:14px}.support-chat-list{display:grid;gap:8px;max-height:420px;overflow:auto;padding:8px}.support-message{max-width:min(82%,620px);padding:9px 11px;border-radius:14px;background:#171c24;border:1px solid #272e39}.support-message.admin{margin-left:auto;background:#2a1119;border-color:#5a2632}.support-message b,.support-message p,.support-message small{display:block}.support-message p{margin:4px 0;white-space:pre-wrap}.support-message small{color:var(--muted);font-size:9px}.support-chat-form{display:flex;gap:8px;margin-top:9px}.support-chat-form input{flex:1;min-width:0}
+.admin-support-conversation{width:100%;text-align:left;display:grid;gap:3px;padding:10px;border:1px solid #262d37;border-radius:11px;background:#0b0e13;color:#fff}.admin-support-conversation small{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.support-icon{overflow:hidden}.support-icon img{display:block;max-width:100%;max-height:100%}.admin-grid>.panel{min-width:0}.admin-account-tools input{min-width:0;width:100%;padding:12px;border:1px solid #2a2f39;background:#0d1016;color:#fff;border-radius:12px}
+
+/* Watch Party r4: ações do host e banimento em tempo real */
+.watch-member-item .watch-ban-btn{flex:none;margin-left:auto;min-height:30px;white-space:nowrap}
+.watch-banned-list{margin-top:10px;border-top:1px solid #272e38;padding-top:9px;display:grid;gap:7px}
+.watch-banned-list[hidden]{display:none!important}
+.watch-banned-list>small{font-size:11px;color:var(--muted)}
+.watch-banned-row{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#0b1016;border:1px solid #252b34;padding:6px 9px;border-radius:10px;font-size:12px}
+.watch-banned-row span{overflow-wrap:anywhere;min-width:0}
+.watch-banned-row .mini-btn{flex-shrink:0}
+
+/* Watch Party: estado de áudio/permissões, responsivo e sem F5 */
+.watch-audio-health{display:block;color:#aeb9c9;font-size:11px;line-height:1.5;padding:9px 11px;margin:4px 0 10px;border:1px solid #303b49;border-radius:10px;background:#0b1016;overflow-wrap:anywhere}
+.watch-call-panel .watch-voice-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.watch-call-panel .watch-voice-actions .btn{min-width:0;white-space:normal}
+@media(max-width:480px){.watch-call-panel .watch-voice-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* V14 — Premium, apostas e Watch Party social */
+.game-bet-create,.game-lobby-row{align-items:end}
+.game-bet-create label,.game-lobby-row label{min-width:160px}
+.premium-rupias-card{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.8fr);gap:18px;align-items:end}
+.premium-rupias-card .admin-row-actions{grid-column:1/-1}
+.watch-chat-list{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow:auto;padding:4px}
+.watch-chat-message{display:grid;grid-template-columns:auto 1fr auto;gap:8px 10px;align-items:start;padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.035)}
+.watch-chat-message.mine{background:rgba(213,69,95,.12)}
+.watch-chat-message strong{font-size:.82rem}.watch-chat-message span{word-break:break-word}.watch-chat-message small{opacity:.6;font-size:.7rem}
+.watch-call-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.watch-peer-volume{width:92px;accent-color:currentColor}
+.hidden-card{display:inline-grid;place-items:center;min-width:44px;min-height:64px;border-radius:8px;background:linear-gradient(145deg,#651b2d,#160b10);border:1px solid rgba(255,255,255,.12);font-size:1.8rem}
+.admin-users-panel .panel-head{align-items:center;gap:12px}.admin-users-panel .panel-head input{max-width:260px}
+.watch-public-card{min-height:160px}.watch-room-subline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+@media (max-width: 760px){
+  .premium-rupias-card{grid-template-columns:1fr}
+  .premium-rupias-card .admin-row-actions{grid-column:auto}
+  .watch-layout-v2{display:block}
+  .watch-source-card{padding:10px}
+  .watch-source-card .watch-media-form{display:grid;grid-template-columns:1fr auto;gap:8px}
+  .watch-local-source{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center}
+  .watch-local-source small{grid-column:1/-1;font-size:.72rem;opacity:.65}
+  .watch-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .watch-controls .btn,.watch-local-source .btn{padding:9px 10px;font-size:.82rem}
+  #watchHostPill{grid-column:1/-1;justify-self:start}
+  .watch-screen-head{gap:8px}.watch-screen-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}
+  .watch-volume-inline{grid-column:1/-1}
+  .watch-call-panel,.watch-music-panel,.watch-chat-panel,.watch-invite-panel{margin-top:10px}
+  .watch-call-actions{gap:4px}.watch-peer-volume{width:76px}
+  .watch-member-item{padding:8px}
+  .watch-room-hero{gap:8px}.watch-room-identity h2{font-size:1.1rem}.watch-invite-box{min-width:0}
+  .game-bet-create,.game-lobby-row{grid-template-columns:1fr;display:grid}
+  .admin-users-panel .panel-head{display:grid}.admin-users-panel .panel-head input{max-width:none;width:100%}
+}
+
+/* V14 profile music + admin */
+.public-profile-music{display:grid;gap:8px;padding:14px 0;border-top:1px solid var(--border,rgba(255,255,255,.08))}.public-profile-music>span{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;opacity:.65}.public-profile-music .modal-actions.compact{justify-content:flex-start;margin:0}.admin-economy-grid .full-span{grid-column:1/-1}
+
+/* 21 Pesadelo: mesa de cartas discreta, sem afetar os outros jogos */
+#blackjackGamePanel .card-table-pvp{background:radial-gradient(ellipse at center,#193b35 0%,#0b2222 65%,#090e13 100%);border:1px solid #346054;border-radius:22px;padding:18px}
+#blackjackGamePanel .card-table-pvp .card-seat{background:rgba(5,14,15,.5);border-color:rgba(139,200,169,.19)}
+.nightmare-cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:16px 0 9px}
+.nightmare-cards[hidden]{display:none}
+.nightmare-card{border:1px solid #744f55;border-radius:13px;background:linear-gradient(135deg,#2e1b28,#15121b);color:#f9dfd1;min-height:74px;padding:9px 6px;cursor:pointer;text-align:center}
+.nightmare-card b,.nightmare-card small{display:block}.nightmare-card b{font-size:13px}.nightmare-card small{font-size:11px;color:#d5abb5;margin-top:5px}.nightmare-card:disabled,.nightmare-card.used{opacity:.4;cursor:default}
+.nightmare-hint:not(:empty){margin:10px 0;text-align:center}
+@media(max-width:700px){.nightmare-cards{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.nightmare-card{min-height:64px}#blackjackGamePanel .card-table-pvp{padding:8px}}
+
+/* Recuperação responsiva V14 — atividades, XP e Watch Party compacta */
+.site-progression{display:grid;gap:14px}.site-progress-track{display:grid;gap:7px}.site-progress-track>span{font-size:.84rem;opacity:.82}
+.site-progress-bar{height:8px;border-radius:30px;overflow:hidden;background:rgba(255,255,255,.1)}.site-progress-bar>i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#914761,#df8396);transition:width .3s ease}
+.site-activity-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.site-activity{display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:0;padding:14px;border-radius:15px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.025)}
+.site-activity .activity-icon{font-size:1.45rem}.site-activity strong{font-size:.95rem}.site-activity small{font-size:.77rem;min-height:2.5em;color:var(--muted,#a6a6b2)}.site-activity .btn{margin-top:auto;width:100%}
+.site-progress-collection,.site-profile-badges{display:flex;gap:7px;flex-wrap:wrap;padding-top:9px}.site-inventory summary{cursor:pointer}.site-profile-xp{display:grid;gap:6px;margin-top:12px;padding:12px;border:1px solid rgba(255,255,255,.09);border-radius:14px}.site-profile-xp small{opacity:.65}
+@media(max-width:960px){.site-activity-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.site-activity-grid{gap:8px}.site-activity{padding:10px}.site-activity .btn{min-width:0;white-space:normal}.watch-call-panel .watch-voice-actions,.watch-local-source,.watch-controls{grid-template-columns:repeat(2,minmax(0,1fr))!important}.watch-member-item{min-width:0}.watch-peer-volume{max-width:76px}.watch-screen-actions>*{min-width:0}}
+@media(prefers-reduced-motion:reduce){.site-progress-bar>i{transition:none}}
