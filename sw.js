@@ -1,9 +1,9 @@
-const CACHE='gremory-v14-sitewallet-20261027b';
+const CACHE='gremory-site-independent-20261027c';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261027-v14-sitewallet-b',
-  '/assets/js/app.js?v=20261027-v14-sitewallet-b',
+  '/assets/css/app.css?v=20261027-site-independent-c',
+  '/assets/js/app.js?v=20261027-site-independent-c',
   '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',

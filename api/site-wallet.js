@@ -44,6 +44,7 @@ function applyEntry(current,opId,delta,kind,detail={}){
  if(!current||!validMoney(Number(current.balance)))return;
  current.receipts=current.receipts||{};
  if(current.receipts[opId])return current;
+ if(kind==='slot'&&(!Number.isSafeInteger(detail.bet)||Number(current.balance)<detail.bet))return;
  const balance=Number(current.balance)+delta;
  if(!validMoney(balance))return;
  current.balance=balance;current.version=Number(current.version||0)+1;current.updatedAt=Date.now();

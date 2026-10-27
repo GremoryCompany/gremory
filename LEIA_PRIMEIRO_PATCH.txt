@@ -1,0 +1,32 @@
+PATCH DO SITE — BASE: Gremory_V14_Projeto_Completo_Corrigido (1).zip
+
+1. Faça uma cópia do projeto atual. Extraia este ZIP sobre a raiz do projeto V14, mantendo as pastas api e assets. Não apague os demais arquivos.
+2. Na Vercel, configure FIREBASE_DATABASE_URL e FIREBASE_SERVICE_ACCOUNT_JSON no ambiente de servidor do mesmo projeto Firebase. Consulte api/README_HOSTING.md. Se já estiverem configuradas corretamente, mantenha-as. Nunca coloque o JSON no frontend nem no Git.
+3. Publique um novo deploy e recarregue a página. O cache foi atualizado.
+4. Mantenha os dois TXT atuais (bridge e regras) exatamente como estão. Não é necessário refazer o vínculo do WhatsApp, alterar o bot ou abrir as regras.
+
+CORREÇÕES
+- Convites e jogadas de Velha, 21/21 Pesadelo e Forca passam pela API do site, sem aguardar confirmação da Charlotte.
+- Slots: sorteio e saldo no servidor do site, recibo idempotente, prevenção de aposta sem saldo, áudio/animação limitados a 4,5 segundos. Em resposta incerta, o mesmo giro é consultado/reutilizado; não se cria outro débito automaticamente.
+- Charlotte continua espelhando a carteira pelo listener já existente no bridge atual.
+- Ativação e fila de música executadas pelo site; ouvir música não exige participar da chamada de voz. Repetir uma ativação ou inclusão pendente recupera a operação sem cobrar novamente.
+- Mantidos os recursos atuais de transmissão de tela/filme do PC, Pokémon, raids e administração; este patch não substitui o site inteiro pela versão antiga.
+
+MÚSICA
+Mantido o custo de ativação de 50; 10 inclusões iniciais e depois 5 por faixa, com isenção premium conforme o plano. Para pesquisar por nome, configure YOUTUBE_API_KEY; sem ela, use link YouTube. Se um pedido de música ficar pendente, repita-o para recuperar. Não apague os registros financeiros.
+
+VERIFICAÇÃO APÓS PUBLICAR
+Com duas contas amigas, envie e aceite um convite novo sem aposta. Faça uma partida e teste recusar outro convite. Depois teste uma aposta pequena e confira a carteira/extrato. Abra a Watch Party, ative a música, adicione um link YouTube, teste a fila e a transmissão de tela/arquivo do PC.
+
+LIMITES
+Testes locais usam banco simulado; não foi acessado seu Firebase de produção nem feito deploy na sua Vercel. Partidas novas usam o motor do site. Partidas antigas criadas pelo bridge não são migradas por este patch; não remova jogos/apostas pendentes do banco para forçar novas cobranças. Giros antigos pendentes permanecem protegidos até sua liquidação no fluxo anterior. O bot precisa voltar a conectar para sincronizar o saldo, embora as novas jogadas do site não aguardem sua resposta.
+
+Arquivos alterados:
+- index.html
+- sw.js
+- api/site-music.js
+- api/README_HOSTING.md
+- api/site-wallet.js
+- api/main.js
+- assets/js/bootstrap.js
+- assets/js/app.js

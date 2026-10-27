@@ -1279,11 +1279,12 @@ module.exports = async (req, res) => {
     try{const got=await blobSdk.get(`backups/accounts/${uid}/latest.json`,{access:'private'});if(!got?.stream)return sendJson(res,404,{erro:'backup não encontrado'});const txt=await new Response(got.stream).text();return sendJson(res,200,{ok:true,snapshot:JSON.parse(txt)})}catch(e){return sendJson(res,404,{erro:'backup não encontrado',detalhe:e.message})}
   }
 
-  // Mutating game/music/slots flows were migrated to siteBridgeJobs (Firebase RTDB)
-  // processed by the Railway/Highway Charlotte bridge. No Firebase Admin at Vercel.
-  if (['site_game','watch_music_activate_site','slots_spin_site','slots_status_site','pokemon_explore_site'].includes(action)) {
-    return sendJson(res,410,{code:'BRIDGE_REQUIRED',erro:'Esta ação usa o bridge da Charlotte no Firebase. Atualize o site (Ctrl+F5) para usar o fluxo novo.'});
-  }
+  if(action==='site_game')return require('./site-games').handleGame(req,res,{readJsonBody,sendJson});
+  if(action==='slots_spin_site')return require('./slots').handleSlotsSpin(req,res,{readJsonBody,sendJson});
+  if(action==='slots_status_site')return require('./slots').handleSlotsStatus(req,res,{readJsonBody,sendJson});
+  if(action==='watch_music_activate_site')return require('./site-music').handleActivate(req,res,{readJsonBody,sendJson});
+  if(action==='watch_music_queue_site')return require('./site-music').handleQueue(req,res,{readJsonBody,sendJson});
+
 
   if(action === 'youtube_search'){
     if(req.method!=='GET')return sendJson(res,405,{erro:'Método inválido'});

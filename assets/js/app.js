@@ -634,8 +634,7 @@ function playPokemonSound(kind){
   tryCustomGameSound(row[0],{fallback:()=>playSiteSound(row[1],row[2])});
 }
 
-// SLOTS GREMORY: sorteio e carteira no servidor Charlotte/Highway, via Firebase.
-// A Vercel NÃO tem acesso Firebase Admin; recibo idempotente impede giros duplicados.
+// SLOTS: processamento na API do site; bridge sincroniza somente a carteira.
 const SLOT_SYMBOLS=['♛','✦','◆','♥','☾','⚡','7'];
 let slotBusy=false;
 const slotWait=ms=>new Promise(r=>setTimeout(r,ms));
@@ -673,51 +672,42 @@ function showSpinResult(spin,balance){
 async function runSlotsSpin(){
   if(slotBusy)return;
   if(!state.user)return toast('Entre na sua conta para jogar.');
-  if(!linkedCharlotte())return toast('Vincule a Charlotte para usar rúpias.');
-  const bet=Number($('slotsBetInput')?.value||0);
+  const key=`gremory_site_spin_${state.user.uid}`,betKey=key+'_bet';
+  let requestId='',storedBet=0;
+  try{requestId=sessionStorage.getItem(key)||'';storedBet=Number(sessionStorage.getItem(betKey)||0)}catch{}
+  const bet=requestId&&storedBet?storedBet:Number($('slotsBetInput')?.value||0);
   if(!Number.isSafeInteger(bet)||bet<10||bet>1000000000)return toast('A aposta deve ficar entre ₹10 e ₹1.000.000.000.');
-  const key=`gremory_site_spin_${state.user.uid}`;
-  const oldId=(()=>{try{return sessionStorage.getItem(key)||''}catch{return''}})();
-  if(oldId){
-    try{
-      const status=await querySlotStatus(oldId);
-      if(status.status==='done'){try{sessionStorage.removeItem(key)}catch{}showSpinResult(status.spin,status.balance);return toast('Giro anterior recuperado. Clique novamente para fazer outro.');}
-      if(status.status==='none'||status.status==='error'&&!status.pending){try{sessionStorage.removeItem(key)}catch{}return toast('Giro anterior não concluído. Confira o saldo antes de girar novamente.');}
-      return toast('O giro anterior ainda está em análise; nenhuma aposta nova foi cobrada.',6500);
-    }catch(e){return toast('Não foi possível verificar a aposta anterior. Não faça outra até reconectar.',6500)}
-  }
-  const balance=Number(accountSnapshot().balance||0);
-  if((state.siteWallet||state.charlotteSync?.account)&&balance<bet)return toast(`Saldo insuficiente: ₹${formatNumber(balance)}.`);
-  const requestId='spin_'+crypto.randomUUID().replace(/-/g,'');
   slotBusy=true;
   const btn=$('slotsSpinBtn'),reels=[$('slotReel1'),$('slotReel2'),$('slotReel3')];
   if(btn)btn.disabled=true;
-  reels.forEach(e=>e?.classList.add('spinning'));
-  if($('slotsStatus'))$('slotsStatus').textContent='Girando...';
-  const began=Date.now(),stopSound=startSlotSpinSound();
-  let timer=setInterval(()=>reels.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]}),80);
-  const stop=()=>{if(timer){clearInterval(timer);timer=null}try{stopSound()}catch{}reels.forEach(e=>e?.classList.remove('spinning'))};
+  let timer=null,safety=null,stopSound=null,stopped=false;
+  const stop=()=>{if(stopped)return;stopped=true;if(timer)clearInterval(timer);if(safety)clearTimeout(safety);try{stopSound?.()}catch{}reels.forEach(e=>e?.classList.remove('spinning'))};
+  const clearPending=()=>{try{sessionStorage.removeItem(key);sessionStorage.removeItem(betKey)}catch{}};
   try{
-    try{sessionStorage.setItem(key,requestId)}catch{}
-    const r=await bridgeRequest('slots_spin',{bet,requestId},35000,true,requestId);
-    await slotWait(Math.max(0,1200-(Date.now()-began)));
-    stop();
-    showSpinResult(r.spin||r,r.balance);
-    try{sessionStorage.removeItem(key)}catch{}
+    if(requestId){
+      const status=await Promise.race([querySlotStatus(requestId),new Promise((_,reject)=>{safety=setTimeout(()=>reject(new Error('Não foi possível consultar o giro pendente.')),8000)})]);
+      clearTimeout(safety);safety=null;
+      if(status.status==='done'){clearPending();showSpinResult(status.spin,status.balance);return toast('Giro anterior recuperado.');}
+      if(status.pending||!storedBet)return toast('Giro anterior pendente. Nenhuma nova aposta foi enviada.',6500);
+      // Reenviar o MESMO ID recupera a operação; nunca cria outra cobrança.
+    }else{
+      requestId='spin_'+crypto.randomUUID().replace(/-/g,'');
+      sessionStorage.setItem(key,requestId);sessionStorage.setItem(betKey,String(bet));
+    }
+    reels.forEach(e=>e?.classList.add('spinning'));
+    if($('slotsStatus'))$('slotsStatus').textContent='Girando...';
+    stopSound=startSlotSpinSound();
+    timer=setInterval(()=>reels.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]}),80);
+    safety=setTimeout(()=>{stop();if($('slotsStatus'))$('slotsStatus').textContent='Aguardando confirmação do site';},4500);
+    const r=await siteApi('slots_spin_site',{bet,requestId},15000);
+    stop();showSpinResult(r.spin||r,r.balance);clearPending();
   }catch(e){
     stop();
-    const status=await querySlotStatus(requestId).catch(()=>null);
-    if(status?.status==='done'){showSpinResult(status.spin,status.balance);try{sessionStorage.removeItem(key)}catch{};toast('Giro recuperado com segurança.');}
-    else if(status?.status==='none'||(status?.status==='error'&&!status.pending)){
-      try{sessionStorage.removeItem(key)}catch{}
-      if($('slotsStatus'))$('slotsStatus').textContent='Giro não realizado';
-      toast(e.message||'Não foi possível girar.',6000);
-    }else{
-      if($('slotsStatus'))$('slotsStatus').textContent='Giro aguardando confirmação';
-      if($('slotsLastWin'))$('slotsLastWin').textContent='Operação pendente. O mesmo giro será verificado antes de uma nova aposta.';
-      toast('O servidor ainda não confirmou a aposta; não será feita cobrança duplicada.',6500);
-    }
-  }finally{slotBusy=false;if(btn)btn.disabled=false}
+    if(e.pending===false)clearPending();
+    if($('slotsStatus'))$('slotsStatus').textContent=e.pending===false?'Giro não realizado':'Confirmar giro pendente';
+    if($('slotsLastWin'))$('slotsLastWin').textContent=e.message||'Falha de conexão. O mesmo giro será consultado antes de outra aposta.';
+    toast(e.message||'Não foi possível concluir o giro.',6500);
+  }finally{stop();slotBusy=false;if(btn)btn.disabled=false}
 }
 // Delegação também funciona no mobile.
 document.addEventListener('click',ev=>{
@@ -1254,19 +1244,22 @@ $('duelExitBtn')?.addEventListener('click',async()=>{if(!state.duel)return;if(!c
 function linkedCharlotte(){return state.charlottePublic?.status==='linked'}
 async function siteApi(action,data={},timeoutMs=15000){
   if(!state.user)throw new Error('Entre na sua conta.');
-  const idToken=await state.user.getIdToken();
-  const response=await fetch('/api/main?action='+encodeURIComponent(action),{
-    method:'POST',headers:{'content-type':'application/json'},cache:'no-store',
-    signal:AbortSignal.timeout(timeoutMs),body:JSON.stringify({idToken,...data})
-  });
-  const result=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(result.erro||`Servidor do site indisponível (${result.code||response.status}).`);
-  return result;
+  const controller=new AbortController();let timer;
+  const work=(async()=>{
+    const idToken=await state.user.getIdToken();
+    if(controller.signal.aborted)throw new Error('Solicitação encerrada.');
+    const response=await fetch('/api/main?action='+encodeURIComponent(action),{method:'POST',headers:{'content-type':'application/json'},cache:'no-store',signal:controller.signal,body:JSON.stringify({...data,idToken})});
+    const result=await response.json();
+    if(!response.ok)throw Object.assign(new Error(result.erro||`Servidor do site indisponível (${response.status}).`),{code:result.code,pending:response.status>=500||/PENDING|CONFLICT/.test(result.code||'')});
+    return result;
+  })();
+  try{return await Promise.race([work,new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(Object.assign(new Error('O servidor do site ainda não confirmou. Consulte a mesma operação antes de repetir.'),{pending:true}));},timeoutMs)})]);}
+  finally{clearTimeout(timer)}
 }
 async function siteGameRequest(type,data={}){
   const allowed=new Set(['ttt_move','ttt_exit','blackjack_move','blackjack_exit','hangman_guess','hangman_exit']);
   if(!allowed.has(type))throw new Error('Ação de jogo inválida.');
-  return bridgeRequest(type,data,24000,false);
+  return siteApi('site_game',{type,...data,actionId:'act_'+crypto.randomUUID().replace(/-/g,'')},18000);
 }
 async function bridgeRequest(type,data={},timeoutMs=22000,requireLink=true,jobId=''){
   if(!state.user)throw new Error('Entre na sua conta.');
@@ -1628,7 +1621,7 @@ async function createSiteGame(type,opponentUid){
   const idx={id:gameId,type,status:'active',createdAt,updatedAt:createdAt,createdBy:me,opponentUid:other};
   const updates={};updates[`${meta.games}/${gameId}`]=game;updates[`${meta.index}/${me}/${gameId}`]=idx;updates[`${meta.index}/${other}/${gameId}`]={...idx,opponentUid:me};await update(ref(db),updates);return gameId
 }
-async function acceptSiteGameChallenge(ch){if(!state.user||!ch?.id||!ch?.fromUid)throw new Error('Convite inválido.');if(!SITE_GAME_META[ch.type])throw new Error('Jogo inválido.');const r=await bridgeRequest('site_game_accept',{challengeId:ch.id},35000,false),gameId=r.gameId;if(ch.type==='ttt')subscribeTtt(gameId);else if(ch.type==='blackjack')subscribeBlackjack(gameId);else if(ch.type==='hangman')subscribeHangman(gameId);await remove(ref(db,`siteGameChallenges/${state.user.uid}/${ch.id}`));scheduleGameRealtimeSync(20);navigate('games');playGameSfx('accept');toast(`${SITE_GAME_META[ch.type]?.label||'Partida'} iniciada${Number(ch.bet||0)>0?` • pote ₹${formatNumber(Number(ch.bet||0)*2)}`:''}.`);return gameId}
+async function acceptSiteGameChallenge(ch){if(!state.user||!ch?.id||!ch?.fromUid)throw new Error('Convite inválido.');if(!SITE_GAME_META[ch.type])throw new Error('Jogo inválido.');const r=await siteApi('site_game',{type:ch.type+'_create',challengeId:ch.id},18000),gameId=r.gameId;if(ch.type==='ttt')subscribeTtt(gameId);else if(ch.type==='blackjack')subscribeBlackjack(gameId);else if(ch.type==='hangman')subscribeHangman(gameId);await remove(ref(db,`siteGameChallenges/${state.user.uid}/${ch.id}`));scheduleGameRealtimeSync(20);navigate('games');playGameSfx('accept');toast(`${SITE_GAME_META[ch.type]?.label||'Partida'} iniciada${Number(ch.bet||0)>0?` • pote ₹${formatNumber(Number(ch.bet||0)*2)}`:''}.`);return gameId}
 async function finishIndexes(type,game){if(!game?.id)return;const meta=SITE_GAME_META[type];if(!meta)return;const updates={};const now=Number(game.updatedAt||game.finishedAt||Date.now());for(const uid of Object.keys(game.players||{})){const base=`${meta.index}/${uid}/${game.id}`;updates[`${base}/status`]=game.status||'finished';updates[`${base}/updatedAt`]=now;updates[`${base}/finishedAt`]=Number(game.finishedAt||now);if(game.winnerUid!=null)updates[`${base}/winnerUid`]=game.winnerUid;if(game.finishReason)updates[`${base}/finishReason`]=game.finishReason;if(game.leftUid)updates[`${base}/leftUid`]=game.leftUid}try{await update(ref(db),updates)}catch(e){console.warn('[GAME EXIT] Não foi possível sincronizar os índices:',e?.message||e)}}
 function applyFinishedGameLocally(type,game){if(!game?.id)return;if(type==='ttt'&&state.ttt.game?.id===game.id)setTttGame(game);else if(type==='blackjack'&&state.blackjack.game?.id===game.id)setBlackjackGame(game);else if(type==='hangman'&&state.hangman.game?.id===game.id)setHangmanGame(game)}
 async function directGameExit(type,game){if(!state.user||!game?.id)return;const meta=SITE_GAME_META[type],uid=state.user.uid;if(!meta)throw new Error('Jogo inválido.');let failReason='';const gameRef=ref(db,`${meta.games}/${game.id}`);const tx=await runTransaction(gameRef,g=>{if(!g){failReason='Partida não encontrada.';return}if(!g.players?.[uid]){failReason='Você não participa desta partida.';return}if(g.status!=='active'){failReason='Partida já encerrada.';return}const other=Object.keys(g.players).find(x=>x!==uid)||null,now=Date.now();g.status='finished';g.winnerUid=other;g.leftUid=uid;g.finishReason='exit';g.finishedAt=now;g.updatedAt=now;g.turnUid=null;appendGameLog(g,`${g.players[uid]?.name||'Jogador'} saiu da partida. ${other?`${g.players[other]?.name||'Adversário'} venceu por desistência.`:'Partida encerrada.'}`);return g});if(!tx.committed){const current=await get(gameRef).catch(()=>null);if(current?.exists()){const value={id:game.id,...current.val()};if(value.status!=='active'){applyFinishedGameLocally(type,value);return value}}throw new Error(failReason||'Não foi possível encerrar a partida.')}const final={id:game.id,...tx.snapshot.val()};await finishIndexes(type,final);applyFinishedGameLocally(type,final);toast('Você saiu. A partida foi encerrada para os dois jogadores.');return final}
@@ -1885,7 +1878,7 @@ function watchMusicPendingRows(queueObj=state.watchRoom?.musicQueue||{},playback
   const current=currentWatchMusic(queueObj,playback);
   return watchMusicRows(queueObj).filter(x=>!current||String(x.id)!==String(current.id))
 }
-function watchMusicCanHear(){return !!state.watchRtc.audioJoined}
+function watchMusicCanHear(){return !!state.watchCode}
 function watchMusicElapsed(item,playback=state.watchRoom?.musicPlayback||{}){
   const started=Number(playback?.currentId===item?.id?playback.startedAt:(item?.startedAt||Date.now()));
   return Math.max(0,(Date.now()-started)/1000)
@@ -1969,7 +1962,7 @@ function loadWatchMusicPlayback(current,playback={}){
 async function autoAdvanceWatchMusic(currentId){
   if(!currentId||state.watchMusic.lastAdvanceId===currentId||!watchMusicCanHear())return;
   state.watchMusic.lastAdvanceId=currentId;
-  try{await bridgeRequest('watch_music_advance',{roomCode:state.watchCode,currentId},20000)}
+  try{await siteApi('watch_music_queue_site',{type:'advance',roomCode:state.watchCode,currentId},15000)}
   catch(e){state.watchMusic.lastAdvanceId='';console.warn('[WATCH MUSIC ADVANCE]',e)}
 }
 function renderWatchMusic(queueObj={},accessObj={},planObj={},playback={}){
@@ -2016,29 +2009,30 @@ $('watchMusicActivateBtn')?.addEventListener('click',async()=>{
   const button=$('watchMusicActivateBtn'),roomCode=state.watchCode;
   try{
     state.watchMusic.activating=true;if(button)button.disabled=true;
-    if(!await joinWatchVoice())throw new Error('A chamada de voz ainda não foi confirmada no Firebase.');
     if(state.watchRoom?.musicPlan?.active)return toast('Charlotte Music já está ativa para todos da sala.');
-    const r=await bridgeRequest('watch_music_activate',{roomCode},30000,true);
+    const r=await siteApi('watch_music_activate_site',{roomCode},15000);
     toast(r.alreadyActive?'A Charlotte Music já está ativa nesta sala.':`Charlotte Music ativada por ₹${r.cost||50}.`)
   }catch(e){toast(e.message,7500)}
   finally{state.watchMusic.activating=false;if(button)button.disabled=false}
 });
 $('watchMusicForm')?.addEventListener('submit',async ev=>{
-  ev.preventDefault();if(state.watchMusic.adding)return;if(!watchMusicCanHear())return toast('Entre na chamada de voz primeiro.');
+  ev.preventDefault();if(state.watchMusic.adding)return;if(!state.watchCode)return toast('Entre na sala primeiro.');
   const query=$('watchMusicInput').value.trim();if(!query)return;
   state.watchMusic.adding=true;renderWatchMusic(state.watchRoom?.musicQueue||{},state.watchRoom?.musicAccess||{},state.watchRoom?.musicPlan||{},state.watchRoom?.musicPlayback||{});
   try{
     // A pesquisa externa pode demorar. Se a resposta expirar, verificar a fila
     // em vez de criar outro pedido automaticamente (pode custar rúpias).
-    const r=await bridgeRequest('watch_music_add',{roomCode:state.watchCode,query},16000);
+    const key=`gremory_music_${state.user.uid}_${state.watchCode}`;let requestId=sessionStorage.getItem(key);if(!requestId){requestId='track_'+crypto.randomUUID().replace(/-/g,'');sessionStorage.setItem(key,requestId)}
+    const pendingQuery=sessionStorage.getItem(key+'_query')||query;sessionStorage.setItem(key+'_query',pendingQuery);
+    const r=await siteApi('watch_music_queue_site',{type:'add',roomCode:state.watchCode,query:pendingQuery,requestId},15000);sessionStorage.removeItem(key);sessionStorage.removeItem(key+'_query');
     $('watchMusicInput').value='';
     toast(r.started?'Música iniciada.':r.cost>0?`Adicionada à fila por ₹${r.cost}.`:'Adicionada à fila.')
-  }catch(e){toast(e.message)}
+  }catch(e){if(e.pending===false){const key=`gremory_music_${state.user.uid}_${state.watchCode}`;sessionStorage.removeItem(key);sessionStorage.removeItem(key+'_query')}toast(e.message)}
   finally{state.watchMusic.adding=false;renderWatchMusic(state.watchRoom?.musicQueue||{},state.watchRoom?.musicAccess||{},state.watchRoom?.musicPlan||{},state.watchRoom?.musicPlayback||{})}
 });
 $('watchMusicSkipBtn')?.addEventListener('click',async()=>{
   if(!isWatchHost())return toast('Somente o host pode pular.');
-  try{const r=await bridgeRequest('watch_music_skip',{roomCode:state.watchCode},20000);toast(r.skipped?'Pulou para a próxima música.':'A playlist está vazia.')}catch(e){toast(e.message)}
+  try{const r=await siteApi('watch_music_queue_site',{type:'skip',roomCode:state.watchCode,currentId:currentWatchMusic(state.watchRoom?.musicQueue||{},state.watchRoom?.musicPlayback||{})?.id||''},15000);toast(r.skipped?'Pulou para a próxima música.':'A playlist está vazia.')}catch(e){toast(e.message)}
 });
 
 function renderWatchChat(obj={}){const box=$('watchChatList');if(!box)return;const rows=Object.values(obj||{}).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0)).slice(-100);box.innerHTML='';if(!rows.length){box.innerHTML='<div class="empty-state small">Sem mensagens ainda.</div>';return}rows.forEach(m=>{const d=document.createElement('div');d.className='watch-chat-message'+(m.uid===state.user?.uid?' mine':'');d.innerHTML=`<strong>${escText(m.name||'Usuário')}</strong><span>${escText(m.text||'')}</span><small>${shortDateTime(m.createdAt)}</small>`;box.appendChild(d)});box.scrollTop=box.scrollHeight}
