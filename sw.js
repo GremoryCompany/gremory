@@ -1,9 +1,10 @@
-const CACHE='gremory-v14-base-pro-20261026';
+const CACHE='gremory-v18-games-20261026';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261026-v14-base-pro',
-  '/assets/js/app.js?v=20261026-v14-base-pro',
+  '/assets/css/app.css?v=20261026-v18-games',
+  '/assets/js/app.js?v=20261026-v18-games',
+  '/assets/js/games-extra.js?v=20261026-v18-games',
   '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',

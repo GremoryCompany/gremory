@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261026-v13-15-1-login-fix">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261026-v18-games">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -557,7 +557,7 @@
 
         <section class="view games-view-pro" data-view="games">
           <div class="section-head games-page-head">
-            <div><span class="tag">JOGOS</span><h2>Salão de jogos</h2><p class="muted">Partidas maiores e multiplayer em tempo real direto pelo site. A Charlotte é usada nos jogos apenas para a carteira de Rupias do Slots.</p></div>
+            <div><span class="tag">JOGOS</span><h2>Salão de jogos</h2><p class="muted">Partidas maiores e multiplayer em tempo real direto pelo site. A Charlotte entra apenas onde há carteira de Rupias; turnos, cartas e estados dos jogos ficam no servidor/Firebase do site.</p></div>
           </div>
 
           <div class="studio-section-label game-section-label"><span>CLÁSSICO</span><h3>Jogo da velha</h3></div>
@@ -626,6 +626,40 @@
             <div class="arcade-actions"><button class="btn primary full slots-spin-button" id="slotsSpinBtn" type="button">Girar Slots</button></div>
             <details class="slot-paytable"><summary>Tabela de prêmios</summary><div><span>777</span><b>25x</b><span>♛♛♛</span><b>12x</b><span>⚡⚡⚡</span><b>8x</b><span>◆◆◆</span><b>6x</b><span>☾☾☾</span><b>5x</b><span>♥♥♥</span><b>4x</b><span>✦✦✦</span><b>3x</b><span>Qualquer dupla</span><b>1,2x</b></div></details>
           </article>
+
+
+          <div class="studio-section-label game-section-label extra-games-heading"><span>NOVOS JOGOS</span><h3>Arcade Gremory</h3></div>
+          <div class="extra-games-grid">
+            <article class="panel extra-game-card" id="nightmareCard">
+              <div class="panel-head"><div><span class="tag">21 PESADELO</span><h3>21 Pesadelo</h3><small class="muted">21 com cartas especiais originais.</small></div><span class="pill" id="nightmareStatus">Livre</span></div>
+              <div class="game-lobby-row" id="nightmareLobby"><label>Adversário<select id="nightmareFriendSelect"><option value="">Escolha um amigo</option></select></label><button class="btn primary" id="nightmareCreateBtn" type="button">Desafiar</button></div>
+              <div class="big-game-stage" id="nightmareGamePanel" hidden>
+                <div class="big-game-title"><div><strong id="nightmareTitle">21 Pesadelo</strong><span>Cartas especiais ficam privadas.</span></div><button class="btn danger-ghost" id="nightmareExitBtn" type="button">Sair</button></div>
+                <div class="card-table card-table-pvp"><div class="card-seat opponent-seat"><small>Adversário</small><div class="playing-cards" id="nightmareOpponentCards"></div><strong id="nightmareOpponentTotal">0 cartas · Total: ???</strong></div><div class="card-seat my-seat"><small>Você</small><div class="playing-cards" id="nightmareMineCards"></div><strong id="nightmareMineTotal">Total: —</strong></div></div>
+                <div class="arcade-actions"><button class="btn primary" id="nightmareHitBtn" type="button">Pedir carta</button><button class="btn" id="nightmareStandBtn" type="button">Parar</button></div><div class="arcade-actions extra-power-actions" id="nightmarePowers"></div><div class="duel-log" id="nightmareLog"></div>
+              </div>
+            </article>
+
+            <article class="panel extra-game-card" id="chaosCard">
+              <div class="panel-head"><div><span class="tag">CORES & CAOS</span><h3>Cores & Caos</h3><small class="muted">Cartas por cor com Bloqueio, Inverter, +2 e Coringa.</small></div><span class="pill" id="chaosStatus">Livre</span></div>
+              <div class="game-lobby-row" id="chaosLobby"><label>Adversário<select id="chaosFriendSelect"><option value="">Escolha um amigo</option></select></label><button class="btn primary" id="chaosCreateBtn" type="button">Desafiar</button></div>
+              <div class="big-game-stage" id="chaosGamePanel" hidden><div class="big-game-title"><div><strong>Cores & Caos</strong><span id="chaosTurnText">Aguardando...</span></div><button class="btn danger-ghost" id="chaosExitBtn" type="button">Sair</button></div><div class="chaos-table"><div><small>Carta da mesa</small><strong class="chaos-top-card" id="chaosTopCard">—</strong></div><div><small id="chaosOpponentCount">Adversário: 0 cartas</small></div></div><div class="chaos-hand" id="chaosHand"></div><div class="arcade-actions"><label>Cor do Coringa<select id="chaosColorSelect"><option value="red">Vermelho</option><option value="blue">Azul</option><option value="green">Verde</option><option value="yellow">Amarelo</option></select></label><button class="btn" id="chaosDrawBtn" type="button">Comprar carta</button></div><div class="duel-log" id="chaosLog"></div></div>
+            </article>
+
+            <article class="panel extra-game-card" id="pokerCard">
+              <div class="panel-head"><div><span class="tag">POKER BETA</span><h3>Texas Hold'em</h3><small class="muted">Mesa rápida de 2 jogadores com fichas virtuais. Sem Rupias nesta beta.</small></div><span class="pill" id="pokerStatus">Livre</span></div>
+              <div class="game-lobby-row" id="pokerLobby"><label>Adversário<select id="pokerFriendSelect"><option value="">Escolha um amigo</option></select></label><button class="btn primary" id="pokerCreateBtn" type="button">Criar mesa</button></div>
+              <div class="big-game-stage" id="pokerGamePanel" hidden><div class="big-game-title"><div><strong>Texas Hold'em</strong><span id="pokerInfo">Aguardando...</span></div><button class="btn danger-ghost" id="pokerExitBtn" type="button">Sair</button></div><small>Mesa</small><div class="playing-cards poker-board" id="pokerBoard"></div><div class="poker-seats"><div><small>Adversário</small><div class="playing-cards" id="pokerOpponent"></div></div><div><small>Você</small><div class="playing-cards" id="pokerMine"></div></div></div><div class="arcade-actions poker-actions"><button class="btn" id="pokerCheckBtn" type="button">Check</button><button class="btn" id="pokerCallBtn" type="button">Call</button><label>Aumentar para<input id="pokerRaiseInput" type="number" min="20" step="10" value="40"></label><button class="btn" id="pokerRaiseBtn" type="button">Raise</button><button class="btn" id="pokerAllInBtn" type="button">All-in</button><button class="btn danger-ghost" id="pokerFoldBtn" type="button">Fold</button></div><div class="duel-log" id="pokerLog"></div></div>
+            </article>
+
+            <article class="panel extra-game-card solo-extra-card">
+              <div class="panel-head"><div><span class="tag">CORRIDA</span><h3>Corrida de Cavalos</h3><small class="muted">Resultado calculado no bridge com RNG seguro.</small></div></div><div class="extra-solo-controls"><label>Cavalo<select id="horseSelect"><option value="nebula">Nébula · 2x</option><option value="onyx">Ônix · 3x</option><option value="valkyrie">Valquíria · 4x</option><option value="comet">Cometa · 5x</option><option value="phantom">Fantasma · 8x</option></select></label><label>Aposta<input id="horseBet" type="number" min="10" max="5000" step="10" value="50"></label><button class="btn primary" id="horseRaceBtn" type="button">Apostar e correr</button></div><div class="extra-result" id="horseResult">Escolha um cavalo.</div>
+            </article>
+
+            <article class="panel extra-game-card solo-extra-card"><div class="panel-head"><div><span class="tag">PESCA</span><h3>Pesca</h3><small class="muted" id="fishingEnergy">Energia: 5/5 · Vara Nv.1</small></div></div><div class="arcade-actions"><button class="btn primary" id="fishingCastBtn" type="button">Pescar</button><button class="btn" id="fishingSellBtn" type="button">Vender tudo</button><button class="btn" id="fishingUpgradeBtn" type="button">Melhorar vara</button></div><div class="extra-result" id="fishingLast">Procure peixes comuns, raros e lendários.</div><div class="extra-inventory" id="fishingInventory"></div></article>
+
+            <article class="panel extra-game-card solo-extra-card"><div class="panel-head"><div><span class="tag">MINERAÇÃO</span><h3>Mineração</h3><small class="muted" id="miningEnergy">Energia: 6/6 · Picareta Nv.1</small></div></div><div class="arcade-actions"><button class="btn primary" id="miningMineBtn" type="button">Minerar</button><button class="btn" id="miningSellBtn" type="button">Vender tudo</button><button class="btn" id="miningUpgradeBtn" type="button">Melhorar picareta</button></div><div class="extra-result" id="miningLast">Minere ferro, ouro, gemas e minérios lendários.</div><div class="extra-inventory" id="miningInventory"></div></article>
+          </div>
         </section>
 
         <section class="view watch-view-v2" data-view="watch">
@@ -1104,6 +1138,7 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261026-v14-base-pro"></script>
+  <script type="module" src="/assets/js/app.js?v=20261026-v18-games"></script>
+  <script type="module" src="/assets/js/games-extra.js?v=20261026-v18-games"></script>
 </body>
 </html>
