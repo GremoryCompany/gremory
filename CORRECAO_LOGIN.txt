@@ -1,15 +1,14 @@
-CORREÇÃO DO LOGIN — 27/10/2026
+GREMORY — REGISTRO DE CORREÇÃO DO LOGIN (27/10/2026)
 
-Causa encontrada: uma aspa não escapada em "Poker Texas Hold'em Beta" impedia o navegador de interpretar app.js inteiro. O formulário auxiliar podia autenticar, mas o painel não iniciava.
+A V14 recebida continha correções de sintaxe no título Poker Texas Hold'em,
+mas existia uma condição de corrida na inicialização do Auth. A inicialização
+da política de persistência agora ocorre antes da inscrição do observador de
+login e depois da criação dos controles da interface.
 
-Corrigido também:
-- A inicialização não encerra uma sessão que acabou de entrar.
-- O observador de autenticação inicia após as constantes do painel.
-- O formulário aguarda o painel e informa falhas de carregamento.
-- Atualizadas as versões dos arquivos e do cache.
+A leitura de preferência de login possui tratamento para navegadores que
+impedem acesso ao localStorage. A sessão iniciada durante a preparação da
+persistência não é derrubada por um logout atrasado.
 
-Publicação: substitua o projeto inteiro por esta pasta e faça novo deploy na sua hospedagem. Depois recarregue o site. Este ZIP não publica automaticamente as alterações.
-
-Validação: todos os arquivos JavaScript do navegador passaram na análise de sintaxe; inicialização simulada concluída; 3 testes de autenticação passaram.
-A suíte anterior mantém 9 testes aprovados e 5 falhas preexistentes em jogos/regras do banco, também presentes no ZIP original. Não foram alteradas regras de acesso para tentar contornar essas falhas.
-Login com conta real e configuração da hospedagem/Firebase ainda precisam de validação no site publicado.
+Validação local: 28 testes automatizados aprovados e todos os arquivos JS
+verificados sintaticamente. Ainda é necessário testar login verdadeiro após
+publicar na Vercel e no Firebase do ambiente real.

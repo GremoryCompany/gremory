@@ -208,7 +208,7 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   const HEAL_MS_PREMIUM=2*60*1000;
   const watchedUsers=new Set(),watchedRefs=new Map(),walletRefs=new Map(),userQueues=new Map();
   const bridgeInstanceId=`bridge_${process.pid}_${crypto.randomBytes(6).toString('hex')}`;
-  let rootWatcher=null,walletWatcher=null,healingTimer=null,syncTimer=null,raidTimer=null,backupTimer=null,premiumGroupTimer=null,syncingLinked=false,backupRunning=false,restoreRunning=false,backupRecoveryRequired=false,backupRestartRequired=false,backupAssessmentDone=false,backupRuntimeStarted=false;
+  let rootWatcher=null,walletWatcher=null,healingTimer=null,syncTimer=null,walletSyncTimer=null,raidTimer=null,backupTimer=null,premiumGroupTimer=null,syncingLinked=false,backupRunning=false,restoreRunning=false,backupRecoveryRequired=false,backupRestartRequired=false,backupAssessmentDone=false,backupRuntimeStarted=false;
 
   function savePokemonDb(db){if(typeof saveGremonDB!=='function')throw new Error('saveGremonDB não está disponível no bot.');saveGremonDB(db);}
   function ensureMon(mon){if(!mon)return null;if(garantirHp){try{garantirHp(mon)}catch{}}if(!mon.uid)mon.uid=id('pk');if(!mon.maxHp)mon.maxHp=Math.max(1,Number(mon.hp||100));if(mon.hpAtual==null)mon.hpAtual=mon.maxHp;if(Number(mon.hpAtual)<=0){mon.hpAtual=0;mon.fainted=true;}return mon;}
@@ -344,7 +344,11 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     if(new Set(jids).size!==2)throw new Error('Uma carteira não pode apostar contra si mesma.');
     if(typeof economy.delkoin!=='function'||typeof economy.addkoin!=='function')throw new Error('Sistema de Rúpias indisponível.');
     return withExclusiveKeys(walletLocks,jids,async()=>{
-      for(const jid of jids)if(balanceFor(jid)<bet)throw new Error('Um dos jogadores não possui saldo suficiente para essa aposta.');
+      for(let i=0;i<jids.length;i++){
+        const w=await siteWalletState(playerUids[i],jids[i]);
+        if(Number(w.version||0)>Number(w.syncedVersion||0))throw new Error('A carteira ainda está sincronizando uma operação. Aguarde a confirmação antes de apostar.');
+        if(balanceFor(jids[i])<bet)throw new Error('Um dos jogadores não possui saldo suficiente para essa aposta.');
+      }
       const wr=rtdb.ref(`gameWagers/${gameId}`);
       const initial={amount:bet,pot:bet*2,players:{[playerUids[0]]:true,[playerUids[1]]:true},settled:false,status:'preparing',createdAt:Date.now(),debits:{}};
       const claim=await wr.transaction(current=>current?undefined:initial,undefined,false);
@@ -362,6 +366,8 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
         });
       }
       await wr.update({status:'active',preparedAt:Date.now()});
+      // Reflect the new balance on the site without waiting for the periodic sync.
+      for(let i=0;i<jids.length;i++)await syncAccount(playerUids[i],jids[i]).catch(()=>{});
       return{amount:bet,pot:bet*2,settled:false};
     });
   }
@@ -640,6 +646,26 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
       await accountRef.update({balance:target}).catch(()=>{});
     });
   }
+  // Carteira site-side validada pelo bridge; os dados financeiros NUNCA são
+  // enviados diretamente pelo navegador. A mesma ID garante idempotência.
+  const SITE_MAX_BALANCE=1000000000000;
+  async function applySiteWalletEntry(uid,jid,operationId,delta,kind,details={}){
+    if(!/^[-a-zA-Z0-9_]{8,110}$/.test(operationId)||!Number.isSafeInteger(delta)||Math.abs(delta)>SITE_MAX_BALANCE)
+      throw new Error('Operação financeira inválida.');
+    await siteWalletState(uid,jid);
+    const wr=rtdb.ref(`siteWallets/${uid}`);
+    const tx=await wr.transaction(current=>{
+      if(!current||!Number.isSafeInteger(Number(current.balance)))return;
+      if(current.receipts?.[operationId])return current;
+      const balance=Number(current.balance)+delta;
+      if(!Number.isSafeInteger(balance)||balance<0||balance>SITE_MAX_BALANCE)return;
+      return{...current,balance,version:Number(current.version||0)+1,updatedAt:Date.now(),origin:'site-bridge',receipts:{...(current.receipts||{}),[operationId]:{at:Date.now(),delta,kind,...details,balance}}};
+    },undefined,false);
+    if(!tx.committed)throw new Error('Saldo insuficiente ou limite da carteira excedido.');
+    const wallet=tx.snapshot.val()||{},receipt=wallet.receipts?.[operationId];
+    // O listener siteWallets espelha para o JSON da Charlotte sem segurar a tela.
+    return{balance:Number(wallet.balance),receipt,version:Number(wallet.version||0)};
+  }
   function watchSiteWallet(uid){
     if(walletRefs.has(uid))return;
     const walletRef=rtdb.ref(`siteWallets/${uid}`);
@@ -768,18 +794,20 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
 
   async function processDaily(uid,jid){if(!registeredFor(jid))throw new Error('Use /reg na Charlotte antes de coletar o Daily pelo site.');if(typeof mining.checkDayli!=='function'||typeof mining.addDayli!=='function')throw new Error('Sistema Daily não disponível no bot.');if(mining.checkDayli(jid)){const release=Number(mining.timeDayli?.(jid)||Date.now());return{claimed:false,cooldownMs:Math.max(0,release-Date.now()),message:'Você já coletou o Daily. Volte quando o cooldown terminar.'};}await mining.addDayli(jid,24*60*60*1000);const sorte=Math.random()*100;let rupias,rewardName;if(sorte<3){rupias=crypto.randomInt(700,1001);rewardName='JACKPOT DIÁRIO';}else if(sorte<15){rupias=crypto.randomInt(400,601);rewardName='Recompensa de Ouro';}else if(sorte<45){rupias=crypto.randomInt(300,451);rewardName='Recompensa de Prata';}else{rupias=crypto.randomInt(200,301);rewardName='Recompensa Diária';}const xp=crypto.randomInt(20,61);await economy.addkoin(jid,rupias);await economy.addXp(jid,xp);try{await achievements.registrarEventoConquista?.({sender:jid,evento:'daily',qtd:1});await achievements.registrarEventoConquista?.({sender:jid,evento:'dinheiro_ganho',qtd:rupias});}catch{}const balance=balanceFor(jid);await syncAccount(uid,jid).catch(()=>{});return{claimed:true,rewardName,rupias,xp,balance};}
   async function processBuyCustomization(uid,jid,data){
-    const itemId=String(data.itemId||'').trim().toLowerCase(),item=await resolveCustomizationItem(itemId);if(!item)throw new Error('Personalização inválida.');
+    const itemId=String(data.itemId||'').trim().toLowerCase(),item=await resolveCustomizationItem(itemId);
+    if(!item)throw new Error('Personalização inválida.');
     if(!registeredFor(jid))throw new Error('Use /reg na Charlotte antes de usar rúpias no site.');
-    const invRef=rtdb.ref(`siteInventory/${uid}/items/${itemId}`),owned=await invRef.once('value');
-    if(!owned.exists()){
-      const balance=balanceFor(jid);if(balance<item.price)throw new Error(`Saldo insuficiente. Você possui ₹${balance}.`);
-      if(typeof economy.delkoin!=='function')throw new Error('Sistema de rúpias não disponível.');
-      await economy.delkoin(jid,item.price);try{await achievements.registrarEventoConquista?.({sender:jid,evento:'dinheiro_gasto',qtd:item.price});}catch{}
+    const invRef=rtdb.ref(`siteInventory/${uid}/items/${itemId}`),owned=(await invRef.once('value')).exists();
+    let balance=Number((await siteWalletState(uid,jid)).balance);
+    if(!owned){
+      // O ID da compra é fixo por conta/item, portanto timeout e retry não cobram duas vezes.
+      const payment=await applySiteWalletEntry(uid,jid,`custom_${itemId}`,-Number(item.price),'customization',{itemId,price:Number(item.price)});
+      balance=payment.balance;
       await invRef.set({id:itemId,name:item.name,price:item.price,slot:item.slot,mediaUrl:item.mediaUrl||'',mediaKind:item.mediaKind||'',purchasedAt:now()});
+      try{await achievements.registrarEventoConquista?.({sender:jid,evento:'dinheiro_gasto',qtd:item.price})}catch{}
     }
     await rtdb.ref(`siteCustomization/${uid}`).update({[`equipped/${item.slot}`]:itemId,active:itemId,updatedAt:now()});
-    await syncAccount(uid,jid).catch(()=>{});
-    return{itemId,slot:item.slot,price:item.price,balance:balanceFor(jid),alreadyOwned:owned.exists()};
+    return{itemId,slot:item.slot,price:item.price,balance,alreadyOwned:owned};
   }
   async function processEquipCustomization(uid,data){
     const itemId=String(data.itemId||'').trim().toLowerCase(),item=await resolveCustomizationItem(itemId);if(!item)throw new Error('Personalização inválida.');
@@ -890,6 +918,37 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
     return{sent:true,title:name,message:'Arquivo enviado no WhatsApp pela Charlotte.'};
   }
 
+  async function processSiteGameAccept(uid,data){
+    const challengeId=String(data.challengeId||'');
+    if(!/^[a-zA-Z0-9_-]{8,120}$/.test(challengeId))throw new Error('Convite inválido.');
+    const receiptRef=rtdb.ref(`siteGameAccepts/${uid}/${challengeId}`);
+    const previous=(await receiptRef.once('value')).val();
+    if(previous?.status==='done'&&previous.gameId)return{gameId:previous.gameId,recovered:true};
+    if(previous)throw new Error('O aceite anterior ainda está em processamento ou análise. Não repita uma aposta.');
+    const invitationRef=rtdb.ref(`siteGameChallenges/${uid}/${challengeId}`),inv=(await invitationRef.once('value')).val();
+    if(!inv||inv.id!==challengeId||!['ttt','blackjack','hangman'].includes(inv.type))throw new Error('Convite não encontrado.');
+    const targetUid=String(inv.fromUid||'');
+    if(!/^[a-zA-Z0-9_-]{1,128}$/.test(targetUid)||targetUid===uid)throw new Error('Jogador inválido.');
+    if(!Number.isFinite(Number(inv.createdAt))||Date.now()-Number(inv.createdAt)>7*86400000||Number(inv.createdAt)>Date.now()+60000)throw new Error('Este convite expirou.');
+    if(!(await reciprocalFriends(uid,targetUid)))throw new Error('Vocês precisam ser amigos confirmados.');
+    const bet=normalizeGameBet(inv.bet),mode=inv.mode==='nightmare'?'nightmare':'classic';
+    // Confere o vínculo somente se a partida envolve rúpias.
+    if(bet&&(!await linkedJidByUid(uid)||!await linkedJidByUid(targetUid)))throw new Error('Para apostar, os dois jogadores precisam vincular a Charlotte.');
+    const claimed=await receiptRef.transaction(v=>v?undefined:{status:'processing',type:inv.type,bet,by:uid,fromUid:targetUid,startedAt:Date.now()},undefined,false);
+    if(!claimed.committed)throw new Error('Aceite já recebido. Aguarde a confirmação; não aposte duas vezes.');
+    try{
+      const payload={targetUid,bet,mode};
+      const result=inv.type==='ttt'?await processTttCreate(uid,payload):inv.type==='blackjack'?await processBlackjackCreate(uid,payload):await processHangmanCreate(uid,payload);
+      await receiptRef.update({status:'done',gameId:result.gameId,finishedAt:Date.now()});
+      await invitationRef.remove().catch(()=>{});
+      return result;
+    }catch(e){
+      // A criação de uma partida apostada pode ter debitado antes da falha.
+      // Em vez de liberar outro aceite, marque para reconciliação manual.
+      await receiptRef.update({status:'review',error:String(e.message||e).slice(0,200),reviewAt:Date.now()}).catch(()=>{});
+      throw e;
+    }
+  }
   async function processTttCreate(uid,data){
     const targetUid=String(data.targetUid||'');if(!targetUid||targetUid===uid)throw new Error('Amigo inválido.');if(!(await reciprocalFriends(uid,targetUid)))throw new Error('Jogue apenas com amigos confirmados.');await ensureNoActiveGame('ticTacToeIndex',[uid,targetUid]);
     const[a,b]=await Promise.all([rtdb.ref(`directory/${uid}`).once('value'),rtdb.ref(`directory/${targetUid}`).once('value')]),gameId=id('ttt'),first=crypto.randomInt(0,2)===0?uid:targetUid,createdAt=Date.now(),wager=await prepareGameWager(gameId,[uid,targetUid],data.bet),game={id:gameId,status:'active',createdAt,updatedAt:createdAt,turnUid:first,board:['','','','','','','','',''],wager,players:{[uid]:{uid,name:a.val()?.nome||'Jogador',symbol:'X'},[targetUid]:{uid:targetUid,name:b.val()?.nome||'Jogador',symbol:'O'}},log:{}};
@@ -900,7 +959,7 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
     const jid=await linkedJidByUid(uid);if(!jid||typeof economy.addkoin!=='function')return{rupias:0,limitReached:false};const db=readJson(tttRewardPath,{}),day=new Date().toISOString().slice(0,10),row=db[jid]||{};if(row.day!==day){row.day=day;row.wins=0}const premium=readPremium(jid).active,limit=premium?8:5;if(Number(row.wins||0)>=limit){db[jid]=row;writeJson(tttRewardPath,db);return{rupias:0,limitReached:true,limit,premium}}const rupias=premium?40:30;await economy.addkoin(jid,rupias);row.wins=Number(row.wins||0)+1;db[jid]=row;writeJson(tttRewardPath,db);return{rupias,limitReached:false,limit,premium,wins:row.wins};
   }
   async function processTttMove(uid,data){
-    const gameId=String(data.gameId||''),gr=rtdb.ref(`ticTacToeGames/${gameId}`),sn=await gr.once('value');if(!sn.exists())throw new Error('Partida não encontrada.');const g={id:gameId,...sn.val()};if(g.status!=='active'||g.turnUid!==uid)throw new Error('Ainda não é sua vez.');const idx=Number(data.index);if(!Number.isInteger(idx)||idx<0||idx>8)throw new Error('Jogada inválida.');const board=Array.isArray(g.board)?g.board.slice():Array.from({length:9},(_,i)=>g.board?.[i]||'');if(board[idx])throw new Error('Essa casa já foi usada.');const me=g.players?.[uid],otherUid=Object.keys(g.players||{}).find(x=>x!==uid);board[idx]=me.symbol;const winner=tttWinner(board),draw=!winner&&board.every(Boolean),patch={board,updatedAt:Date.now(),[`log/${id('log')}`]:{text:`${me.name} marcou ${me.symbol}.`,at:now()}};let reward=null;if(winner||draw){patch.status='finished';patch.winnerUid=winner?uid:null;patch.finishedAt=Date.now();patch.turnUid=null;if(winner)reward=await grantTttReward(uid);patch.reward=reward}else patch.turnUid=otherUid;await gr.update(patch);if(winner||draw){await settleGameWager(gameId,winner?uid:null);const up=Date.now();await Promise.all(Object.keys(g.players).map(x=>rtdb.ref(`ticTacToeIndex/${x}/${gameId}`).update({status:'finished',winnerUid:winner?uid:null,updatedAt:up,reward:x===uid?reward:null})));}return{winnerUid:winner?uid:null,draw,reward};
+    const gameId=String(data.gameId||''),gr=rtdb.ref(`ticTacToeGames/${gameId}`),sn=await gr.once('value');if(!sn.exists())throw new Error('Partida não encontrada.');const g={id:gameId,...sn.val()};if(g.status!=='active'||g.turnUid!==uid)throw new Error('Ainda não é sua vez.');const idx=Number(data.index);if(!Number.isInteger(idx)||idx<0||idx>8)throw new Error('Jogada inválida.');const board=Array.isArray(g.board)?g.board.slice():Array.from({length:9},(_,i)=>g.board?.[i]||'');if(board[idx])throw new Error('Essa casa já foi usada.');const me=g.players?.[uid],otherUid=Object.keys(g.players||{}).find(x=>x!==uid);board[idx]=me.symbol;const winner=tttWinner(board),draw=!winner&&board.every(Boolean),patch={board,updatedAt:Date.now(),[`log/${id('log')}`]:{text:`${me.name} marcou ${me.symbol}.`,at:now()}};let reward=null;if(winner||draw){patch.status='finished';patch.winnerUid=winner?uid:null;patch.finishedAt=Date.now();patch.turnUid=null;if(winner&&Number(g.wager?.amount||0)>0)reward=await grantTttReward(uid);patch.reward=reward}else patch.turnUid=otherUid;await gr.update(patch);if(winner||draw){await settleGameWager(gameId,winner?uid:null);const up=Date.now();await Promise.all(Object.keys(g.players).map(x=>rtdb.ref(`ticTacToeIndex/${x}/${gameId}`).update({status:'finished',winnerUid:winner?uid:null,updatedAt:up,reward:x===uid?reward:null})));}return{winnerUid:winner?uid:null,draw,reward};
   }
   async function processTttExit(uid,data){const gameId=String(data.gameId||''),gr=rtdb.ref(`ticTacToeGames/${gameId}`),sn=await gr.once('value');if(!sn.exists())return{};const g={id:gameId,...sn.val()};if(g.status!=='active'||!g.players?.[uid])return{};const winnerUid=Object.keys(g.players).find(x=>x!==uid),up=Date.now();await gr.update({status:'finished',winnerUid,leftUid:uid,finishReason:'exit',finishedAt:up,updatedAt:up,turnUid:null,[`log/${id('log')}`]:{text:`${g.players[uid].name} saiu da partida.`,at:now()}});await settleGameWager(gameId,winnerUid);await Promise.all(Object.keys(g.players).map(x=>rtdb.ref(`ticTacToeIndex/${x}/${gameId}`).update({status:'finished',winnerUid,updatedAt:up})));return{winnerUid};}
 
@@ -1031,14 +1090,26 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
   function slotPayout(items,bet){const syms=items.map(x=>x.symbol);if(syms[0]===syms[1]&&syms[1]===syms[2])return{payout:Math.floor(bet*items[0].mult),jackpot:syms[0]==='7',label:`Trinca ${syms[0]}`};if(new Set(syms).size===2)return{payout:Math.floor(bet*1.2),jackpot:false,label:'Dupla'};return{payout:0,jackpot:false,label:'Sem prêmio'};}
   function pickSlotItem(){const total=SLOT_ITEMS.reduce((n,x)=>n+Number(x.weight||0),0),roll=crypto.randomInt(Math.max(1,total));let acc=0;for(const item of SLOT_ITEMS){acc+=Number(item.weight||0);if(roll<acc)return item}return SLOT_ITEMS[0];}
   async function processSlotsSpin(uid,jid,data){
-    const bet=Number(data.bet);if(!Number.isSafeInteger(bet)||bet<10||bet>5000)throw new Error('A aposta deve ficar entre ₹10 e ₹5.000.');
-    if(!registeredFor(jid))throw new Error('Use /reg na Charlotte antes de jogar Slots.');
-    if(typeof economy.delkoin!=='function'||typeof economy.addkoin!=='function')throw new Error('Sistema de rúpias indisponível.');
-    const previousBalance=balanceFor(jid);if(previousBalance<bet)throw new Error(`Saldo insuficiente. Você possui ₹${previousBalance}.`);
-    const items=[pickSlotItem(),pickSlotItem(),pickSlotItem()],symbols=items.map(x=>x.symbol),result=slotPayout(items,bet),net=result.payout-bet;
-    if(net<0)await economy.delkoin(jid,-net);else if(net>0)await economy.addkoin(jid,net);
-    const balance=balanceFor(jid);try{if(net>0)await achievements.registrarEventoConquista?.({sender:jid,evento:'dinheiro_ganho',qtd:net})}catch{}
-    await syncAccount(uid,jid).catch(()=>{});return{bet,payout:result.payout,net,balance,symbols,jackpot:result.jackpot,label:result.label,settlement:'done'};
+    const bet=Number(data.bet),requestId=String(data.requestId||'');
+    if(!/^spin_[a-f0-9]{32}$/.test(requestId))throw new Error('Identificador do giro inválido.');
+    if(!Number.isSafeInteger(bet)||bet<10||bet>1000000000)throw new Error('Aposta inválida: entre ₹10 e ₹1.000.000.000.');
+    if(!jid||!registeredFor(jid))throw new Error('Vincule e registre-se na Charlotte antes de apostar.');
+    const current=await siteWalletState(uid,jid);
+    const previous=current?.receipts?.[requestId];
+    if(previous){
+      if(previous.kind!=='slot'||Number(previous.bet)!==bet)throw new Error('ID de giro já utilizado para outra aposta.');
+      return{...previous.spin,spin:previous.spin,balance:Number(previous.balance),settlement:'done',recovered:true};
+    }
+    // Não limpe reservas antigas sem saber se o bot já debitou aquele giro.
+    const oldPending=(await rtdb.ref(`siteSlotsPending/${uid}`).once('value')).val();
+    if(oldPending)throw new Error('Existe uma aposta antiga pendente; o histórico precisa ser conferido antes de apostar novamente.');
+    if(Number(current.balance)<bet)throw new Error(`Saldo insuficiente. Você possui ₹${current.balance}.`);
+    const items=[pickSlotItem(),pickSlotItem(),pickSlotItem()],symbols=items.map(x=>x.symbol),out=slotPayout(items,bet);
+    const spin={spinId:requestId,bet,payout:out.payout,net:out.payout-bet,symbols,jackpot:out.jackpot,label:out.label,createdAt:Date.now()};
+    const paid=await applySiteWalletEntry(uid,jid,requestId,spin.net,'slot',{bet,spin});
+    if(paid.receipt?.kind!=='slot'||Number(paid.receipt.bet)!==bet)throw new Error('Operação financeira já registrada com outro valor.');
+    const result=paid.receipt.spin||spin;
+    return{...result,spin:result,balance:paid.balance,settlement:'done'};
   }
 
   async function processSlotsSettle(uid,jid,data,jobId){
@@ -1195,8 +1266,7 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
     if(!roomSn.exists())throw new Error('Sala não encontrada.');
     const room=roomSn.val()||{};
     if(!room.members?.[uid])throw new Error('Entre na sala antes de usar música.');
-    const voiceSn=await rtdb.ref(`watchVoice/${roomCode}/${uid}/audio`).once('value');
-    if(voiceSn.val()!==true)throw new Error('Entre na chamada de voz para usar a música da sala.');
+    // Música pertence à sala; não depende de microfone nem de presença na chamada de voz.
     return room;
   }
   function watchMusicRoomPlanFromRoom(room={}){
@@ -1226,39 +1296,36 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
   }
   async function processWatchMusicActivate(uid,jid,data,jobId=''){
     const roomCode=String(data.roomCode||'').trim().toUpperCase();
-    if(!roomCode)throw new Error('Sala inválida.');
+    if(!/^[A-Z0-9_-]{4,32}$/.test(roomCode))throw new Error('Código da sala inválido.');
     const room=await watchMusicRoomState(roomCode,uid);
     const existingPlan=await ensureWatchMusicRoomPlan(roomCode,room);
     if(existingPlan?.active)return{alreadyActive:true,cost:0,plan:existingPlan,premium:!!existingPlan.premiumAtActivation};
-    if(!jid)throw new Error('Vincule sua conta à Charlotte para ativar a música da sala.');
-
-    const cost=50,balance=balanceFor(jid);
-    if(balance<cost)throw new Error(`Você precisa de ₹${cost} para ativar a música nesta sala. Saldo: ₹${balance}.`);
-    if(typeof economy.delkoin!=='function')throw new Error('Sistema de rúpias não disponível.');
-    // Uma trava na sala é registrada ANTES do débito. Em caso de reinício
-    // durante a cobrança, a operação passa por revisão: NUNCA debitar duas vezes.
-    const lock=rtdb.ref(`watchRooms/${roomCode}/musicActivationLock`);
-    const claim=await lock.transaction(current=>current?undefined:{status:'processing',jobId,uid,startedAt:Date.now()},undefined,false);
-    if(!claim.committed)throw new Error('Ativação pendente de confirmação. Não pague novamente.');
+    if(!jid)throw new Error('Vincule a Charlotte para ativar a música.');
+    const wallet=await siteWalletState(uid,jid),cost=50;
+    if(Number(wallet.balance)<cost)throw new Error(`Saldo insuficiente para ativar a música: ₹${wallet.balance}.`);
+    // Uma sala só pode ser ativada uma vez; a trava persiste em caso de queda.
+    const lock=rtdb.ref(`watchRooms/${roomCode}/musicActivationLock`),opId=`music_${roomCode}`;
+    const claim=await lock.transaction(v=>v?undefined:{status:'processing',jobId,uid,startedAt:Date.now()},undefined,false);
+    if(!claim.committed){
+      const fresh=(await rtdb.ref(`watchRooms/${roomCode}/musicPlan`).once('value')).val();
+      if(fresh?.active)return{alreadyActive:true,cost:0,plan:fresh};
+      throw new Error('Esta sala tem uma ativação em análise. Nenhuma nova cobrança foi feita.');
+    }
+    let paid;
+    try{paid=await applySiteWalletEntry(uid,jid,opId,-cost,'music_activation',{roomCode,cost})}
+    catch(e){await lock.remove().catch(()=>{});throw e}
     const premium=readPremium(jid).active,activatedAt=Date.now();
     const access={active:true,activatedAt,activationCost:cost,used:0,premiumAtActivation:premium};
     const plan={active:true,activatedBy:uid,activatedAt,activationCost:cost,used:0,premiumAtActivation:premium,premium};
     try{
-      await economy.delkoin(jid,cost);
       await rtdb.ref().update({
         [`watchRooms/${roomCode}/musicAccess/${uid}`]:access,
         [`watchRooms/${roomCode}/musicPlan`]:plan,
         [`watchRooms/${roomCode}/musicActivationLock/status`]:'done',
         [`watchRooms/${roomCode}/musicActivationLock/finishedAt`]:Date.now()
       });
-    }catch(e){
-      await lock.update({status:'review',reviewAt:Date.now(),error:'Conferir cobrança e ativação'}).catch(()=>{});
-      throw new Error('Ativação em verificação; confira a sala antes de solicitar outra cobrança.');
-    }
-    // O estado da sala já está publicado. A sincronização da carteira não
-    // deve prolongar a resposta do botão de música.
-    syncAccount(uid,jid).catch(e=>logger.log('[WATCH MUSIC] atualização de saldo:',e.message));
-    return{alreadyActive:false,cost,access,plan,premium};
+    }catch(e){await lock.update({status:'review',reviewAt:Date.now()}).catch(()=>{});throw new Error('Música paga, mas ativação em verificação. Não pague novamente.');}
+    return{alreadyActive:false,cost,access,plan,premium,balance:paid.balance};
   }
   async function processWatchMusicAdd(uid,jid,data,jobId=''){
     const roomCode=String(data.roomCode||'').trim().toUpperCase(),query=String(data.query||'').trim().slice(0,160);
@@ -1297,15 +1364,14 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
     const cost=premium?0:(used<10?0:5);
     if(cost>0){
       if(!jid)throw new Error(`As 10 músicas inclusas da sala acabaram. Vincule a Charlotte para pagar ₹${cost} por esta faixa.`);
-      const balance=balanceFor(jid);
-      if(balance<cost)throw new Error(`As 10 músicas inclusas da sala acabaram. Você precisa de ₹${cost} para adicionar esta faixa.`);
-      if(typeof economy.delkoin!=='function')throw new Error('Sistema de rúpias não disponível.');
+      const wallet=await siteWalletState(uid,jid);
+      if(Number(wallet.balance)<cost)throw new Error(`As 10 músicas inclusas da sala acabaram. Você precisa de ₹${cost} para adicionar esta faixa.`);
       const receiptRef=rtdb.ref(`watchRooms/${roomCode}/musicPaidJobs/${jobId}`);
       const claim=await receiptRef.transaction(v=>v?undefined:{uid,cost,status:'processing',at:Date.now()},undefined,false);
       if(!claim.committed)throw new Error('Esta música já tem uma cobrança pendente; verifique a fila.');
-      try{await economy.delkoin(jid,cost)}catch(e){
-        await receiptRef.update({status:'review',at:Date.now()}).catch(()=>{});
-        throw new Error('Cobrança da música em verificação. Não tente novamente até conferir o saldo.');
+      try{await applySiteWalletEntry(uid,jid,`musicq_${roomCode}_${jobId}`,-cost,'music_track',{roomCode,cost})}catch(e){
+        await receiptRef.remove().catch(()=>{});
+        throw e;
       }
     }
 
@@ -1481,9 +1547,8 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
   }
 
   async function siteAdmin(uid){
-    try{const user=await admin.auth?.().getUser?.(uid);if(String(user?.email||'').trim().toLowerCase()==='losermodder@gmail.com')return true}catch{}
-    const sn=await rtdb.ref(`profiles/${uid}`).once('value').catch(()=>null);
-    return String(sn?.val?.()?.email||'').trim().toLowerCase()==='losermodder@gmail.com';
+    try{const user=await admin.auth().getUser(uid);return !user?.disabled&&String(user?.email||'').trim().toLowerCase()==='losermodder@gmail.com';}
+    catch(e){logger.log('[SITE ADMIN] Firebase Auth:',e.message);return false}
   }
   function raidBossFromPool(){
     const base={...SITE_RAID_BOSSES[crypto.randomInt(0,SITE_RAID_BOSSES.length)]};
@@ -1504,14 +1569,17 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
     notifyRaidPokemonGroups(raid).catch(e=>logger.log('[SITE RAID] anúncio nos grupos:',e.message));
     const ps=await rtdb.ref('profiles').once('value').catch(()=>null);const profiles=ps?.val?.()||{};
     for(const[uid,p]of Object.entries(profiles)){
-      if(!p?.raidWhatsappNotify)continue;const jid=await linkedJidByUid(uid).catch(()=>null);if(jid)await sendWhats(jid,`⚔️ *RAID GLOBAL GREMORY*\n${raid.boss.name} (${raid.boss.types.map(typeName).join(' / ')}) apareceu no site!\n\nEntre em ${siteOrigin}/#pokemon para atacar.`);await new Promise(r=>setTimeout(r,80));
+      if(p?.raidWhatsappNotify===false)continue;const jid=await linkedJidByUid(uid).catch(()=>null);if(jid)await sendWhats(jid,`⚔️ *RAID GLOBAL GREMORY*\n${raid.boss.name} (${raid.boss.types.map(typeName).join(' / ')}) apareceu no site!\n\nEntre em ${siteOrigin}/#pokemon para atacar.\n\nPara desativar os avisos: Perfil > avisos do site.`);await new Promise(r=>setTimeout(r,80));
     }
   }
   async function startSiteRaid({by='auto',force=false}={}){
     const rr=rtdb.ref('pokemonSiteRaid/current'),sn=await rr.once('value'),existing=sn.val();
     if(existing?.status==='active'&&Number(existing.expiresAt||0)>Date.now()&&!force)throw new Error('Já existe uma raid ativa.');
     const pick=raidBossFromPool(),startedAt=Date.now(),raid={id:id('sraid'),status:'active',tier:pick.tier,boss:pick.boss,hp:pick.maxHp,maxHp:pick.maxHp,startedAt,expiresAt:startedAt+30*60*1000,startedBy:by,participants:{},log:{}};
-    await rr.set(raid);await rtdb.ref('pokemonSiteRaidConfig').update({lastStartedAt:startedAt,lastAutoAt:by==='auto'?startedAt:((await rtdb.ref('pokemonSiteRaidConfig/lastAutoAt').once('value')).val()||0)}).catch(()=>{});await notifyRaidStarted(raid);return raid;
+    const claim=await rr.transaction(current=>current?.status==='active'&&Number(current.expiresAt||0)>Date.now()&&!force?undefined:raid,undefined,false);
+    if(!claim.committed)throw new Error('Já existe uma raid ativa.');
+    await rtdb.ref('pokemonSiteRaidConfig').update({lastStartedAt:startedAt,lastAutoAt:by==='auto'?startedAt:((await rtdb.ref('pokemonSiteRaidConfig/lastAutoAt').once('value')).val()||0)}).catch(()=>{});
+    notifyRaidStarted(raid).catch(e=>logger.log('[SITE RAID] Notificações:',e.message));return raid;
   }
   async function finishSiteRaidRewards(raidId){
     const rr=rtdb.ref('pokemonSiteRaid/current');let claimed=null;
@@ -1570,11 +1638,11 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
     const type=String(data?.type||'');
     try{
       if(!data||typeof data!=='object')return;
-      let payload={};const recoveryAllowed=new Set(['admin_restore_backup','admin_backup_now','admin_reset_charlotte_link','admin_create_link_code']);if(backupRestartRequired&&!recoveryAllowed.has(type))throw new Error('Backup restaurado. Reinicie a Charlotte para carregar os JSONs restaurados antes de continuar.');const jid=await linkedJidByUid(uid);const noLink=new Set(['ttt_create','ttt_move','ttt_exit','blackjack_create','blackjack_move','blackjack_exit','hangman_create','hangman_guess','hangman_exit','site_raid_start','site_raid_auto','watch_music_add','watch_music_skip','watch_music_advance','admin_grant_currency','admin_grant_premium','admin_premium_group_set','admin_store_upsert','admin_store_delete','admin_backup_now','admin_restore_backup','admin_reset_charlotte_link','admin_create_link_code','admin_feed_announce']);if(!jid&&!noLink.has(type))throw new Error('Conta não vinculada.');
+      let payload={};const recoveryAllowed=new Set(['admin_restore_backup','admin_backup_now','admin_reset_charlotte_link','admin_create_link_code']);if(backupRestartRequired&&!recoveryAllowed.has(type))throw new Error('Backup restaurado. Reinicie a Charlotte para carregar os JSONs restaurados antes de continuar.');const jid=await linkedJidByUid(uid);const noLink=new Set(['site_game_accept','ttt_create','ttt_move','ttt_exit','blackjack_create','blackjack_move','blackjack_exit','hangman_create','hangman_guess','hangman_exit','site_raid_start','site_raid_auto','watch_music_add','watch_music_skip','watch_music_advance','admin_grant_currency','admin_grant_premium','admin_premium_group_set','admin_store_upsert','admin_store_delete','admin_backup_now','admin_restore_backup','admin_reset_charlotte_link','admin_create_link_code','admin_feed_announce']);if(!jid&&!noLink.has(type))throw new Error('Conta não vinculada.');
       if(type==='sync_pokemon')payload={pokemon:await syncPokemon(uid,jid)};
       else if(type==='sync_account')payload=await syncAccount(uid,jid);
       else if(type==='daily_claim')payload=await processDaily(uid,jid);
-      else if(type==='buy_customization')payload=await processBuyCustomization(uid,jid,data);
+      else if(type==='buy_customization')payload=await withExclusiveKeys(walletLocks,[jid],()=>processBuyCustomization(uid,jid,data));
       else if(type==='equip_customization')payload=await processEquipCustomization(uid,data);
       else if(type==='premium_checkout')payload=await processPremiumCheckout(uid,jid,data);
       else if(type==='premium_rupias_buy')payload=await processPremiumRupiasBuy(uid,jid,data);
@@ -1609,13 +1677,14 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
       else if(type==='admin_restore_backup')payload=await processAdminRestoreBackup(uid);
       else if(type==='admin_create_link_code')payload=await processAdminCreateLinkCode(uid,data);
       else if(type==='admin_reset_charlotte_link')payload=await processAdminResetCharlotteLink(uid,data);
-      else if(type==='ttt_create')payload=await processTttCreate(uid,data);
+      else if(type==='site_game_accept')payload=await withExclusiveKeys(gameActionLocks,['accept:'+uid+':'+String(data.challengeId||'')],()=>processSiteGameAccept(uid,data));
+      else if(type==='ttt_create')throw new Error('Aceite um convite válido para iniciar a partida.');
       else if(type==='ttt_move')payload=await withExclusiveKeys(gameActionLocks,['ttt:'+String(data.gameId||'')],()=>processTttMove(uid,data));
       else if(type==='ttt_exit')payload=await withExclusiveKeys(gameActionLocks,['ttt:'+String(data.gameId||'')],()=>processTttExit(uid,data));
-      else if(type==='blackjack_create')payload=await processBlackjackCreate(uid,data);
+      else if(type==='blackjack_create')throw new Error('Aceite um convite válido para iniciar a partida.');
       else if(type==='blackjack_move')payload=await withExclusiveKeys(gameActionLocks,['blackjack:'+String(data.gameId||'')],()=>processBlackjackMove(uid,data));
       else if(type==='blackjack_exit')payload=await withExclusiveKeys(gameActionLocks,['blackjack:'+String(data.gameId||'')],()=>processBlackjackExit(uid,data));
-      else if(type==='hangman_create')payload=await processHangmanCreate(uid,data);
+      else if(type==='hangman_create')throw new Error('Aceite um convite válido para iniciar a partida.');
       else if(type==='hangman_guess')payload=await withExclusiveKeys(gameActionLocks,['hangman:'+String(data.gameId||'')],()=>processHangmanGuess(uid,data));
       else if(type==='hangman_exit')payload=await withExclusiveKeys(gameActionLocks,['hangman:'+String(data.gameId||'')],()=>processHangmanExit(uid,data));
       else if(type==='slots_spin')payload=await withExclusiveKeys(walletLocks,[jid],()=>processSlotsSpin(uid,jid,data));
@@ -1653,10 +1722,10 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
     userRef.on('child_added',handler);
     watchedRefs.set(uid,{userRef,handler});
   }
-  function startOperationalRuntime({allowAutoBackup=true}={}){if(backupRuntimeStarted)return;backupRuntimeStarted=true;processDueHealingJobs().catch(()=>{});healingTimer=setInterval(()=>processDueHealingJobs().catch(()=>{}),30000);healingTimer.unref?.();setTimeout(()=>syncLinkedAccounts().catch(()=>{}),600).unref?.();setTimeout(()=>restoreTinderFromFirebase().catch(()=>{}),900).unref?.();setTimeout(()=>maybeAutoSiteRaid().catch(()=>{}),1200).unref?.();setTimeout(()=>checkPremiumGroups().catch(()=>{}),1500).unref?.();syncTimer=setInterval(()=>syncLinkedAccounts().catch(()=>{}),180000);syncTimer.unref?.();raidTimer=setInterval(()=>maybeAutoSiteRaid().catch(()=>{}),30000);raidTimer.unref?.();premiumGroupTimer=setInterval(()=>checkPremiumGroups().catch(()=>{}),30000);premiumGroupTimer.unref?.();if(allowAutoBackup){setTimeout(()=>backupOperationalJsons(false).catch(e=>logger.log('[FIREBASE BACKUP] inicial:',e.message)),10000).unref?.();backupTimer=setInterval(()=>backupOperationalJsons(false).catch(e=>logger.log('[FIREBASE BACKUP] ciclo:',e.message)),10*60*1000);backupTimer.unref?.();}else logger.log('🛡️ BACKUP REMOTO PROTEGIDO: backup automático pausado, mas Slots/Raid/sync e demais funções continuam ativas.');}
+  function startOperationalRuntime({allowAutoBackup=true}={}){if(backupRuntimeStarted)return;backupRuntimeStarted=true;processDueHealingJobs().catch(()=>{});healingTimer=setInterval(()=>processDueHealingJobs().catch(()=>{}),30000);healingTimer.unref?.();setTimeout(()=>syncLinkedAccounts().catch(()=>{}),600).unref?.();setTimeout(()=>restoreTinderFromFirebase().catch(()=>{}),900).unref?.();setTimeout(()=>maybeAutoSiteRaid().catch(()=>{}),1200).unref?.();setTimeout(()=>checkPremiumGroups().catch(()=>{}),1500).unref?.();syncTimer=setInterval(()=>syncLinkedAccounts().catch(()=>{}),180000);syncTimer.unref?.();walletSyncTimer=setInterval(()=>{for(const uid of walletRefs.keys())(async()=>{await mirrorSiteWallet(uid);const jid=await linkedJidByUid(uid);if(!jid)return;const wallet=await siteWalletState(uid,jid);await rtdb.ref(`charlotteSync/${uid}/account/balance`).set(Number(wallet.balance));})().catch(e=>logger.log('[SITE WALLET] sync:',uid,e.message))},12000);walletSyncTimer.unref?.();raidTimer=setInterval(()=>maybeAutoSiteRaid().catch(()=>{}),30000);raidTimer.unref?.();premiumGroupTimer=setInterval(()=>checkPremiumGroups().catch(()=>{}),30000);premiumGroupTimer.unref?.();if(allowAutoBackup){setTimeout(()=>backupOperationalJsons(false).catch(e=>logger.log('[FIREBASE BACKUP] inicial:',e.message)),10000).unref?.();backupTimer=setInterval(()=>backupOperationalJsons(false).catch(e=>logger.log('[FIREBASE BACKUP] ciclo:',e.message)),10*60*1000);backupTimer.unref?.();}else logger.log('🛡️ BACKUP REMOTO PROTEGIDO: backup automático pausado, mas Slots/Raid/sync e demais funções continuam ativas.');}
   async function initializeOperationalRuntime(){const state=await assessOperationalBackupState();backupRestartRequired=false;if(state.recoveryRequired)logger.log(`🛟 BACKUP REMOTO DIFERENTE: ${state.remoteFiles||0} arquivo(s) no Firebase. O backup automático ficará pausado até restaurar ou confirmar substituição; a Charlotte continuará funcionando normalmente.`);startOperationalRuntime({allowAutoBackup:!state.recoveryRequired})}
   function start(){if(rootWatcher)return;rootWatcher=rtdb.ref('siteBridgeJobs');rootWatcher.on('child_added',sn=>watchUserJobs(sn.key));walletWatcher=rtdb.ref('siteWallets');walletWatcher.on('child_added',sn=>watchSiteWallet(sn.key));const timer=setTimeout(()=>initializeOperationalRuntime().catch(e=>logger.log('[FIREBASE BACKUP] avaliação:',e.message)),1500);timer.unref?.();logger.log('✅ GREMORY SITE BRIDGE ATIVO');}
-  function stop(){try{if(rootWatcher)rootWatcher.off()}catch{}try{walletWatcher?.off()}catch{}for(const{walletRef,onChange}of walletRefs.values()){try{walletRef.off('value',onChange)}catch{}}walletRefs.clear();walletWatcher=null;for(const{userRef,handler}of watchedRefs.values()){try{userRef.off('child_added',handler)}catch{}}watchedRefs.clear();watchedUsers.clear();userQueues.clear();walletLocks.clear();gameActionLocks.clear();rootWatcher=null;if(healingTimer){clearInterval(healingTimer);healingTimer=null;}if(syncTimer){clearInterval(syncTimer);syncTimer=null;}if(raidTimer){clearInterval(raidTimer);raidTimer=null;}if(premiumGroupTimer){clearInterval(premiumGroupTimer);premiumGroupTimer=null;}if(backupTimer){clearInterval(backupTimer);backupTimer=null;}syncingLinked=false;backupRuntimeStarted=false;}
+  function stop(){try{if(rootWatcher)rootWatcher.off()}catch{}try{walletWatcher?.off()}catch{}for(const{walletRef,onChange}of walletRefs.values()){try{walletRef.off('value',onChange)}catch{}}walletRefs.clear();walletWatcher=null;for(const{userRef,handler}of watchedRefs.values()){try{userRef.off('child_added',handler)}catch{}}watchedRefs.clear();watchedUsers.clear();userQueues.clear();walletLocks.clear();gameActionLocks.clear();rootWatcher=null;if(healingTimer){clearInterval(healingTimer);healingTimer=null;}if(syncTimer){clearInterval(syncTimer);syncTimer=null;}if(walletSyncTimer){clearInterval(walletSyncTimer);walletSyncTimer=null;}if(raidTimer){clearInterval(raidTimer);raidTimer=null;}if(premiumGroupTimer){clearInterval(premiumGroupTimer);premiumGroupTimer=null;}if(backupTimer){clearInterval(backupTimer);backupTimer=null;}syncingLinked=false;backupRuntimeStarted=false;}
   function rawIncomingText(info){
     return String(
       info?.message?.conversation||

@@ -1,34 +1,83 @@
-PATCH INCREMENTAL — RAIDS, SALAS E SLOTS — 27/10/2026
+GREMORY — PROJETO COMPLETO REVISADO — 27/10/2026
+================================================
 
-APLICAÇÃO (as três partes são necessárias)
-1. SITE: copie o conteúdo deste patch sobre o projeto atual, mantendo os caminhos. Faça o deploy do site. Não substitua pelo ZIP antigo completo.
-2. FIREBASE: publique TODO o conteúdo de firebase.rules.production.json em Realtime Database > Rules. Este arquivo parte das regras que você enviou nesta conversa, preservando os demais caminhos.
-3. CHARLOTTE: substitua database/gremory_site_bridge.js no projeto do bot pelo arquivo deste patch e REINICIE a Charlotte. Substituir só esse arquivo no projeto do site não atualiza o bot.
-4. Feche as abas/PWA antigas e abra o site novamente para carregar o cache novo.
+Este ZIP contém a estrutura completa do site e o bridge compatível. É baseado
+no arquivo 'gremory-main (8).zip', no bridge e nas regras de Firebase fornecidos
+na conversa. Não aplique patches V12/V13 sobre estes arquivos.
 
-SLOTS E HOSPEDAGEM
-O sorteio continua no servidor do site e a carteira continua na Charlotte.
-A hospedagem do site precisa das credenciais Firebase Admin (FIREBASE_SERVICE_ACCOUNT_JSON; alternativamente FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL e FIREBASE_PRIVATE_KEY). Use o mesmo projeto Firebase da Charlotte. FIREBASE_DATABASE_URL deve apontar para o banco correto.
-Configure as credenciais SOMENTE nas variáveis de ambiente da hospedagem. Não coloque essas chaves no navegador nem neste ZIP. Não é necessário GREMORY_BACKUP_SECRET para Slots.
-Se o servidor de Slots estiver sem configuração, a tela agora mostra a falha e para o giro, em vez de tentar um comando slots_spin que esse bridge não implementa.
+IMPORTANTE: O ZIP NÃO FAZ DEPLOY AUTOMÁTICO. São três instalações separadas:
 
-O QUE FOI CORRIGIDO
-- Raid: responde após gravar a raid; os avisos de WhatsApp seguem em segundo plano. Criação simultânea usa transação.
-- Admin da raid: usa a identidade do Firebase Auth, sem depender da sincronização do e-mail em profiles.
-- Jobs presos após reinício: a trava é reavaliada quando vence, mantendo a fila por usuário e a proteção contra cobrança duplicada.
-- Slots: limite de espera da chamada HTTP; animação e som param mesmo se o servidor não responder; recibos duráveis e recuperação da mesma aposta pendente; nenhuma repetição automática de débito em análise.
-- Liquidação de Slots: sincronização complementar de Pokémon deixa de segurar a resposta financeira.
-- Salas: listagem secundária não impede abrir uma sala criada; clique duplicado é bloqueado; nomes respeitam o limite das regras.
-- Restaurados os ajustes de Watch Party do patch V19 já existente: convite/moderação, música da sala independente do microfone e proteção contra retorno do próprio áudio.
-- Login: fluxo único, correção de sintaxe preservada, observador após inicialização e sem signOut concorrente.
-- Regras: adicionados leitura dos próprios recibos/pendências de Slots e caminhos de convite/moderação; escrita de planos de música continua no bridge.
-- Mantido o campo opcional de aposta do 21 Pesadelo que já existia no patch V19.
+1) SITE / VERCEL
+   - Publique os arquivos desta pasta como o projeto do site na Vercel.
+   - Para Jogo da Velha, 21, Forca, Slots, Pokémon via bridge e Charlotte Music,
+     o frontend utiliza Firebase Auth + Realtime Database + siteBridgeJobs.
+   - NÃO instale FIREBASE_PRIVATE_KEY, FIREBASE_SERVICE_ACCOUNT_JSON,
+     FIREBASE_CLIENT_EMAIL ou FIREBASE_DATABASE_URL na Vercel para essas ações.
+   - Outros recursos HTTP (downloads, APIs de busca etc.) podem continuar
+     utilizando variáveis específicas de serviços externos na Vercel.
 
-VALIDAÇÃO
-35 testes passaram: 20 regressões da base V19, 3 testes de autenticação e 12 testes de ações/recuperação.
-Todos os scripts do navegador passaram na análise de sintaxe. Bridge e API Slots também passaram. Inicialização do painel simulada concluída.
-Os trechos de backup/restauração do bridge que você enviou foram preservados byte a byte e isso é verificado nos testes.
-Teste local: npm test (com os demais arquivos do projeto presentes).
+2) FIREBASE REALTIME DATABASE
+   - Abra Realtime Database > Rules no projeto Firebase já usado pela Charlotte.
+   - Publique TODO o arquivo firebase.rules.production.json (não somente partes).
+   - As regras negam acesso na raiz e deixam saldo/sorteio/cartas privadas
+     sob controle exclusivo do servidor Admin do bot.
+   - Faça cópia das regras publicadas antes de substituí-las.
+   - NÃO utilize firebase.rules.example.json (modelo antigo).
 
-Não foi feito login real nem teste de raid/sala/giro no site publicado: não foi fornecido acesso à hospedagem/conta. O patch não publica automaticamente as mudanças.
-Uma aposta marcada como review/processing NÃO é apagada para destravar outro giro: confira o extrato antes de qualquer correção manual.
+3) CHARLOTTE — HOSPEDAGEM DO BOT (RAILWAY/HIGHWAY)
+   - Substitua database/gremory_site_bridge.js NO PROJETO DO BOT pelo
+     arquivo de MESMO CAMINHO incluído neste ZIP.
+   - Garanta que o carregamento do bot continua invocando o bridge (como na
+     instalação original) e reinicie a Charlotte. Trocar só o bridge dentro do
+     projeto do site NÃO altera o bot que está em execução.
+   - As credenciais Firebase Admin permanecem SOMENTE no servidor do bot.
+   - Continue usando o mesmo banco/projeto Firebase e o mesmo número do bot.
+
+FLUXO CORRIGIDO
+---------------
+- Login e vinculação continuam utilizando Firebase Auth e o código WhatsApp.
+- Jogos grátis (Jogo da Velha / 21 / Forca) não exigem WhatsApp vinculado;
+  o bridge gerencia turnos/resultados no Firebase sem movimentar Rúpias.
+- Jogos com aposta validam convite, valor e participantes no bridge. Apostas
+  antigas não são repetidas silenciosamente.
+- Slots: servidor do bot gera o resultado, grava débito/prêmio por ID único na
+  carteira do site (siteWallets), e o espelho sincroniza o saldo do bot.
+- Música: ativação única por sala, Rúpias debitadas pelo bridge. A música é
+  PERMISSÃO da sala, não depende de microfone ou chamada de voz ativa.
+- Pokémon: equipes, status e Raid continuam vinculados ao bot.
+- O jogo e o site leem resultados e saldo por listeners Realtime do Firebase.
+- O espelho financeiro verifica pendências periodicamente e também recebe
+  alterações do saldo do bot. Uma rede offline ainda pode gerar atrasos.
+- Watch Party, transmissões, microfone separado, personalizações, chat,
+  comunidade, notificações e backup/restauração foram preservados.
+
+PROTEÇÃO DOS SALDOS EXISTENTES
+-----------------------------
+- NÃO apague siteWallets, economyBackups, gameWagers, siteSlotsPending,
+  siteSlotsSettlements, ou dados de Pokémon para "destravar" uma operação.
+- Se aparecer "giro antigo pendente" ou "operação em análise", confira as
+  transações anteriores ANTES de intervir. Um giro antigo pode ter sido
+  debitado mesmo sem resposta ao navegador. A correção não cobra de novo.
+- Não troque os IDs do projeto Firebase nem vincule uma conta diferente para
+  tentar corrigir pendências financeiras.
+- Faça backup dos dados do Firebase e dos JSONs do bot antes de publicar.
+
+VERIFICAÇÃO LOCAL
+-----------------
+No projeto completo, com Node 20+: npm test
+Também é possível rodar:
+  node --check database/gremory_site_bridge.js
+  node --check api/main.js
+  node --input-type=module --check < assets/js/app.js
+  node --test tests/*.cjs
+
+LIMITAÇÕES DESTA ENTREGA
+------------------------
+A correção foi verificada por análise do código e testes automatizados locais.
+Não houve acesso ao Firebase real, à Vercel nem ao processo ativo do bot.
+Portanto, NÃO é possível confirmar cobranças reais, entrega de áudio WebRTC,
+ou recebimento de WhatsApp sem publicar e testar na sua infraestrutura.
+O site e o bot precisam estar implantados com versões compatíveis.
+
+Se o bot continuar offline, nenhum serviço que dependa do bridge irá responder,
+mesmo que a Vercel esteja funcionando perfeitamente.

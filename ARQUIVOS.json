@@ -1,62 +1,270 @@
 [
   {
-    "file": "index.html",
-    "sha256": "71a47e17823a406f2e51420792ec2f5a314d8f04f6cea71b93ecc6a0b87ee78e"
+    "file": "CORRECAO_LOGIN.txt",
+    "sha256": "8b3f5736f7a78bb61b52c65f4f36aa2790874145a89958cc9b16de115b9ad4e7"
   },
   {
-    "file": "sw.js",
-    "sha256": "ecd768dad23848b7ea253b916525630f3e800b2f4d154b1f66b0eae0922f3afc"
+    "file": "LEIA-ME.txt",
+    "sha256": "b2c049043adf3b85b54e1dd2a70dc1d7c3f52b286fb7f1b6e0f53f3a4acf7979"
+  },
+  {
+    "file": "README_DEPLOY.txt",
+    "sha256": "76e32bd8861d8881217c87a66455724a644389804d3b58b3a629c65fc2398e35"
+  },
+  {
+    "file": "api/README_HOSTING.md",
+    "sha256": "e25c22c02dcdf7e8ec0dd7424412781782037a3f09022bfc6f99bddbc4fbd922"
+  },
+  {
+    "file": "api/explore.js",
+    "sha256": "17dec1e01083a3bfd2167a7f74240730a4829c3e31b49c33e7505242acf74198"
+  },
+  {
+    "file": "api/main.js",
+    "sha256": "61586c6baca85eeebc774d57c04806b72bbdfed95e1455d37bd17be705eddd47"
+  },
+  {
+    "file": "api/pokemon-actions.js",
+    "sha256": "323fffc5c5888769a2b7c14bcfcd7f9895f051180333bb943ade989a8a7173aa"
+  },
+  {
+    "file": "api/site-games.js",
+    "sha256": "3b785a5a37731bf27d6d856add9938e087d6670b89e1d972a725f063624c8554"
+  },
+  {
+    "file": "api/site-music.js",
+    "sha256": "a9c5a041d5cf21e4e9a32dd54fd9e46600569f39c4977c08eea52ee63aef1bb7"
+  },
+  {
+    "file": "api/site-wallet.js",
+    "sha256": "02760e539429cdb19cbfa9be82c968f0d5256a6a2e309a82dbae2abf2a70c837"
+  },
+  {
+    "file": "api/slots.js",
+    "sha256": "6ba163cb89747288c1551ce8310279e9bccac4036401cb0c49cd826456052ec6"
+  },
+  {
+    "file": "assets/audio/LEIA_ME_SONS_POKEMON.txt",
+    "sha256": "20ed911f405d5b9b150807718416a9a60847404a9f570eeee53993f18e539f70"
+  },
+  {
+    "file": "assets/audio/README.txt",
+    "sha256": "e311002ea64bb704e30095e2bb48e0f759ec1140902a026d9fd54e926b03c53a"
+  },
+  {
+    "file": "assets/audio/custom/LEIA_ME.txt",
+    "sha256": "1dce34224bf0bd5a3abb62b5aa03423b6e2413073338199fd749d251134891a5"
+  },
+  {
+    "file": "assets/audio/custom/accept.mp3",
+    "sha256": "e86a2f1644222d07ee44600fc02f15b32f7bf3b1455dd0330542753aff51addc"
+  },
+  {
+    "file": "assets/audio/custom/correct.mp3",
+    "sha256": "a106868fd8a145542ed741b1a784a9324c3b6bcbadbef1cb5680f6ac0dad0097"
+  },
+  {
+    "file": "assets/audio/custom/defeat.mp3",
+    "sha256": "da190f085866298c960f44e0e8f29232170271a88fa03f25462b8ff239ff678c"
+  },
+  {
+    "file": "assets/audio/custom/draw.mp3",
+    "sha256": "ff579ca2748eea734a27fb7776b014667be76c8611fc49e98b23500cee193827"
+  },
+  {
+    "file": "assets/audio/custom/money-win.mp3",
+    "sha256": "c00dc30e246bfb8c3e73aae1c8c3e8f7e68b9625c687eda383a31043c1291761"
+  },
+  {
+    "file": "assets/audio/custom/move.mp3",
+    "sha256": "59b6c721df0f0da7986deadd3ca042d2cbdd8d651747eee213f7cfca1c4e7167"
+  },
+  {
+    "file": "assets/audio/custom/pokemon-encounter (2).mp3",
+    "sha256": "e1b1497878546fcebdb9de2e198ddd3ce303e1df2934afb7fbe5e0ff41582b0d"
+  },
+  {
+    "file": "assets/audio/custom/pokemon-hit.mp3",
+    "sha256": "c70216a3ed9a8231c75b1978d3b8105c17e6fcb8d168cd02c71b36a3317dcb55"
+  },
+  {
+    "file": "assets/audio/custom/purchase-customization.mp3",
+    "sha256": "560d75f6eff0fe2f9b9837edf472332dbc14a9e02c8b4048248caf862f8404f5"
+  },
+  {
+    "file": "assets/audio/custom/reject.mp3",
+    "sha256": "9abfc59cf2a279c976e6b173165268a2e6186f798fd172f92edafbb336ca6c72"
+  },
+  {
+    "file": "assets/audio/custom/select.mp3",
+    "sha256": "94c2f82aaa3b36e1e7e70b52f4d7ca24de537010e89fe0ea29a8cfa2d86773ac"
+  },
+  {
+    "file": "assets/audio/custom/slot-spin.mp3",
+    "sha256": "eb3bb95d3d46ffa4edabad280a155d2807a5ad9c6b8ccb2cfff5196c1f22b5b9"
+  },
+  {
+    "file": "assets/audio/custom/start.mp3",
+    "sha256": "1e95917a5fa832bd31ea725144cbcea1e8098e6afe83b1aed8ecf1f9bdf0fcd3"
+  },
+  {
+    "file": "assets/audio/custom/turn.mp3",
+    "sha256": "f0f633a5cbb8a35c0f27bf0452205d04018a3e1d031f63b012c7040e2825eee6"
+  },
+  {
+    "file": "assets/audio/custom/wrong.mp3",
+    "sha256": "760d6a02689b503153c257ae17234be3475be6041fe0b4533c248ca1c0608a02"
+  },
+  {
+    "file": "assets/audio/defeat.mp3",
+    "sha256": "da190f085866298c960f44e0e8f29232170271a88fa03f25462b8ff239ff678c"
+  },
+  {
+    "file": "assets/audio/notification.mp3",
+    "sha256": "c13da61f3e5bcd79ce3e8785715970ef8d09b2edcd5f956febc6d83e6a759827"
+  },
+  {
+    "file": "assets/audio/victory.mp3",
+    "sha256": "02ba23f3c3b9f6c3c5b1935d8115b418d9d82ec87a914b27ac03d47b3043203f"
+  },
+  {
+    "file": "assets/css/app.css",
+    "sha256": "c18a6affe5a98026cc77287d5a4489d6d79c76698c25ec0ec1cd232dddbce157"
+  },
+  {
+    "file": "assets/css/gremory-core.css",
+    "sha256": "671b482eb48dc5864e759d68180298a4fcbae1090a821a6da598407cbae7ac47"
+  },
+  {
+    "file": "assets/css/login-restore.css",
+    "sha256": "efe1a76962101b3a07a1b59800e440d960bffc5d1a1d08ee0acedda5734de7e8"
+  },
+  {
+    "file": "assets/css/style.css",
+    "sha256": "543ce8ef1a44cc37f554dee4e32099ebd1d214ef026399258f773de0ae9b0902"
+  },
+  {
+    "file": "assets/icons/icon-192.png",
+    "sha256": "298923a825be99b4c297506aeb242b7626069f0876f229e840c44c403b4957ca"
+  },
+  {
+    "file": "assets/icons/icon-512.png",
+    "sha256": "ec024c671f9894547cfa34aff616ca8cee26c6221fe68ed09faae977f011351c"
+  },
+  {
+    "file": "assets/img/background.gif",
+    "sha256": "d18bcb7971de46b34bda491b7b68aba06b0c8bea100057d4be7937b492b56ccc"
+  },
+  {
+    "file": "assets/img/gremory-logo.png",
+    "sha256": "7b01892a24dbaefbe57f81115b3709a9da569e08d5bf16e22670668a8140c85a"
+  },
+  {
+    "file": "assets/img/profile.jpg",
+    "sha256": "bc2caef0a1141aaacc3a37ce31829c5c7d385e2ba1df231f8c53ef8b1f3468b0"
+  },
+  {
+    "file": "assets/js/anime-apk.js",
+    "sha256": "c09499841e311b4ee2f578702f9ad10ba2bd011b6acff4cb4fedf9b324b78816"
   },
   {
     "file": "assets/js/app.js",
-    "sha256": "2bce7d47a4d48c5805fb92e488d4c8e47e763abf7903101608aee662f1742a72"
+    "sha256": "830ef7bb825b9fd6e7f091ad4de4c79e3aa0e979b5c359ef1978442f9308a7fb"
+  },
+  {
+    "file": "assets/js/auth-shell.js",
+    "sha256": "beacbcd8994e56797fd5323d5cb0f6e3a3b5a61bc856c83fdab3100da3d8c415"
   },
   {
     "file": "assets/js/bootstrap.js",
-    "sha256": "8a99242f203be7181ce8077aba3049c618bf22faaeb49f9e23aeacd90e935a8e"
+    "sha256": "ab58bff673b044c81d982fbfe4d6802eaaedf0e5211c6ac61d9743afcbd179fe"
+  },
+  {
+    "file": "assets/js/community.js",
+    "sha256": "61bb491471c1e5977f5c7fbf498bf4f3e02e188114e71f826d09ad13315672ed"
+  },
+  {
+    "file": "assets/js/firebase-auth.js",
+    "sha256": "ea811107494b8f5c6dc0b0e59ea77781f1c8f6d4aaae93458d6ae5221a285b52"
   },
   {
     "file": "assets/js/games-extra.js",
     "sha256": "97df3d6818327b92332fdeb2eb9dff5d2e40a5efa2fbfa2b5448b11f40d9f3b5"
   },
   {
-    "file": "api/slots.js",
-    "sha256": "02fc72626553c8802f8495e7faa2b1a57615ee4bcabaf3ea20b17f2d993e289a"
+    "file": "assets/js/gremory-core.js",
+    "sha256": "cad24376a5b42aaa39fc59fa36dd245f09568d77c09dd06391f6aa48d6c21730"
+  },
+  {
+    "file": "assets/video/login.gif",
+    "sha256": "e798891c4445f0f46b40b0e01ec560c00420e01f04d9a3177c700939b9be38ea"
+  },
+  {
+    "file": "config.js",
+    "sha256": "dd980ecab0d6b6e7a815be56930e6d3b23796668fbe16b6557daf06142f91ec9"
+  },
+  {
+    "file": "config.json",
+    "sha256": "a9f26f55438f40957b751d555868c4431da404941ff6a2e0dc34b23d52844afa"
   },
   {
     "file": "database/gremory_site_bridge.js",
-    "sha256": "06ab683afca5418d1416a08bc8a64f385eb1ffd0e44719d271228ed096983330"
+    "sha256": "755e1fabc7e2cf0732e702611cec3bb30a0f6dd606c8e478634b919e6aff1df1"
+  },
+  {
+    "file": "firebase.rules.example.json",
+    "sha256": "84905bb9c4d2bb04b08ee53bad9d11e547670e81a6a1bf348dce28af356b64b9"
   },
   {
     "file": "firebase.rules.production.json",
-    "sha256": "791fb450dabad1dd79b454c3f4168091cc6bc84ee216aed10c88648715b4115b"
+    "sha256": "46082920faa97351b0d015f5421f9c8f34d69dba25fc547f86986408cb413c6c"
+  },
+  {
+    "file": "index.html",
+    "sha256": "57940f33e36a0e5a6d3069c2edbcfcc8c3586b40f2a5be29e47cfdcde001b2c8"
+  },
+  {
+    "file": "manifest.webmanifest",
+    "sha256": "a69d87c8cbf2f4b527c94a7a82fc99cc244bac63e0c2e87da77be7bb772e7a93"
   },
   {
     "file": "package.json",
     "sha256": "cd493cf340574ea192d33ed4070db7dfe78e15622c36f99a353a2f93f2b90ca5"
   },
   {
-    "file": "tests/regression.cjs",
-    "sha256": "d703299f1c1889c21442d42d5ffb04d9d86b69a759456d15027cdef9a985f895"
+    "file": "storage.rules",
+    "sha256": "c66d88daea54dce95f885b1bb610ecaf0f6d9a03b318c9d42507ab2e08316543"
   },
   {
-    "file": "tests/auth.cjs",
-    "sha256": "cf9a007977e2695b78cc2c93d007c0cd032f81887d8e2e2a70d5b9e96e619ffa"
+    "file": "sw.js",
+    "sha256": "722fcc9d91144cdfc67fd38c811336f55781f18d08bee7632852f41d93e67a78"
   },
   {
     "file": "tests/actions.cjs",
-    "sha256": "18f0a57ef33c11e5b1583665eee842efe787f37afc38154ac2542e20dbf9a5bf"
+    "sha256": "ddbd4f737300fdc89db5a253194aa0a2637fe03cb9bff0d24433cfa666e04684"
+  },
+  {
+    "file": "tests/auth.cjs",
+    "sha256": "3ab49bf0362507e2472547444db0966cde91b5ada698671aad214173d8e65bd8"
   },
   {
     "file": "tests/bridge-recovery.cjs",
-    "sha256": "c896978148ef0ff8780760b9e5cce61d92a48ce331f47058a1bc1b0759fa6122"
+    "sha256": "dcf7e5510127b057d931afc467cd2b0d70f50a58acaba202446ed08a5ab037d7"
+  },
+  {
+    "file": "tests/fixtures/backup-hashes.json",
+    "sha256": "f0a0b87382641fac5acb84748738d403a8a2555c06f7ed328e51a218773bdea3"
   },
   {
     "file": "tests/fixtures/firebase-rules-before.json",
     "sha256": "8692a1bce8e791d15cacefe0bf250a230a45e638eb2b521e8c697da123431326"
   },
   {
-    "file": "tests/fixtures/backup-hashes.json",
-    "sha256": "33aa46ad3ebcf6e59e3ee72f7499c4c0308b67b4bafbc64b845d69f50faf3fb9"
+    "file": "tests/regression.cjs",
+    "sha256": "8de7233eabd5173fc0b4a0513388440bd1c812a797ef341c5ed4d12a48a345a8"
+  },
+  {
+    "file": "vercel.json",
+    "sha256": "b2a7dc552faca58d018ec87bddf2e5697014102af8803803cf89fe899f58c185"
   }
 ]

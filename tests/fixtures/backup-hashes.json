@@ -2,11 +2,11 @@
   {
     "start": "  async function backupAccountSnapshot",
     "end": "  async function syncIdentity",
-    "hash": "18c8218eff725fa0be9d11e2bcc1d779c7630fbb4c8e04cda7030b524cadfaa5"
+    "hash": "13f7c82827832420661a69259f7222d4f3e22fb9e281c18bd183adde7f5647c9"
   },
   {
     "start": "  function backupFileKey",
-    "end": "  async function siteAdmin",
-    "hash": "a1675807bf4fdba2877a89e3b33a75c9060c68e714536a6d0ba5fc403866ece0"
+    "end": "  async function assessOperationalBackupState",
+    "hash": "128449062f2a6079521d377b98d901dc9e619605bef86152e2011c96f1f8417c"
   }
 ]
