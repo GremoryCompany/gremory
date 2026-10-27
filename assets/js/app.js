@@ -1,5 +1,5 @@
 import { initCommunity } from './community.js';
-import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js';
 import {
   getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence, inMemoryPersistence,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail,
@@ -20,7 +20,7 @@ const firebaseConfig = {
   measurementId: 'G-6Q9KFT1CC5'
 };
 
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 const $ = (id) => document.getElementById(id);
@@ -456,7 +456,7 @@ function startUserSubscriptions(){
 let extraGamesModulePromise=null;
 function loadExtraGamesAfterAuth(){
   if(extraGamesModulePromise)return extraGamesModulePromise;
-  extraGamesModulePromise=import('/assets/js/games-extra.js?v=20261026-v18-1-login-fix').catch(err=>{
+  extraGamesModulePromise=import('/assets/js/games-extra.js?v=20261026-v18-2-login-real-fix').catch(err=>{
     extraGamesModulePromise=null;
     console.warn('[GREMORY GAMES] Não foi possível carregar os jogos extras.',err);
     return null;
