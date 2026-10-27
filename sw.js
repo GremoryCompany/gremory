@@ -1,9 +1,10 @@
-const CACHE='gremory-v18-2-login-real-fix-20261026';
+const CACHE='gremory-v18-3-auth-shell-20261026';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261026-v18-2-login-real-fix',
-  '/assets/js/app.js?v=20261026-v18-2-login-real-fix',
+  '/assets/css/app.css?v=20261026-v18-3-auth-shell',
+  '/assets/js/app.js?v=20261026-v18-3-auth-shell',
+  '/assets/js/auth-shell.js?v=20261026-v18-3-auth-shell',
   '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
