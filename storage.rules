@@ -9,14 +9,5 @@ service firebase.storage {
    allow delete: if request.auth != null && (request.auth.uid == uid || (request.auth.token.email == 'losermodder@gmail.com' && request.auth.token.email_verified == true));
    allow update: if false;
   }
-
-  // Foto do Tinder usada pelo mesmo perfil no site e na Charlotte.
-  match /tinder/{uid}/{file} {
-   allow read: if request.auth != null;
-   allow create, update: if request.auth != null && request.auth.uid == uid
-     && request.resource.contentType.matches('image/(jpeg|png|webp|gif)')
-     && request.resource.size <= 10 * 1024 * 1024;
-   allow delete: if request.auth != null && (request.auth.uid == uid || (request.auth.token.email == 'losermodder@gmail.com' && request.auth.token.email_verified == true));
-  }
  }
 }

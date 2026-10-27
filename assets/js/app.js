@@ -34,7 +34,7 @@ let RTC_CONFIG={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:st
 
 const state = {
   user:null, profile:null, privateData:null, route:'home',
-  webTeam:{}, charlottePublic:null, charlotteSync:null, siteWallet:null,
+  webTeam:{}, charlottePublic:null, charlotteSync:null,
   friends:{}, requests:{}, directory:{},
   downloadService:'tiktok', lastDownloadInput:'',
   roomCode:null, room:null, roomUnsubs:[],
@@ -42,7 +42,7 @@ const state = {
   bridgeResults:{}, siteInventory:{}, siteCustomization:{}, storeCatalog:{},
   teamDraft:[], pokemonEncounter:null, pokemonHealing:{}, pokemonAudio:{encounterId:'',resultId:''}, siteRaid:null, siteRaidConfig:{},
   ttt:{game:null,unsub:null,index:{},lastResultId:'',seenActiveIds:new Set()},
-  blackjack:{game:null,private:null,unsub:null,privateUnsub:null,index:{},seenActiveIds:new Set()},
+  blackjack:{game:null,unsub:null,index:{},seenActiveIds:new Set()},
   hangman:{game:null,unsub:null,index:{},seenActiveIds:new Set()},
   siteGameChallenges:{},siteGameChallengeSeen:new Set(),
   duelSeenActiveIds:new Set(),
@@ -51,7 +51,7 @@ const state = {
   admin:{reports:{},updates:{},directory:{},bans:{},selectedUid:'',supportChats:{},supportSelectedUid:'',supportUnsub:null,backupStatus:{}},
   tinder:{current:null,seen:[]},updates:{},notifications:{},notificationDismissed:{},ban:null,supportChat:{messages:{}},
   watchCode:null,watchRoom:null,watchUnsubs:[],watchApplying:false,
-  watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,screenSource:'',localFileVideo:null,localFileUrl:'',localFileName:'',localFileAudioCtx:null,localFileAudioSource:null,localFileAudioDest:null,localFileAudioGain:null,localFileAudioLimiter:null,screenVolume:Number(localStorage.getItem('gremory:watchScreenVolume')||150),localFileTransmitGainPct:Number(localStorage.getItem('gremory:watchTransmitGain')||150),fullscreenUiTimer:null,peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),screenOutPeers:new Map(),screenInPeers:new Map(),screenOutCandidates:new Map(),screenInCandidates:new Map(),screenOfferAt:new Map(),screenOfferLocks:new Set(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false,mutedPeers:new Set(),peerVolumes:new Map(),autoVoiceCode:'',autoVoicePending:false},
+  watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,screenSource:'',localFileVideo:null,localFileUrl:'',localFileName:'',localFileAudioCtx:null,localFileAudioSource:null,localFileAudioDest:null,localFileAudioGain:null,localFileAudioLimiter:null,screenVolume:Number(localStorage.getItem('gremory:watchScreenVolume')||150),localFileTransmitGainPct:Number(localStorage.getItem('gremory:watchTransmitGain')||150),fullscreenUiTimer:null,peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),screenOutPeers:new Map(),screenInPeers:new Map(),screenOutCandidates:new Map(),screenInCandidates:new Map(),screenOfferAt:new Map(),screenOfferLocks:new Set(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false},
   watchYoutube:{lastTime:0,lastState:-1,lastPublishAt:0},
   watchMusic:{currentId:'',volume:Number(localStorage.getItem('gremory:watchMusicVolume')||65),muted:localStorage.getItem('gremory:watchMusicMuted')==='1',engineReady:false,lastAdvanceId:'',adding:false,currentTime:0,lastClockSync:0,endedId:''},
   rtc:{joined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true},premiumPoll:null,
@@ -199,11 +199,9 @@ async function configurePersistence(remember){
   }
 }
 async function initialAuthPolicy(){
-  let remember=false;try{remember=localStorage.getItem('gremory:remember')==='1'}catch{}
-  const initialUser=auth.currentUser;
+  const remember=localStorage.getItem('gremory:remember')==='1';
   try{await setPersistence(auth,remember?browserLocalPersistence:inMemoryPersistence)}catch{}
-  // Não derrubar login feito enquanto o browser ainda definia a persistência.
-  if(!remember&&initialUser&&auth.currentUser===initialUser)await signOut(auth).catch(()=>{});
+  if(!remember&&auth.currentUser) await signOut(auth).catch(()=>{});
 }
 $('loginForm').addEventListener('submit',async ev=>{
   ev.preventDefault();
@@ -271,7 +269,7 @@ $('registerForm').addEventListener('submit',async ev=>{
       nome:name,
       ...(usernameOk?{username,usernameChangedAt:stamp}:{}),
       avatar:'',bio:'',favoriteAnime:'',email:cred.user.email||email,
-      whatsappSiteNotify:true,raidWhatsappNotify:true,profileSongTitle:'',profileSongUrl:'',profilePlaylistUrl:'',createdAt:nowIso(),updatedAt:nowIso()
+      whatsappSiteNotify:false,raidWhatsappNotify:false,createdAt:nowIso(),updatedAt:nowIso()
     };
 
     // Não bloqueia a entrada no site indefinidamente por causa do RTDB.
@@ -309,7 +307,7 @@ function publicCustomizationIds(){
 }
 function publicProfile(p,styleOverride=null){
   const style=Array.isArray(styleOverride)?styleOverride:publicCustomizationIds();
-  return{uid:p.uid,nome:p.nome||'Usuário',username:normalizeUsername(p.username||''),avatar:p.avatar||'',bio:p.bio||'',favoriteAnime:p.favoriteAnime||'',profileSongTitle:p.profileSongTitle||'',profileSongUrl:p.profileSongUrl||'',profilePlaylistUrl:p.profilePlaylistUrl||'',style:style.map(String).filter(id=>/^[a-z0-9_-]{2,64}$/i.test(id)).slice(0,8),createdAt:p.createdAt||nowIso(),updatedAt:p.updatedAt||nowIso()}
+  return{uid:p.uid,nome:p.nome||'Usuário',username:normalizeUsername(p.username||''),avatar:p.avatar||'',bio:p.bio||'',favoriteAnime:p.favoriteAnime||'',style:style.map(String).filter(id=>/^[a-z0-9_-]{2,64}$/i.test(id)).slice(0,8),createdAt:p.createdAt||nowIso(),updatedAt:p.updatedAt||nowIso()}
 }
 async function syncPublicCustomization(){
   if(!state.user)return;
@@ -318,9 +316,9 @@ async function syncPublicCustomization(){
 async function readUserData(user){
   const [ps,old,dirSnap]=await Promise.all([get(ref(db,`profiles/${user.uid}`)).catch(()=>null),get(ref(db,`users/${user.uid}`)).catch(()=>null),get(ref(db,`directory/${user.uid}`)).catch(()=>null)]);
   const p=ps?.exists()?ps.val():{};const o=old?.exists()?old.val():{};const oldDirectory=dirSnap?.exists()?dirSnap.val():{};
-  const merged={uid:user.uid,nome:p.nome||o.nome||user.displayName||'Usuário',username:normalizeUsername(p.username||o.username||''),usernameChangedAt:Number(p.usernameChangedAt||o.usernameChangedAt||0),avatar:p.avatar||o.avatar||user.photoURL||'',bio:p.bio||o.bio||'',favoriteAnime:p.favoriteAnime||o.favoriteAnime||o.animeFavorito||'',email:p.email||user.email||'',whatsappSiteNotify:p.whatsappSiteNotify!==false,raidWhatsappNotify:p.raidWhatsappNotify!==false,profileSongTitle:String(p.profileSongTitle||''),profileSongUrl:String(p.profileSongUrl||''),profilePlaylistUrl:String(p.profilePlaylistUrl||''),createdAt:p.createdAt||o.createdAt||user.metadata?.creationTime||nowIso()};
+  const merged={uid:user.uid,nome:p.nome||o.nome||user.displayName||'Usuário',username:normalizeUsername(p.username||o.username||''),usernameChangedAt:Number(p.usernameChangedAt||o.usernameChangedAt||0),avatar:p.avatar||o.avatar||user.photoURL||'',bio:p.bio||o.bio||'',favoriteAnime:p.favoriteAnime||o.favoriteAnime||o.animeFavorito||'',email:p.email||user.email||'',whatsappSiteNotify:Boolean(p.whatsappSiteNotify),raidWhatsappNotify:Boolean(p.raidWhatsappNotify),createdAt:p.createdAt||o.createdAt||user.metadata?.creationTime||nowIso()};
   if(!ps?.exists()) await set(ref(db,`profiles/${user.uid}`),{...merged,updatedAt:nowIso()}).catch(()=>{});
-  else if((!p.email&&user.email)||p.raidWhatsappNotify==null||p.whatsappSiteNotify==null) await update(ref(db,`profiles/${user.uid}`),{email:user.email||p.email||'',whatsappSiteNotify:p.whatsappSiteNotify!==false,raidWhatsappNotify:p.raidWhatsappNotify!==false,updatedAt:nowIso()}).catch(()=>{});
+  else if((!p.email&&user.email)||p.raidWhatsappNotify==null||p.whatsappSiteNotify==null) await update(ref(db,`profiles/${user.uid}`),{email:user.email||p.email||'',whatsappSiteNotify:Boolean(p.whatsappSiteNotify),raidWhatsappNotify:Boolean(p.raidWhatsappNotify),updatedAt:nowIso()}).catch(()=>{});
   await set(ref(db,`directory/${user.uid}`),publicProfile(merged,publicCustomizationIds().length?publicCustomizationIds():(Array.isArray(oldDirectory?.style)?oldDirectory.style:[]))).catch(()=>{});
   state.profile=merged;state.privateData=o;renderAccount();
 }
@@ -331,13 +329,13 @@ function accountSnapshot(){
     premium:Boolean(synced.premium ?? legacy.premium ?? false),
     level:Number(synced.level ?? legacy.nivel ?? legacy.level ?? legacy.total ?? 0),
     xp:Number(synced.xp ?? legacy.xp ?? 0),
-    balance:Number(state.siteWallet?.balance ?? synced.balance ?? legacy.saldo ?? legacy.dinero ?? 0),
+    balance:Number(synced.balance ?? legacy.saldo ?? legacy.dinero ?? 0),
     registered:synced.registered
   };
 }
 function renderAccount(){
   const p=state.profile||{};const avatar=avatarFor(p);const name=p.nome||'Usuário';const acc=accountSnapshot();const premium=acc.premium;const level=acc.level;const balance=acc.balance;
-  ['sideAvatar','topAvatar','profileAvatarPreview'].forEach(id=>{if($(id))$(id).src=avatar});$('sideName').textContent=name;$('sideStatus').textContent=premium?'Premium':usernameLabel(p);$('profileNameView').textContent=name;if($('profileUsernameView'))$('profileUsernameView').textContent=usernameLabel(p);$('profilePlanView').textContent=premium?'Premium':'Padrão';$('profileName').value=name;if($('profileUsername'))$('profileUsername').value=normalizeUsername(p.username||'');if($('profileUsernameHint'))$('profileUsernameHint').textContent=formatCooldown(usernameCooldownRemaining(p));$('profileAvatar').value=p.avatar||'';$('profileBio').value=p.bio||'';$('profileFavoriteAnime').value=p.favoriteAnime||'';if($('profileSongTitle'))$('profileSongTitle').value=p.profileSongTitle||'';if($('profileSongUrl'))$('profileSongUrl').value=p.profileSongUrl||'';if($('profilePlaylistUrl'))$('profilePlaylistUrl').value=p.profilePlaylistUrl||'';if($('profileWhatsappSiteNotify'))$('profileWhatsappSiteNotify').checked=p.whatsappSiteNotify!==false;if($('profileRaidWhatsapp'))$('profileRaidWhatsapp').checked=p.raidWhatsappNotify!==false;if($('profileBrowserNotify'))$('profileBrowserNotify').checked=browserNotificationsEnabled();if($('raidWhatsappNotify'))$('raidWhatsappNotify').checked=Boolean(p.raidWhatsappNotify);renderAdminAccess();$('profileLevel').textContent=formatNumber(level);$('profileBalance').textContent=`₹ ${formatNumber(balance)}`;$('homePlan').textContent=premium?'Premium':'Padrão';$('homeLevel').textContent=formatNumber(level);$('homeBalance').textContent=`₹ ${formatNumber(balance)}`;$('homeGreeting').textContent=`Olá, ${name}.`;
+  ['sideAvatar','topAvatar','profileAvatarPreview'].forEach(id=>{if($(id))$(id).src=avatar});$('sideName').textContent=name;$('sideStatus').textContent=premium?'Premium':usernameLabel(p);$('profileNameView').textContent=name;if($('profileUsernameView'))$('profileUsernameView').textContent=usernameLabel(p);$('profilePlanView').textContent=premium?'Premium':'Padrão';$('profileName').value=name;if($('profileUsername'))$('profileUsername').value=normalizeUsername(p.username||'');if($('profileUsernameHint'))$('profileUsernameHint').textContent=formatCooldown(usernameCooldownRemaining(p));$('profileAvatar').value=p.avatar||'';$('profileBio').value=p.bio||'';$('profileFavoriteAnime').value=p.favoriteAnime||'';if($('profileWhatsappSiteNotify'))$('profileWhatsappSiteNotify').checked=Boolean(p.whatsappSiteNotify);if($('profileRaidWhatsapp'))$('profileRaidWhatsapp').checked=Boolean(p.raidWhatsappNotify);if($('profileBrowserNotify'))$('profileBrowserNotify').checked=browserNotificationsEnabled();if($('raidWhatsappNotify'))$('raidWhatsappNotify').checked=Boolean(p.raidWhatsappNotify);renderAdminAccess();$('profileLevel').textContent=formatNumber(level);$('profileBalance').textContent=`₹ ${formatNumber(balance)}`;$('homePlan').textContent=premium?'Premium':'Padrão';$('homeLevel').textContent=formatNumber(level);$('homeBalance').textContent=`₹ ${formatNumber(balance)}`;$('homeGreeting').textContent=`Olá, ${name}.`;
   if($('storeBalance'))$('storeBalance').textContent=`₹ ${formatNumber(balance)}`;
   if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(balance)}`;
   if($('premiumStatusPill'))$('premiumStatusPill').textContent=premium?'Premium':'Padrão';
@@ -363,7 +361,7 @@ $('profileForm').addEventListener('submit',async ev=>{
       await set(ref(db,`usernames/${username}`),{uid:state.user.uid,username,updatedAt:Date.now()});
       reservedNew=true;
     }
-    const payload={uid:state.user.uid,nome:$('profileName').value.trim().slice(0,40)||'Usuário',username,usernameChangedAt:changing?Date.now():Number(oldProfile.usernameChangedAt||Date.now()),avatar:$('profileAvatar').value.trim(),bio:$('profileBio').value.trim().slice(0,500),favoriteAnime:$('profileFavoriteAnime').value.trim().slice(0,80),profileSongTitle:String($('profileSongTitle')?.value||'').trim().slice(0,80),profileSongUrl:String($('profileSongUrl')?.value||'').trim().slice(0,500),profilePlaylistUrl:String($('profilePlaylistUrl')?.value||'').trim().slice(0,500),email:state.user.email||oldProfile.email||'',whatsappSiteNotify:Boolean($('profileWhatsappSiteNotify')?.checked),raidWhatsappNotify:Boolean($('profileRaidWhatsapp')?.checked),createdAt:oldProfile.createdAt||nowIso(),updatedAt:nowIso()};
+    const payload={uid:state.user.uid,nome:$('profileName').value.trim().slice(0,40)||'Usuário',username,usernameChangedAt:changing?Date.now():Number(oldProfile.usernameChangedAt||Date.now()),avatar:$('profileAvatar').value.trim(),bio:$('profileBio').value.trim().slice(0,500),favoriteAnime:$('profileFavoriteAnime').value.trim().slice(0,80),email:state.user.email||oldProfile.email||'',whatsappSiteNotify:Boolean($('profileWhatsappSiteNotify')?.checked),raidWhatsappNotify:Boolean($('profileRaidWhatsapp')?.checked),createdAt:oldProfile.createdAt||nowIso(),updatedAt:nowIso()};
     await set(ref(db,`profiles/${state.user.uid}`),payload);
     await set(ref(db,`directory/${state.user.uid}`),publicProfile(payload));
     if(changing&&oldUsername)await remove(ref(db,`usernames/${oldUsername}`)).catch(()=>{});
@@ -382,7 +380,7 @@ $('profileForm').addEventListener('submit',async ev=>{
   }
 });
 
-function clearUserSubscriptions(){if(slotSettlementTimer)clearTimeout(slotSettlementTimer);try{slotSettlementUnsub?.()}catch{}slotSettlementUnsub=null;activeSlotJob='';slotBusy=false;try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}if(state.gameRealtimePoll){clearInterval(state.gameRealtimePoll);state.gameRealtimePoll=null}state.gameRealtimeSyncing=false;clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.blackjack.privateUnsub){try{state.blackjack.privateUnsub()}catch{}state.blackjack.privateUnsub=null}if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.siteWallet=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonAudio={encounterId:'',resultId:''};state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.private=null;state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.notificationDismissed={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null;state.watchRtc.peerVolumes.clear()}
+function clearUserSubscriptions(){try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}if(state.gameRealtimePoll){clearInterval(state.gameRealtimePoll);state.gameRealtimePoll=null}state.gameRealtimeSyncing=false;clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonAudio={encounterId:'',resultId:''};state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.notificationDismissed={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null}
 async function syncSiteGameRealtimeState(){
   if(!state.user||state.gameRealtimeSyncing)return;
   const uid=state.user.uid;
@@ -420,12 +418,7 @@ function startUserSubscriptions(){
   state.userUnsubs.push(onValue(ref(db,`friendRequests/${uid}`),s=>{state.requests=s.exists()?s.val():{};renderFriendRequests()}));
   state.userUnsubs.push(onValue(ref(db,`charlottePublic/${uid}`),s=>{state.charlottePublic=s.exists()?s.val():null;renderCharlotteStatus()}));
   state.userUnsubs.push(onValue(ref(db,`charlotteSync/${uid}`),s=>{state.charlotteSync=s.exists()?s.val():null;renderCharlotteSync();renderAccount();loadPokemonSources();renderCollection();renderStore();renderPokemonInventory()}));
-  state.userUnsubs.push(onValue(ref(db,`siteWallets/${uid}`),s=>{state.siteWallet=s.exists()?s.val():null;renderAccount()},e=>console.warn('[SITE WALLET] Firebase não autorizou leitura da carteira:',e?.code||e?.message||e)));
   state.userUnsubs.push(onValue(ref(db,`siteBridgeResults/${uid}`),s=>{state.bridgeResults=s.exists()?s.val():{}}));
-  state.userUnsubs.push(onValue(ref(db,`siteSlotsPending/${uid}`),sn=>{
-    if(!sn.exists()||!state.user||state.user.uid!==uid)return;
-    const spin=sn.val();if(spin?.jobId)watchSlotSettlement(spin.jobId,spin.bet,spin.payout);
-  },e=>console.warn('[SLOTS] Reserva indisponível:',e?.message||e)));
   state.userUnsubs.push(onValue(ref(db,`siteInventory/${uid}`),s=>{state.siteInventory=s.exists()?s.val():{};renderStore()}));
   state.userUnsubs.push(onValue(ref(db,`siteCustomization/${uid}`),s=>{state.siteCustomization=s.exists()?s.val():{};applyCustomization();renderStore();syncPublicCustomization().catch(()=>{})}));
   state.userUnsubs.push(onValue(ref(db,'siteStoreCatalog'),sn=>{state.storeCatalog=sn.exists()?sn.val():{};mergeRemoteStoreCatalog(state.storeCatalog);renderStore();applyCustomization();}));
@@ -457,10 +450,57 @@ function startUserSubscriptions(){
   // Fallback leve: se um listener do Firebase for cancelado (ex.: regras foram publicadas com o site aberto),
   // convites e partidas continuam aparecendo sem precisar recarregar a página.
   scheduleGameRealtimeSync(350);
-  // Listeners são a via principal; uma revisão lenta recupera estados perdidos sem
-  // quatro novas leituras do Firebase a cada 1,2 segundo por jogador.
-  state.gameRealtimePoll=setInterval(()=>{if(!document.hidden)syncSiteGameRealtimeState().catch(()=>{});},45000);
+  state.gameRealtimePoll=setInterval(()=>syncSiteGameRealtimeState().catch(()=>{}),3000);
 }
+
+await initialAuthPolicy();
+onAuthStateChanged(auth,user=>{
+  document.body.classList.remove('auth-loading');
+  state.user=user||null;
+
+  if(!user){
+    document.body.classList.remove('authenticated');
+    $('appShell').setAttribute('aria-hidden','true');
+    const reason=sessionStorage.getItem('gremory:banReason');
+    if(reason){$('authStatus').textContent=`Conta suspensa: ${reason}`;sessionStorage.removeItem('gremory:banReason')}
+    clearUserSubscriptions();
+    return;
+  }
+
+  // Abre o site imediatamente após o Auth. Dados complementares carregam em seguida.
+  document.body.classList.add('authenticated');
+  $('appShell').setAttribute('aria-hidden','false');
+  setTimeout(()=>{const gif=$('authGif');if(gif)gif.removeAttribute('src')},250);
+
+  if(!state.profile){
+    state.profile={
+      uid:user.uid,
+      nome:user.displayName||user.email?.split('@')[0]||'Usuário',
+      username:'',avatar:user.photoURL||'',bio:'',favoriteAnime:'',email:user.email||'',
+      raidWhatsappNotify:false,createdAt:user.metadata?.creationTime||nowIso()
+    };
+  }
+  renderAccount();
+  renderAdminAccess();
+  startUserSubscriptions();
+
+  withTimeout(readUserData(user),12000,'DB_TIMEOUT').then(()=>{
+    renderAccount();
+    if(!state.profile?.username)setTimeout(()=>{toast('Escolha seu nome de usuário para completar a conta.',5000);setDrawer(true)},700);
+  }).catch(e=>{
+    console.warn('[GREMORY AUTH] Perfil ainda não sincronizado:',e);
+    toast('Conta conectada. Algumas informações ainda estão sincronizando.',4000);
+  });
+
+  state.ttt.lastResultId=localStorage.getItem(`gremory:tttSeen:${user.uid}`)||'';
+  loadPokemonSources().catch(()=>{});
+
+  const params=new URLSearchParams(location.search);
+  const watchInvite=params.get('watch');
+  const rpgInvite=params.get('rpg');
+  if(watchInvite){navigate('watch');joinWatchRoom(watchInvite.toUpperCase()).catch(()=>{})}
+  else if(rpgInvite){navigate('rpg');joinRoom(rpgInvite.toUpperCase()).catch(()=>{})}
+});
 
 function generatedTone(freq=720,duration=.12){
   try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;const ctx=new Ctx(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.frequency.value=freq;gain.gain.value=.035;osc.connect(gain);gain.connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+duration);setTimeout(()=>ctx.close().catch(()=>{}),Math.ceil((duration+.15)*1000))}catch{}
@@ -634,87 +674,106 @@ function playPokemonSound(kind){
   tryCustomGameSound(row[0],{fallback:()=>playSiteSound(row[1],row[2])});
 }
 
-// SLOTS: processamento na API do site; bridge sincroniza somente a carteira.
+// ======================================================
+// SLOTS — inicialização antecipada e independente do status visual de vínculo.
+// A carteira continua sendo a mesma Rupia da Charlotte via siteBridgeJobs.
+// ======================================================
 const SLOT_SYMBOLS=['♛','✦','◆','♥','☾','⚡','7'];
 let slotBusy=false;
 const slotWait=ms=>new Promise(r=>setTimeout(r,ms));
-let activeSlotJob='',slotSettlementUnsub=null,slotSettlementTimer=null;
-async function querySlotStatus(spinId=''){
-  if(!state.user)throw new Error('Entre na sua conta.');
-  const uid=state.user.uid;
-  const id=String(spinId||'');
-  if(id&&!/^spin_[a-f0-9]{32}$/.test(id))throw new Error('Identificador de giro inválido.');
-  const [walletSnap,legacySnap,jobSnap,resultSnap]=await Promise.all([
-    get(ref(db,`siteWallets/${uid}`)),get(ref(db,`siteSlotsPending/${uid}`)),
-    id?get(ref(db,`siteBridgeJobs/${uid}/${id}`)):Promise.resolve(null),
-    id?get(ref(db,`siteBridgeResults/${uid}/${id}`)):Promise.resolve(null)
-  ]);
-  const wallet=walletSnap.val()||{},receipt=id?(wallet.receipts?.[id]||null):null;
-  const legacy=legacySnap.val()||null;
-  if(receipt?.kind==='slot')return{ok:true,status:'done',spinId:id,bet:receipt.bet,balance:receipt.balance,spin:receipt.spin};
-  const result=resultSnap?.val?.()||null;
-  if(result?.ok===false)return{status:'error',error:result.error||'Giro não concluído.',pending:!!legacy};
-  if(legacy)return{status:'legacy_pending',pending:true,spinId:id,balance:wallet.balance};
-  if(jobSnap?.exists())return{status:'processing',pending:true,spinId:id,balance:wallet.balance};
-  return{status:'none',pending:false,spinId:id,balance:wallet.balance};
-}
-function showSpinResult(spin,balance){
-  const syms=Array.isArray(spin.symbols)?spin.symbols:[];
-  const reels=[$('slotReel1'),$('slotReel2'),$('slotReel3')];
-  syms.forEach((v,i)=>{if(reels[i])reels[i].textContent=v});
-  if(Number.isSafeInteger(Number(balance))){state.siteWallet={...(state.siteWallet||{}),balance:Number(balance)};renderAccount()}
-  const payout=Number(spin.payout||0),jackpot=!!spin.jackpot;
-  if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':payout>0?'Você ganhou!':'Sem prêmio';
-  if($('slotsLastWin'))$('slotsLastWin').textContent=`${syms.join(' ')} • ${payout?'prêmio ₹'+formatNumber(payout):'sem prêmio'} • saldo ₹${formatNumber(balance)}`;
-  if(jackpot){playGameSfx('jackpot');showGameResult({title:'JACKPOT!',text:`Prêmio ₹${formatNumber(payout)}.`,win:true,icon:'7'});}
-  else if(payout>0)playVictoryTone();else playGameSfx('debit');
-}
 async function runSlotsSpin(){
   if(slotBusy)return;
-  if(!state.user)return toast('Entre na sua conta para jogar.');
-  const key=`gremory_site_spin_${state.user.uid}`,betKey=key+'_bet';
-  let requestId='',storedBet=0;
-  try{requestId=sessionStorage.getItem(key)||'';storedBet=Number(sessionStorage.getItem(betKey)||0)}catch{}
-  const bet=requestId&&storedBet?storedBet:Number($('slotsBetInput')?.value||0);
-  if(!Number.isSafeInteger(bet)||bet<10||bet>1000000000)return toast('A aposta deve ficar entre ₹10 e ₹1.000.000.000.');
+  const bet=Math.floor(Number($('slotsBetInput')?.value||0));
+  if(!Number.isFinite(bet)||bet<10||bet>5000)return toast('A aposta deve ficar entre ₹10 e ₹5.000.');
+
+  // Se já temos saldo sincronizado, validamos antes. Se o espelho ainda não carregou,
+  // deixamos a Charlotte validar a carteira real em vez de bloquear o botão.
+  const hasWalletSnapshot=!!state.charlotteSync?.account;
+  const mirroredBalance=Number(accountSnapshot().balance||0);
+  if(hasWalletSnapshot&&mirroredBalance<bet)return toast(`Saldo insuficiente. Você possui ₹${formatNumber(mirroredBalance)}.`);
+
   slotBusy=true;
-  const btn=$('slotsSpinBtn'),reels=[$('slotReel1'),$('slotReel2'),$('slotReel3')];
+  playGameSfx('start');
+  const btn=$('slotsSpinBtn'),els=[$('slotReel1'),$('slotReel2'),$('slotReel3')];
   if(btn)btn.disabled=true;
-  let timer=null,safety=null,stopSound=null,stopped=false;
-  const stop=()=>{if(stopped)return;stopped=true;if(timer)clearInterval(timer);if(safety)clearTimeout(safety);try{stopSound?.()}catch{}reels.forEach(e=>e?.classList.remove('spinning'))};
-  const clearPending=()=>{try{sessionStorage.removeItem(key);sessionStorage.removeItem(betKey)}catch{}};
+  els.forEach(e=>e?.classList.add('spinning'));
+  if($('slotsStatus'))$('slotsStatus').textContent='Girando...';
+  if($('slotsLastWin'))$('slotsLastWin').textContent=`Apostando ₹${formatNumber(bet)}...`;
+
+  const started=Date.now();
+  const stopSpinSound=startSlotSpinSound();
+  let timer=setInterval(()=>els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]}),78);
+  let visualStopped=false;
+  const stopVisual=()=>{
+    if(visualStopped)return;
+    visualStopped=true;
+    if(timer){clearInterval(timer);timer=null}
+    try{stopSpinSound()}catch{}
+    els.forEach(e=>e?.classList.remove('spinning'));
+  };
+  const visualSafety=setTimeout(()=>{
+    stopVisual();
+    if($('slotsStatus'))$('slotsStatus').textContent='Sincronizando Rupias...';
+    if($('slotsLastWin'))$('slotsLastWin').textContent='O giro terminou. Confirmando a carteira...';
+  },4200);
+
   try{
-    if(requestId){
-      const status=await Promise.race([querySlotStatus(requestId),new Promise((_,reject)=>{safety=setTimeout(()=>reject(new Error('Não foi possível consultar o giro pendente.')),8000)})]);
-      clearTimeout(safety);safety=null;
-      if(status.status==='done'){clearPending();showSpinResult(status.spin,status.balance);return toast('Giro anterior recuperado.');}
-      if(status.pending||!storedBet)return toast('Giro anterior pendente. Nenhuma nova aposta foi enviada.',6500);
-      // Reenviar o MESMO ID recupera a operação; nunca cria outra cobrança.
-    }else{
-      requestId='spin_'+crypto.randomUUID().replace(/-/g,'');
-      sessionStorage.setItem(key,requestId);sessionStorage.setItem(betKey,String(bet));
+    // requireLink=false evita bloquear por um charlottePublic atrasado. O bridge é quem
+    // valida o UID/JID real e usa delkoin/addkoin na carteira oficial.
+    const r=await bridgeRequest('slots_spin',{bet},18000,false);
+    await slotWait(Math.max(0,1550-(Date.now()-started)));
+    clearTimeout(visualSafety);
+    stopVisual();
+
+    for(let i=0;i<6;i++){
+      els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]});
+      await slotWait(48+i*14);
     }
-    reels.forEach(e=>e?.classList.add('spinning'));
-    if($('slotsStatus'))$('slotsStatus').textContent='Girando...';
-    stopSound=startSlotSpinSound();
-    timer=setInterval(()=>reels.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]}),80);
-    safety=setTimeout(()=>{stop();if($('slotsStatus'))$('slotsStatus').textContent='Aguardando confirmação do site';},4500);
-    const r=await siteApi('slots_spin_site',{bet,requestId},15000);
-    stop();showSpinResult(r.spin||r,r.balance);clearPending();
+    const symbols=Array.isArray(r.symbols)&&r.symbols.length===3?r.symbols:['✦','✦','✦'];
+    for(let i=0;i<symbols.length;i++){
+      if(els[i])els[i].textContent=symbols[i];
+      playGameSfx('reelStop');
+      if(i<symbols.length-1)await slotWait(105);
+    }
+
+    const payout=Number(r.payout||0),balance=Number(r.balance??accountSnapshot().balance??0),jackpot=!!r.jackpot;
+    if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(balance)}`;
+    if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':payout>0?'Você ganhou!':'Sem prêmio';
+    if($('slotsLastWin'))$('slotsLastWin').textContent=payout>0
+      ? `${symbols.join(' ')} • prêmio ₹${formatNumber(payout)} • saldo ₹${formatNumber(balance)}`
+      : `${symbols.join(' ')} • perdeu ₹${formatNumber(bet)} • saldo ₹${formatNumber(balance)}`;
+
+    if(jackpot){
+      playGameSfx('jackpot');
+      setTimeout(()=>playGameSfx('coins'),240);
+      showGameResult({title:'JACKPOT!',text:`${symbols.join(' ')} • você ganhou ₹${formatNumber(payout)}. Saldo: ₹${formatNumber(balance)}.`,win:true,icon:'7'});
+    }else if(payout>0){
+      playVictoryTone();
+      setTimeout(()=>playGameSfx('coins'),220);
+    }else{
+      playGameSfx('debit');
+      setTimeout(()=>playDefeatTone(),180);
+    }
+    bridgeRequest('sync_account',{},25000,false).catch(()=>{});
   }catch(e){
-    stop();
-    if(e.pending===false)clearPending();
-    if($('slotsStatus'))$('slotsStatus').textContent=e.pending===false?'Giro não realizado':'Confirmar giro pendente';
-    if($('slotsLastWin'))$('slotsLastWin').textContent=e.message||'Falha de conexão. O mesmo giro será consultado antes de outra aposta.';
-    toast(e.message||'Não foi possível concluir o giro.',6500);
-  }finally{stop();slotBusy=false;if(btn)btn.disabled=false}
+    clearTimeout(visualSafety);
+    stopVisual();
+    if($('slotsStatus'))$('slotsStatus').textContent='Não concluído';
+    if($('slotsLastWin'))$('slotsLastWin').textContent=String(e?.message||'Não foi possível confirmar a aposta.');
+    bridgeRequest('sync_account',{},25000,false).catch(()=>{});
+    toast(e?.message||'Não foi possível concluir o giro.',5500);
+  }finally{
+    slotBusy=false;
+    if(btn)btn.disabled=false;
+  }
 }
-// Delegação também funciona no mobile.
+// Delegação é instalada cedo. Mesmo se outro módulo secundário falhar mais abaixo,
+// o botão do Slots e os presets continuam respondendo no mobile.
 document.addEventListener('click',ev=>{
   const target=ev.target instanceof Element?ev.target:null;if(!target)return;
   const betBtn=target.closest('[data-slot-bet]');
-  if(betBtn){playGameSfx('select');if($('slotsBetInput'))$('slotsBetInput').value=betBtn.dataset.slotBet||'50';return;}
-  if(target.closest('#slotsSpinBtn')){ev.preventDefault();runSlotsSpin().catch(e=>toast(e?.message||'Erro no Slots.'));}
+  if(betBtn){playGameSfx('select');if($('slotsBetInput'))$('slotsBetInput').value=betBtn.dataset.slotBet||'50';return}
+  if(target.closest('#slotsSpinBtn')){ev.preventDefault();runSlotsSpin().catch(e=>toast(e?.message||'Erro no Slots.'))}
 },{passive:false});
 
 function notificationStorageKey(suffix='seen'){
@@ -762,7 +821,7 @@ function markAllNotificationsSeen(){localStorage.setItem(notificationStorageKey(
 function isNotificationUnread(n){return !notificationWasDismissed(n)&&Number(n?.createdAt||0)>notificationLastSeen()&&!notificationReadIds().has(String(n?.id||''))}
 function notificationCategory(n){
   const type=String(n?.type||'').toLowerCase();
-  if(['friend_request','pokemon_duel','ttt','blackjack','hangman','game_challenge','watch_invite','tinder_match','friend','social'].includes(type))return'social';
+  if(['friend_request','pokemon_duel','ttt','blackjack','hangman','game_challenge','tinder_match','friend','social'].includes(type))return'social';
   return'team';
 }
 function notificationCategoryLabel(n){return notificationCategory(n)==='social'?'Amigos':'Equipe'}
@@ -829,7 +888,7 @@ function renderNotifications(){
   rows.slice(0,60).forEach(n=>{
     const row=document.createElement('div');row.className='notification-row-wrap'+(isNotificationUnread(n)?' unread':'')+(n.type==='game_challenge'?' game-challenge':'');
     const d=document.createElement('button');d.type='button';d.className='notification-row';const head=document.createElement('div');head.className='notification-row-head';const st=document.createElement('strong');st.textContent=n.title||'Notificação';const kind=document.createElement('em');kind.textContent=notificationCategoryLabel(n);head.append(st,kind);const sm=document.createElement('span');sm.textContent=n.text||'';const time=document.createElement('small');time.textContent=shortDateTime(n.createdAt);d.append(head,sm,time);
-    d.onclick=()=>{markNotificationRead(n);if(n.type==='game_challenge')return;if(n.type==='watch_invite'&&n.watchCode){closeModal('notificationModal');navigate('watch');joinWatchRoom(n.watchCode).catch(e=>toast(e.message));return}if(n.imageUrl||n.type==='admin_notice'||n.type==='site_update'){openNotificationDetail(n);return}if(n.link?.startsWith('#')){closeModal('notificationModal');navigate(n.link.slice(1));return}openNotificationDetail(n)};
+    d.onclick=()=>{markNotificationRead(n);if(n.type==='game_challenge')return;if(n.imageUrl||n.type==='admin_notice'||n.type==='site_update'){openNotificationDetail(n);return}if(n.link?.startsWith('#')){closeModal('notificationModal');navigate(n.link.slice(1));return}openNotificationDetail(n)};
     row.appendChild(d);
     if(n.type==='game_challenge'&&n.challengeId){
       const actions=document.createElement('div');actions.className='notification-game-actions';
@@ -937,7 +996,7 @@ function renderAdminDashboard(){
   const updates=Object.entries(state.admin.updates||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
   if($('adminOpenReports'))$('adminOpenReports').textContent=String(reports.length);
   if($('adminUpdateCount'))$('adminUpdateCount').textContent=String(updates.length);
-  if($('adminUserCount'))$('adminUserCount').textContent=String(Object.keys(state.admin.directory||{}).length);renderAdminUsers();
+  if($('adminUserCount'))$('adminUserCount').textContent=String(Object.keys(state.admin.directory||{}).length);
 
   const reportBox=$('adminReportsList');if(reportBox){reportBox.innerHTML='';if(!reports.length)reportBox.innerHTML='<div class="empty-state small">Nenhuma denúncia aberta.</div>';
     const counts={};reports.forEach(r=>counts[r.targetUid]=(counts[r.targetUid]||0)+1);
@@ -967,8 +1026,6 @@ function renderAdminDashboard(){
     })
   }
 }
-function renderAdminUsers(){const box=$('adminUsersList');if(!box)return;const q=String($('adminUsersFilter')?.value||'').trim().toLowerCase(),rows=Object.entries(state.admin.directory||{}).map(([uid,p])=>({uid,...p})).filter(p=>!q||String(p.nome||'').toLowerCase().includes(q)||String(p.username||'').toLowerCase().includes(q)||p.uid.toLowerCase().includes(q)).sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR')).slice(0,250);box.innerHTML='';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhum usuário encontrado.</div>';return}rows.forEach(p=>{const row=document.createElement('article');row.className='admin-list-row';row.innerHTML=`<div><strong>${escText(p.nome||'Usuário')}</strong><small>${p.username?'@'+escText(normalizeUsername(p.username))+' • ':''}${escText(p.uid)}</small></div>`;const b=document.createElement('button');b.className='mini-btn';b.textContent='Selecionar';b.onclick=()=>{state.admin.selectedUid=p.uid;if($('adminUserQuery'))$('adminUserQuery').value=p.username?'@'+normalizeUsername(p.username):p.uid;adminLookupUser()};row.appendChild(b);box.appendChild(row)})}
-$('adminUsersFilter')?.addEventListener('input',renderAdminUsers);
 async function adminDeletePublication(id){
   if(!isSiteAdmin()||!id)return;
   if(!confirm(`Apagar a publicação ${id}?`))return;
@@ -1005,69 +1062,20 @@ $('adminDeletePostForm')?.addEventListener('submit',async ev=>{ev.preventDefault
 $('adminUserLookupForm')?.addEventListener('submit',adminLookupUser);
 $('adminBanUserBtn')?.addEventListener('click',async()=>{if(!state.admin.selectedUid)await adminLookupUser();if(state.admin.selectedUid)await adminBanUid(state.admin.selectedUid,$('adminBanReason').value.trim()||'Violação das regras')});
 $('adminUnbanUserBtn')?.addEventListener('click',async()=>{if(!state.admin.selectedUid)await adminLookupUser();if(state.admin.selectedUid)await adminUnbanUid(state.admin.selectedUid)});
-$('adminResetCharlotteLinkBtn')?.addEventListener('click',async()=>{
-  try{
-    if(!state.admin.selectedUid)await adminLookupUser();
-    const targetUid=requireAdminSelectedUid();
-    const person=state.admin.directory?.[targetUid]?.nome||targetUid;
-    if(!confirm(`Resetar somente o vínculo da Charlotte de ${person}?\n\nIsso NÃO apaga Rúpias, Pokémon, perfil, amigos, compras ou backups. O usuário precisará gerar um novo código e vincular novamente.`))return;
-    const btn=$('adminResetCharlotteLinkBtn');if(btn)btn.disabled=true;
-    const r=await bridgeRequest('admin_reset_charlotte_link',{targetUid},30000,false);
-    toast(r?.hadLink?'Vínculo da Charlotte resetado. Agora gere um novo código para esse usuário.':'Dados de vínculo limpos. Agora tente vincular novamente.',6500);
-    if(btn)btn.disabled=false;
-    await loadAdminDashboard();
-  }catch(e){if($('adminResetCharlotteLinkBtn'))$('adminResetCharlotteLinkBtn').disabled=false;toast(e.message||'Não foi possível resetar o vínculo.',6000)}
-});
-
-$('adminCreateCharlotteLinkBtn')?.addEventListener('click',async()=>{
-  try{
-    if(!state.admin.selectedUid)await adminLookupUser();
-    const targetUid=requireAdminSelectedUid(),btn=$('adminCreateCharlotteLinkBtn');if(btn)btn.disabled=true;
-    const r=await bridgeRequest('admin_create_link_code',{targetUid},30000,false),code=String(r?.code||'').trim();
-    if(!code)throw new Error('O bridge não retornou o código.');
-    const help=$('adminCharlotteLinkHelp');if(help)help.innerHTML=`Código para <strong>${escText(state.admin.directory?.[targetUid]?.nome||targetUid)}</strong>: <code>${escText(code)}</code> • expira em 10 minutos • envie <code>/vincular ${escText(code)}</code> para a Charlotte.`;
-    try{await navigator.clipboard?.writeText?.(code)}catch{}
-    toast(`Código ${code} criado e copiado.`,7000);if(btn)btn.disabled=false;
-  }catch(e){if($('adminCreateCharlotteLinkBtn'))$('adminCreateCharlotteLinkBtn').disabled=false;toast(e.message||'Não foi possível gerar o código.',6000)}
-});
 
 
 function requireAdminSelectedUid(){const uid=String(state.admin.selectedUid||'').trim();if(!uid)throw new Error('Localize um usuário primeiro.');return uid}
 async function adminGrantCurrency(sign=1){try{const targetUid=requireAdminSelectedUid(),amount=Math.max(1,Math.floor(Number($('adminCurrencyAmount')?.value||0)))*Math.sign(sign||1);const r=await bridgeRequest('admin_grant_currency',{targetUid,amount},25000,false);toast(`Saldo atualizado: ₹${formatNumber(r.balance||0)}.`);await loadAdminDashboard()}catch(e){toast(e.message)}}
 async function adminGrantPremium(){try{const targetUid=requireAdminSelectedUid(),days=Math.max(1,Math.floor(Number($('adminPremiumDays')?.value||0)));const r=await bridgeRequest('admin_grant_premium',{targetUid,days},25000,false);toast(`Premium concedido por ${r.days||days} dias.`)}catch(e){toast(e.message)}}
-async function adminSetPremiumGroup(){try{const targetUid=requireAdminSelectedUid(),groupLink=String($('adminPremiumGroupLink')?.value||'').trim();if(!groupLink)throw new Error('Cole o link do grupo.');const r=await bridgeRequest('admin_premium_group_set',{targetUid,groupLink},30000,false);toast(`Grupo Premium vinculado: ${r.group?.groupName||'grupo'}.`);$('adminPremiumGroupLink').value=''}catch(e){toast(e.message,6000)}}
-$('adminGiveCurrencyBtn')?.addEventListener('click',()=>adminGrantCurrency(1));$('adminRemoveCurrencyBtn')?.addEventListener('click',()=>adminGrantCurrency(-1));$('adminGivePremiumBtn')?.addEventListener('click',adminGrantPremium);$('adminPremiumGroupSetBtn')?.addEventListener('click',adminSetPremiumGroup);
+$('adminGiveCurrencyBtn')?.addEventListener('click',()=>adminGrantCurrency(1));$('adminRemoveCurrencyBtn')?.addEventListener('click',()=>adminGrantCurrency(-1));$('adminGivePremiumBtn')?.addEventListener('click',adminGrantPremium);
 
 $('adminNotificationForm')?.addEventListener('submit',async ev=>{ev.preventDefault();if(!isSiteAdmin())return;const target=$('adminNotificationTarget')?.value||'all',title=String($('adminNotificationTitle')?.value||'Aviso da Gremory').trim().slice(0,80),text=String($('adminNotificationText')?.value||'').trim().slice(0,800),link=String($('adminNotificationLink')?.value||'').trim().slice(0,300);if(!text)return toast('Escreva a mensagem.');try{let uids=target==='selected'?[requireAdminSelectedUid()]:Object.keys(state.admin.directory||{});if(!uids.length)throw new Error('Nenhum usuário encontrado.');const createdAt=Date.now(),patch={};for(const uid of uids){const id=`admin_${createdAt}_${Math.random().toString(36).slice(2,7)}`;patch[`siteNotifications/${uid}/${id}`]={id,type:'admin_notice',title,text,link,sound:true,createdAt}}await update(ref(db),patch);$('adminNotificationText').value='';toast(`Notificação enviada para ${uids.length} usuário${uids.length===1?'':'s'}.`)}catch(e){toast(permissionMessage(e,e.message))}});
 
 $('adminStoreForm')?.addEventListener('submit',async ev=>{ev.preventDefault();try{const itemId=String($('adminStoreId')?.value||'').trim().toLowerCase(),name=String($('adminStoreName')?.value||'').trim(),price=Number($('adminStorePrice')?.value||0),slot=$('adminStoreSlot')?.value||'cover',mediaUrl=String($('adminStoreMediaUrl')?.value||'').trim();await bridgeRequest('admin_store_upsert',{item:{id:itemId,name,price,slot,mediaUrl,mediaKind:slot==='decor'?'sprite':'gif'}},25000,false);toast('Personalização salva na loja.')}catch(e){toast(e.message)}});
 $('adminStoreDeleteBtn')?.addEventListener('click',async()=>{try{const itemId=String($('adminStoreId')?.value||'').trim().toLowerCase();if(!itemId)throw new Error('Informe o ID do item.');await bridgeRequest('admin_store_delete',{itemId},20000,false);toast('Item removido da loja.')}catch(e){toast(e.message)}});
 
-function renderAdminBackupStatus(){
-  const b=state.admin.backupStatus||{},pill=$('adminBackupStatus'),meta=$('adminBackupMeta');
-  if(pill)pill.textContent=b.restartRequired?'Reiniciar':b.recoveryRequired?'Recuperação':b.lastSuccessAt?'Ativo':'Aguardando';
-  if(meta){
-    if(b.restartRequired)meta.textContent=`Backup restaurado: ${Number(b.restoredFiles||0)} arquivo(s). Reinicie a Charlotte para carregar os dados restaurados.`;
-    else if(b.recoveryRequired)meta.textContent=`Backup remoto protegido. ${Number(b.remoteFiles||0)} arquivo(s) no Firebase; ${Number(b.missingFiles||0)} ausente(s) e ${Number(b.mismatchedFiles||0)} diferente(s) localmente. A Charlotte continua funcionando; restaure antes de substituir o backup remoto.`;
-    else if(b.lastSuccessAt)meta.textContent=`Última cópia: ${shortDateTime(b.lastSuccessAt)} • ${Number(b.files||0)} arquivo(s) • ${Number(b.skipped||0)} ignorado(s)`;
-    else meta.textContent='Aguardando a primeira cópia de segurança da Charlotte.';
-  }
-}
-$('adminBackupNowBtn')?.addEventListener('click',async()=>{
-  const btn=$('adminBackupNowBtn');try{btn.disabled=true;let confirmReplace=false;if(state.admin.backupStatus?.recoveryRequired){confirmReplace=confirm(`ATENÇÃO: esta instalação está diferente do backup remoto.
-
-Cancelar = manter o backup remoto protegido.
-OK = SUBSTITUIR o backup remoto pelos JSONs atuais desta Railway.
-
-Só confirme se você tiver certeza de que os dados locais atuais são os corretos.`);if(!confirmReplace){btn.disabled=false;return}}
-    const r=await bridgeRequest('admin_backup_now',{confirmReplace},90000,false);toast(`Backup concluído: ${r.files||0} arquivo(s).`);await loadAdminDashboard();btn.disabled=false
-  }catch(e){if(btn)btn.disabled=false;toast(e.message)}
-});
-$('adminRestoreBackupBtn')?.addEventListener('click',async()=>{
-  const btn=$('adminRestoreBackupBtn');try{if(!confirm(`Restaurar TODOS os JSONs salvos no Firebase para esta Charlotte?
-
-Use isso em um deploy novo da Railway. Os arquivos locais correspondentes serão substituídos pelo backup. Depois será necessário reiniciar a Charlotte.`))return;btn.disabled=true;const r=await bridgeRequest('admin_restore_backup',{},120000,false);toast(`Backup restaurado: ${r.restoredFiles||0} arquivo(s). REINICIE a Charlotte agora.`,9000);await loadAdminDashboard();btn.disabled=false}catch(e){if(btn)btn.disabled=false;toast(e.message||'Não foi possível restaurar o backup.',8000)}
-});
+function renderAdminBackupStatus(){const b=state.admin.backupStatus||{};if($('adminBackupStatus'))$('adminBackupStatus').textContent=b.lastSuccessAt?'Ativo':'Aguardando';if($('adminBackupMeta'))$('adminBackupMeta').textContent=b.lastSuccessAt?`Última cópia: ${shortDateTime(b.lastSuccessAt)} • ${Number(b.files||0)} arquivo(s) • ${Number(b.skipped||0)} ignorado(s)`:'Aguardando a primeira cópia de segurança da Charlotte.'}
+$('adminBackupNowBtn')?.addEventListener('click',async()=>{try{const btn=$('adminBackupNowBtn');btn.disabled=true;const r=await bridgeRequest('admin_backup_now',{},60000,false);toast(`Backup concluído: ${r.files||0} arquivo(s).`);await loadAdminDashboard();btn.disabled=false}catch(e){if($('adminBackupNowBtn'))$('adminBackupNowBtn').disabled=false;toast(e.message)}});
 
 function renderAdminSupportConversations(){const box=$('adminSupportConversations');if(!box)return;const rows=Object.entries(state.admin.supportChats||{}).map(([uid,v])=>({uid,meta:v?.meta||{},messages:v?.messages||{}})).sort((a,b)=>Number(b.meta.updatedAt||0)-Number(a.meta.updatedAt||0));box.innerHTML='';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma conversa.</div>';return}rows.slice(0,80).forEach(r=>{const b=document.createElement('button');b.type='button';b.className='admin-support-conversation'+(state.admin.supportSelectedUid===r.uid?' active':'');b.innerHTML=`<strong>${escText(r.meta.name||state.admin.directory?.[r.uid]?.nome||'Usuário')}</strong><span>${escText(r.meta.lastText||'Abrir conversa')}</span>`;b.onclick=()=>openAdminSupportChat(r.uid);box.appendChild(b)})}
 function openAdminSupportChat(uid){state.admin.supportSelectedUid=String(uid||'');try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;renderAdminSupportConversations();if(!uid)return;state.admin.supportUnsub=onValue(query(ref(db,`supportChats/${uid}/messages`),orderByChild('createdAt'),limitToLast(150)),sn=>{renderSupportMessages('adminSupportChat',sn.exists()?sn.val():{},state.user?.uid)});if($('adminSupportReplyInput'))$('adminSupportReplyInput').disabled=false;if($('adminSupportReplyForm')?.querySelector('button'))$('adminSupportReplyForm').querySelector('button').disabled=false}
@@ -1191,7 +1199,7 @@ $('pokemonExploreBotBtn').onclick=async()=>{try{const r=await bridgeRequest('pok
 
 // Duelo Pokémon 6x6 via bridge do bot
 function renderDuelFriendSelect(){const sel=$('duelFriendSelect');if(!sel)return;const current=sel.value;sel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';sel.appendChild(o)});if(state.friends[current])sel.value=current;renderGameFriendSelects()}
-$('sendDuelChallengeBtn').addEventListener('click',async()=>{const targetUid=$('duelFriendSelect').value;if(!targetUid)return toast('Escolha um amigo.');if(state.charlottePublic?.status!=='linked')return toast('Vincule a Charlotte primeiro.');playGameSfx('select');try{await bridgeRequest('duel_challenge',{targetUid},25000,true);toast('Desafio 6x6 enviado e confirmado.')}catch(e){toast(permissionMessage(e))}});
+$('sendDuelChallengeBtn').addEventListener('click',async()=>{const targetUid=$('duelFriendSelect').value;if(!targetUid)return toast('Escolha um amigo.');if(state.charlottePublic?.status!=='linked')return toast('Vincule a Charlotte primeiro.');playGameSfx('select');try{await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type:'duel_challenge',targetUid,createdAt:nowIso()});toast('Desafio 6x6 enviado.')}catch(e){toast(permissionMessage(e))}});
 function renderDuelInbox(obj){const box=$('duelInbox');box.innerHTML='';const rows=Object.entries(obj||{});if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhum desafio.</div>';return}rows.forEach(([id,c])=>{const r=document.createElement('div');r.className='duel-request';const cp=document.createElement('div');const st=document.createElement('strong');st.textContent=c.fromName||'Desafiante';const sm=document.createElement('small');sm.textContent='quer batalhar 6x6';cp.append(st,sm);const acts=document.createElement('div');acts.className='person-actions';const a=document.createElement('button');a.className='mini-btn primary';a.textContent='Aceitar';a.onclick=()=>duelJob('duel_accept',{challengeId:id});const d=document.createElement('button');d.className='mini-btn';d.textContent='Recusar';d.onclick=()=>duelJob('duel_decline',{challengeId:id});acts.append(a,d);r.append(cp,acts);box.appendChild(r)})}
 async function duelJob(type,data){try{playGameSfx(type==='duel_switch'?'switch':'select');await push(ref(db,`siteBridgeJobs/${state.user.uid}`),{type,...data,createdAt:nowIso()});toast(type==='duel_move'?'Golpe enviado.':type==='duel_switch'?'Troca enviada.':'Processando...')}catch(e){toast(permissionMessage(e))}}
 function handleDuelIndex(obj){
@@ -1242,49 +1250,11 @@ $('duelExitBtn')?.addEventListener('click',async()=>{if(!state.duel)return;if(!c
 
 // Bridge / ações do site
 function linkedCharlotte(){return state.charlottePublic?.status==='linked'}
-async function siteApi(action,data={},timeoutMs=15000){
-  if(!state.user)throw new Error('Entre na sua conta.');
-  const controller=new AbortController();let timer;
-  const work=(async()=>{
-    const idToken=await state.user.getIdToken();
-    if(controller.signal.aborted)throw new Error('Solicitação encerrada.');
-    const response=await fetch('/api/main?action='+encodeURIComponent(action),{method:'POST',headers:{'content-type':'application/json'},cache:'no-store',signal:controller.signal,body:JSON.stringify({...data,idToken})});
-    const result=await response.json();
-    if(!response.ok)throw Object.assign(new Error(result.erro||`Servidor do site indisponível (${response.status}).`),{code:result.code,pending:response.status>=500||/PENDING|CONFLICT/.test(result.code||'')});
-    return result;
-  })();
-  try{return await Promise.race([work,new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(Object.assign(new Error('O servidor do site ainda não confirmou. Consulte a mesma operação antes de repetir.'),{pending:true}));},timeoutMs)})]);}
-  finally{clearTimeout(timer)}
-}
-async function siteGameRequest(type,data={}){
-  const allowed=new Set(['ttt_move','ttt_exit','blackjack_move','blackjack_exit','hangman_guess','hangman_exit']);
-  if(!allowed.has(type))throw new Error('Ação de jogo inválida.');
-  return siteApi('site_game',{type,...data,actionId:'act_'+crypto.randomUUID().replace(/-/g,'')},18000);
-}
-async function bridgeRequest(type,data={},timeoutMs=22000,requireLink=true,jobId=''){
-  if(!state.user)throw new Error('Entre na sua conta.');
-  if(requireLink&&!linkedCharlotte())throw new Error('Vincule a Charlotte primeiro.');
-  const uid=state.user.uid,jobRef=jobId?ref(db,`siteBridgeJobs/${uid}/${jobId}`):push(ref(db,`siteBridgeJobs/${uid}`));
-  const key=jobRef.key,resultRef=ref(db,`siteBridgeResults/${uid}/${key}`);
-  // Instalar o listener ANTES do set: um bridge rápido não pode fazer perder a resposta.
-  return new Promise((resolve,reject)=>{
-    let finished=false,unsub=null;
-    const finish=(error,result)=>{if(finished)return;finished=true;clearTimeout(deadline);try{unsub?.()}catch{}if(error)reject(error);else resolve(result)};
-    const deadline=setTimeout(()=>finish(Object.assign(new Error('A Charlotte ainda não confirmou. A ação pode estar pendente; consulte o estado atual antes de repetir qualquer pagamento.'),{pending:true,jobId:key,type})),timeoutMs);
-    try{
-      unsub=onValue(resultRef,snapshot=>{
-        if(!snapshot.exists())return;
-        const result=snapshot.val()||{};
-        finish(result.ok===false?new Error(result.error||'Operação não concluída.'):null,result);
-      },error=>finish(error));
-      if(finished)unsub?.();
-    }catch(error){finish(error);return}
-    Promise.resolve().then(async()=>{
-      // Para transações financeiras com ID fixo, nunca substituir o job existente.
-      if(jobId){const existing=await get(jobRef);if(existing.exists())return;}
-      if(!finished)await set(jobRef,{type,...data,createdAt:nowIso()});
-    }).catch(error=>finish(error));
-  });
+async function bridgeRequest(type,data={},timeoutMs=22000,requireLink=true){
+  if(!state.user) throw new Error('Entre na sua conta.');
+  if(requireLink&&!linkedCharlotte()) throw new Error('Vincule a Charlotte primeiro.');
+  const jobRef=push(ref(db,`siteBridgeJobs/${state.user.uid}`));const jobId=jobRef.key;await set(jobRef,{type,...data,createdAt:nowIso()});
+  return await new Promise((resolve,reject)=>{let done=false;let unsub=null;const timer=setTimeout(()=>{if(done)return;done=true;try{unsub?.()}catch{}reject(new Error('A Charlotte demorou para responder. Tente novamente.'))},timeoutMs);unsub=onValue(ref(db,`siteBridgeResults/${state.user.uid}/${jobId}`),sn=>{if(done||!sn.exists())return;done=true;clearTimeout(timer);try{unsub?.()}catch{}const v=sn.val()||{};if(v.ok===false)reject(new Error(v.error||'Não foi possível concluir.'));else resolve(v)},e=>{if(done)return;done=true;clearTimeout(timer);reject(e)})});
 }
 async function requestAccountSync(){return bridgeRequest('sync_account',{},25000)}
 function resultBox(){return $('siteCommandResult')}
@@ -1547,7 +1517,7 @@ function applyPublicProfileStyle(style=[]){
   const card=$('publicProfileCard');if(!card)return;Object.values(STORE_CATALOG).forEach(x=>card.classList.remove(x.className));const ids=Array.isArray(style)?style:[];ids.forEach(id=>{const item=STORE_CATALOG[String(id)];if(item)card.classList.add(item.className)});applyPublicProfileMedia(ids);if($('publicProfileStyle'))$('publicProfileStyle').textContent=ids.filter(id=>STORE_CATALOG[id]).map(id=>STORE_CATALOG[id].name).join(' • ')||'Padrão'
 }
 async function openPublicProfile(uid,fallback={}){
-  if(!uid)return;let p=fallback;try{const sn=await get(ref(db,`directory/${uid}`));if(sn.exists())p=sn.val()}catch{}currentPublicProfile={uid,...p};$('publicProfileAvatar').src=p.avatar||DEFAULT_AVATAR;$('publicProfileName').textContent=p.nome||'Usuário';if($('publicProfileUsername'))$('publicProfileUsername').textContent=p.username?`@${normalizeUsername(p.username)}`:'@sem_usuario';$('publicProfileBio').textContent=p.bio||'Sem bio ainda.';const music=$('publicProfileMusic'),songLink=$('publicProfileSongLink'),playlistLink=$('publicProfilePlaylistLink');const songUrl=String(p.profileSongUrl||'').trim(),playlistUrl=String(p.profilePlaylistUrl||'').trim();if(music){music.hidden=!songUrl&&!playlistUrl;if($('publicProfileSongTitle'))$('publicProfileSongTitle').textContent=p.profileSongTitle||'Música favorita';if(songLink){songLink.hidden=!songUrl;if(songUrl)songLink.href=songUrl}if(playlistLink){playlistLink.hidden=!playlistUrl;if(playlistUrl)playlistLink.href=playlistUrl}}$('publicProfileAnime').textContent=p.favoriteAnime||'—';$('publicProfileSince').textContent=p.createdAt?shortDate(p.createdAt):'—';const isSelf=uid===state.user?.uid,isFriend=!!state.friends?.[uid];if($('publicProfileRelation'))$('publicProfileRelation').textContent=isSelf?'Seu perfil':isFriend?'Amigo':'Visitante';applyPublicProfileStyle(p.style||[]);const btn=$('publicProfileActionBtn');btn.textContent=isSelf?'Seu perfil':isFriend?'Amigo':'Adicionar amigo';btn.disabled=isFriend||isSelf;$('publicProfileDuelBtn').disabled=!isFriend||isSelf;openModal('publicProfileModal');renderPublicBadge(uid)
+  if(!uid)return;let p=fallback;try{const sn=await get(ref(db,`directory/${uid}`));if(sn.exists())p=sn.val()}catch{}currentPublicProfile={uid,...p};$('publicProfileAvatar').src=p.avatar||DEFAULT_AVATAR;$('publicProfileName').textContent=p.nome||'Usuário';if($('publicProfileUsername'))$('publicProfileUsername').textContent=p.username?`@${normalizeUsername(p.username)}`:'@sem_usuario';$('publicProfileBio').textContent=p.bio||'Sem bio ainda.';$('publicProfileAnime').textContent=p.favoriteAnime||'—';$('publicProfileSince').textContent=p.createdAt?shortDate(p.createdAt):'—';const isSelf=uid===state.user?.uid,isFriend=!!state.friends?.[uid];if($('publicProfileRelation'))$('publicProfileRelation').textContent=isSelf?'Seu perfil':isFriend?'Amigo':'Visitante';applyPublicProfileStyle(p.style||[]);const btn=$('publicProfileActionBtn');btn.textContent=isSelf?'Seu perfil':isFriend?'Amigo':'Adicionar amigo';btn.disabled=isFriend||isSelf;$('publicProfileDuelBtn').disabled=!isFriend||isSelf;openModal('publicProfileModal');renderPublicBadge(uid)
 }
 $('publicProfileActionBtn')?.addEventListener('click',()=>{if(currentPublicProfile)sendFriendRequest(currentPublicProfile.uid,currentPublicProfile)});
 $('publicProfileDuelBtn')?.addEventListener('click',()=>{if(!currentPublicProfile)return;closeModal('publicProfileModal');navigate('pokemon');$('duelFriendSelect').value=currentPublicProfile.uid;setTimeout(()=>$('sendDuelChallengeBtn')?.scrollIntoView({behavior:'smooth',block:'center'}),80)});
@@ -1563,7 +1533,7 @@ function showGameResult({title='Partida encerrada',text='',win=false,neutral=fal
 }
 
 // Jogos PvP do site: convites, partidas e jogadas ficam no Firebase do próprio site.
-// Convites e turnos não consultam contas WhatsApp. O bridge executa jogadas sem vínculo para preservar cartas privadas e evitar falsificação.
+// A Charlotte NÃO participa de convites/turnos/resultados. Ela continua sendo usada somente onde há Rupias.
 function renderGameFriendSelect(selectId){const sel=$(selectId);if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';sel.appendChild(o)});if(state.friends[cur])sel.value=cur}
 function renderTttFriendSelect(){renderGameFriendSelect('tttFriendSelect')}
 function renderGameFriendSelects(){renderTttFriendSelect();renderGameFriendSelect('blackjackFriendSelect');renderGameFriendSelect('hangmanFriendSelect')}
@@ -1574,14 +1544,16 @@ const SITE_GAME_META={
 };
 function gameRows(obj){return Object.entries(obj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0))}
 function siteGameName(uid){return state.directory?.[uid]?.nome||state.friends?.[uid]?.nome||(uid===state.user?.uid?displayName():'Jogador')}
-async function sendSiteGameChallenge(type,targetUid,bet=0,options={}){
-  if(!state.user)throw new Error('Entre na sua conta.');if(!SITE_GAME_META[type])throw new Error('Jogo inválido.');if(!targetUid||targetUid===state.user.uid)throw new Error('Escolha um amigo válido.');if(!state.friends?.[targetUid])throw new Error('Esse usuário precisa estar na sua lista de amigos.');bet=Math.max(0,Math.floor(Number(bet||0)));if(bet&&(!Number.isSafeInteger(bet)||bet<10||bet>100000))throw new Error('A aposta deve ficar entre ₹10 e ₹100.000.');if(bet&&!linkedCharlotte())throw new Error('Vincule a Charlotte para apostar.');
-  const challengeRef=push(ref(db,`siteGameChallenges/${targetUid}`));await set(challengeRef,{id:challengeRef.key,type,fromUid:state.user.uid,fromName:displayName(),bet,...(type==='blackjack'?{mode:options.mode==='nightmare'?'nightmare':'classic'}:{}),createdAt:Date.now()});toast(`Convite de ${SITE_GAME_META[type].label}${bet?` com aposta de ₹${formatNumber(bet)}`:''} enviado.`);
+async function sendSiteGameChallenge(type,targetUid){
+  if(!state.user)throw new Error('Entre na sua conta.');if(!SITE_GAME_META[type])throw new Error('Jogo inválido.');if(!targetUid||targetUid===state.user.uid)throw new Error('Escolha um amigo válido.');if(!state.friends?.[targetUid])throw new Error('Esse usuário precisa estar na sua lista de amigos.');
+  const challengeRef=push(ref(db,`siteGameChallenges/${targetUid}`));
+  await set(challengeRef,{id:challengeRef.key,type,fromUid:state.user.uid,fromName:displayName(),createdAt:Date.now()});
+  toast(`Convite de ${SITE_GAME_META[type].label} enviado pelo site.`);
 }
 async function rejectSiteGameChallenge(id){if(!state.user||!id)return;await remove(ref(db,`siteGameChallenges/${state.user.uid}/${id}`));playGameSfx('reject');toast('Convite recusado.')}
 function challengeRow(ch){
   const row=document.createElement('div');row.className='person-row game-invite-row';
-  const copy=document.createElement('div');copy.className='person-copy';copy.innerHTML=`<strong>${escText(ch.fromName||'Amigo')}</strong><small>desafiou você para ${escText(SITE_GAME_META[ch.type]?.label||'uma partida')}${ch.type==='blackjack'&&ch.mode==='nightmare'?' • Modo Pesadelo':''}${Number(ch.bet||0)>0?` • aposta ₹${formatNumber(ch.bet)}`:' • sem aposta'}</small>`;
+  const copy=document.createElement('div');copy.className='person-copy';copy.innerHTML=`<strong>${escText(ch.fromName||'Amigo')}</strong><small>desafiou você para ${escText(SITE_GAME_META[ch.type]?.label||'uma partida')}</small>`;
   const acts=document.createElement('div');acts.className='person-actions';
   const yes=document.createElement('button');yes.type='button';yes.className='btn primary';yes.textContent='Aceitar';yes.onclick=async()=>{try{yes.disabled=true;await acceptSiteGameChallenge(ch)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível aceitar.'))}finally{yes.disabled=false}};
   const no=document.createElement('button');no.type='button';no.className='btn';no.textContent='Recusar';no.onclick=()=>rejectSiteGameChallenge(ch.id).catch(e=>toast(permissionMessage(e)));
@@ -1621,12 +1593,12 @@ async function createSiteGame(type,opponentUid){
   const idx={id:gameId,type,status:'active',createdAt,updatedAt:createdAt,createdBy:me,opponentUid:other};
   const updates={};updates[`${meta.games}/${gameId}`]=game;updates[`${meta.index}/${me}/${gameId}`]=idx;updates[`${meta.index}/${other}/${gameId}`]={...idx,opponentUid:me};await update(ref(db),updates);return gameId
 }
-async function acceptSiteGameChallenge(ch){if(!state.user||!ch?.id||!ch?.fromUid)throw new Error('Convite inválido.');if(!SITE_GAME_META[ch.type])throw new Error('Jogo inválido.');const r=await siteApi('site_game',{type:ch.type+'_create',challengeId:ch.id},18000),gameId=r.gameId;if(ch.type==='ttt')subscribeTtt(gameId);else if(ch.type==='blackjack')subscribeBlackjack(gameId);else if(ch.type==='hangman')subscribeHangman(gameId);await remove(ref(db,`siteGameChallenges/${state.user.uid}/${ch.id}`));scheduleGameRealtimeSync(20);navigate('games');playGameSfx('accept');toast(`${SITE_GAME_META[ch.type]?.label||'Partida'} iniciada${Number(ch.bet||0)>0?` • pote ₹${formatNumber(Number(ch.bet||0)*2)}`:''}.`);return gameId}
+async function acceptSiteGameChallenge(ch){if(!state.user||!ch?.id||!ch?.fromUid)throw new Error('Convite inválido.');const gameId=await createSiteGame(ch.type,ch.fromUid);if(ch.type==='ttt')subscribeTtt(gameId);else if(ch.type==='blackjack')subscribeBlackjack(gameId);else if(ch.type==='hangman')subscribeHangman(gameId);await remove(ref(db,`siteGameChallenges/${state.user.uid}/${ch.id}`));scheduleGameRealtimeSync(100);navigate('games');playGameSfx('accept');toast(`${SITE_GAME_META[ch.type]?.label||'Partida'} iniciada.`);return gameId}
 async function finishIndexes(type,game){if(!game?.id)return;const meta=SITE_GAME_META[type];if(!meta)return;const updates={};const now=Number(game.updatedAt||game.finishedAt||Date.now());for(const uid of Object.keys(game.players||{})){const base=`${meta.index}/${uid}/${game.id}`;updates[`${base}/status`]=game.status||'finished';updates[`${base}/updatedAt`]=now;updates[`${base}/finishedAt`]=Number(game.finishedAt||now);if(game.winnerUid!=null)updates[`${base}/winnerUid`]=game.winnerUid;if(game.finishReason)updates[`${base}/finishReason`]=game.finishReason;if(game.leftUid)updates[`${base}/leftUid`]=game.leftUid}try{await update(ref(db),updates)}catch(e){console.warn('[GAME EXIT] Não foi possível sincronizar os índices:',e?.message||e)}}
 function applyFinishedGameLocally(type,game){if(!game?.id)return;if(type==='ttt'&&state.ttt.game?.id===game.id)setTttGame(game);else if(type==='blackjack'&&state.blackjack.game?.id===game.id)setBlackjackGame(game);else if(type==='hangman'&&state.hangman.game?.id===game.id)setHangmanGame(game)}
 async function directGameExit(type,game){if(!state.user||!game?.id)return;const meta=SITE_GAME_META[type],uid=state.user.uid;if(!meta)throw new Error('Jogo inválido.');let failReason='';const gameRef=ref(db,`${meta.games}/${game.id}`);const tx=await runTransaction(gameRef,g=>{if(!g){failReason='Partida não encontrada.';return}if(!g.players?.[uid]){failReason='Você não participa desta partida.';return}if(g.status!=='active'){failReason='Partida já encerrada.';return}const other=Object.keys(g.players).find(x=>x!==uid)||null,now=Date.now();g.status='finished';g.winnerUid=other;g.leftUid=uid;g.finishReason='exit';g.finishedAt=now;g.updatedAt=now;g.turnUid=null;appendGameLog(g,`${g.players[uid]?.name||'Jogador'} saiu da partida. ${other?`${g.players[other]?.name||'Adversário'} venceu por desistência.`:'Partida encerrada.'}`);return g});if(!tx.committed){const current=await get(gameRef).catch(()=>null);if(current?.exists()){const value={id:game.id,...current.val()};if(value.status!=='active'){applyFinishedGameLocally(type,value);return value}}throw new Error(failReason||'Não foi possível encerrar a partida.')}const final={id:game.id,...tx.snapshot.val()};await finishIndexes(type,final);applyFinishedGameLocally(type,final);toast('Você saiu. A partida foi encerrada para os dois jogadores.');return final}
 
-$('tttCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('tttFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('ttt',targetUid,Number($('tttBetInput')?.value||0))}catch(e){toast(permissionMessage(e,e.message))}});
+$('tttCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('tttFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('ttt',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
 function focusNewSiteGame(type,id){if(!id)return;if(state.route!=='games')navigate('games');const label=SITE_GAME_META[type]?.label||'Partida';toast(`${label} iniciada.`,2600)}
 function handleTttIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.ttt.game?.id!==active.id){subscribeTtt(active.id);focusNewSiteGame('ttt',active.id)}return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.ttt.game?.id!==finished.id)subscribeTtt(finished.id);else if(!finished)setTttGame(null)}
 function subscribeTtt(id){if(state.ttt.unsub){try{state.ttt.unsub()}catch{}}state.ttt.unsub=onValue(ref(db,`ticTacToeGames/${id}`),sn=>setTttGame(sn.exists()?{id,...sn.val()}:null))}
@@ -1656,18 +1628,13 @@ function setTttGame(g){
   }
   state.ttt.seenActiveIds.add(g.id);if(panel)panel.hidden=false;$('tttStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderTtt(g)
 }
-function renderTtt(g){const me=g.players?.[state.user.uid],other=Object.values(g.players||{}).find(x=>x.uid!==state.user.uid);$('tttTitle').textContent=`${me?.name||'Você'} × ${other?.name||'Amigo'}`;$('tttTurnText').textContent=g.turnUid===state.user.uid?`Sua vez • você é ${me?.symbol||'X'}`:`Vez de ${other?.name||'amigo'}`;const board=$('tttBoard');board.innerHTML='';const cells=Array.isArray(g.board)?g.board:Array.from({length:9},(_,i)=>g.board?.[i]||'');cells.forEach((v,i)=>{const b=document.createElement('button');b.type='button';b.className='ttt-cell';b.textContent=v||'';b.disabled=!!v||g.turnUid!==state.user.uid||g.status!=='active';b.onclick=()=>{playGameSfx('select');siteGameRequest('ttt_move',{gameId:g.id,index:i},20000,false).catch(e=>toast(permissionMessage(e,e.message)))};board.appendChild(b)});const log=$('tttLog');log.innerHTML=Object.values(g.log||{}).slice(-8).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
+function renderTtt(g){const me=g.players?.[state.user.uid],other=Object.values(g.players||{}).find(x=>x.uid!==state.user.uid);$('tttTitle').textContent=`${me?.name||'Você'} × ${other?.name||'Amigo'}`;$('tttTurnText').textContent=g.turnUid===state.user.uid?`Sua vez • você é ${me?.symbol||'X'}`:`Vez de ${other?.name||'amigo'}`;const board=$('tttBoard');board.innerHTML='';const cells=Array.isArray(g.board)?g.board:Array.from({length:9},(_,i)=>g.board?.[i]||'');cells.forEach((v,i)=>{const b=document.createElement('button');b.type='button';b.className='ttt-cell';b.textContent=v||'';b.disabled=!!v||g.turnUid!==state.user.uid||g.status!=='active';b.onclick=()=>{playGameSfx('select');directTttMove(g.id,i).catch(e=>toast(permissionMessage(e,e.message)))};board.appendChild(b)});const log=$('tttLog');log.innerHTML=Object.values(g.log||{}).slice(-8).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
 async function directTttMove(gameId,index){const uid=state.user?.uid;if(!uid)return;let reason='';const tx=await runTransaction(ref(db,`ticTacToeGames/${gameId}`),g=>{if(!g||g.status!=='active'){reason='Partida encerrada.';return}if(g.turnUid!==uid){reason='Aguarde sua vez.';return}const board=Array.isArray(g.board)?[...g.board]:Array.from({length:9},(_,i)=>g.board?.[i]||'');if(board[index]){reason='Essa casa já foi usada.';return}const me=g.players?.[uid],other=Object.keys(g.players||{}).find(x=>x!==uid);board[index]=me?.symbol||'X';g.board=board;g.updatedAt=Date.now();appendGameLog(g,`${me?.name||'Jogador'} marcou ${me?.symbol||'X'}.`);const win=tttWinner(board);if(win){g.status='finished';g.winnerUid=uid;g.finishedAt=Date.now()}else if(board.every(Boolean)){g.status='finished';g.winnerUid=null;g.finishedAt=Date.now()}else g.turnUid=other;return g});if(!tx.committed){if(reason)throw new Error(reason);return}const final={id:gameId,...tx.snapshot.val()};if(final.status==='finished')await finishIndexes('ttt',final)}
-$('tttExitBtn')?.addEventListener('click',async()=>{if(!state.ttt.game)return;playGameSfx('reject');try{await siteGameRequest('ttt_exit',{gameId:state.ttt.game.id},20000,false)}catch(e){toast(permissionMessage(e,e.message))}});
-
-
-// Premium por Rúpias
-$('premiumRupiasBuyBtn')?.addEventListener('click',async()=>{const btn=$('premiumRupiasBuyBtn'),status=$('premiumRupiasStatus');try{btn.disabled=true;if(status)status.textContent='Ativando Premium...';const r=await bridgeRequest('premium_rupias_buy',{groupLink:String($('premiumRupiasGroupLink')?.value||'').trim()},35000,true);if(status)status.textContent=`Premium ativo por ${r.days||7} dias • saldo ₹${formatNumber(r.balance||0)}${r.group?.groupName?` • grupo ${r.group.groupName}`:r.groupError?` • grupo pendente: ${r.groupError}`:''}`;toast('Premium ativado por Rúpias.');await requestAccountSync()}catch(e){if(status)status.textContent=e.message;toast(e.message,6000)}finally{btn.disabled=false}});
-$('premiumGroupSetBtn')?.addEventListener('click',async()=>{const btn=$('premiumGroupSetBtn'),status=$('premiumRupiasStatus');try{const groupLink=String($('premiumRupiasGroupLink')?.value||'').trim();if(!groupLink)throw new Error('Cole o link do grupo.');btn.disabled=true;const r=await bridgeRequest('premium_group_set',{groupLink},30000,true);if(status)status.textContent=`Grupo Premium vinculado: ${r.group?.groupName||'grupo'}`;toast('Grupo vinculado ao Premium.')}catch(e){toast(e.message,6000)}finally{btn.disabled=false}});
+$('tttExitBtn')?.addEventListener('click',async()=>{if(!state.ttt.game)return;playGameSfx('reject');try{await directGameExit('ttt',state.ttt.game)}catch(e){toast(permissionMessage(e,e.message))}});
 
 // Watch Party independente do RPG
 $('watchCreateBtn')?.addEventListener('click',()=>openModal('watchCreateModal'));
-$('watchRefreshBtn')?.addEventListener('click',loadWatchRooms);$('watchPublicRefreshBtn')?.addEventListener('click',loadPublicWatchRooms);
+$('watchRefreshBtn')?.addEventListener('click',loadWatchRooms);
 $('watchJoinForm')?.addEventListener('submit',async ev=>{ev.preventDefault();const code=$('watchJoinCode').value.trim().toUpperCase();if(code)await joinWatchRoom(code)});
 $('watchCreateForm')?.addEventListener('submit',createWatchRoom);
 $('watchBackBtn')?.addEventListener('click',()=>closeWatchRoom(false));
@@ -1678,24 +1645,17 @@ $('watchPlayBtn')?.addEventListener('click',toggleWatchPlayback);
 $('watchSyncBtn')?.addEventListener('click',syncWatchPlayer);
 $('watchLocalFileBtn')?.addEventListener('click',()=>{if(!isWatchHost())return toast('Somente o host pode transmitir um arquivo.');$('watchLocalFileInput')?.click()});
 $('watchLocalFileInput')?.addEventListener('change',async ev=>{const file=ev.target.files?.[0];ev.target.value='';if(file)await startWatchLocalFile(file)});
-async function prewarmWatchMicrophone(){try{const live=state.watchRtc.localStream?.getAudioTracks?.().some(t=>t.readyState==='live');if(live)return true;const existing=state.watchRtc.localStream;const stream=existing?.getAudioTracks?.().some(t=>t.readyState==='live')?existing:await navigator.mediaDevices.getUserMedia({audio:true,video:false});state.watchRtc.localStream=stream;return true}catch{return false}}
 async function uniqueWatchCode(){for(let i=0;i<8;i++){const c=randomCode();const sn=await get(ref(db,`watchRooms/${c}`));if(!sn.exists())return c}throw new Error('Não foi possível gerar código.')}
-async function createWatchRoom(ev){ev.preventDefault();if(!state.user)return;prewarmWatchMicrophone().catch(()=>{});try{const code=await uniqueWatchCode(),createdAt=nowIso(),name=$('watchNameInput').value.trim()||'Watch Party',privacy=['public','private','invite'].includes($('watchPrivacyInput')?.value)?$('watchPrivacyInput').value:'private';const room={meta:{code,name,privacy,ownerUid:state.user.uid,createdAt},members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Host',joinedAt:createdAt}},media:{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}};await set(ref(db,`watchRooms/${code}`),room);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name,privacy,role:'Host',joinedAt:createdAt});if(privacy==='public')await set(ref(db,`watchPublicRooms/${code}`),{code,name,ownerUid:state.user.uid,createdAt}).catch(e=>{console.warn('[WATCH] Índice público indisponível:',e?.message||e);toast('Sala criada, mas ainda não aparece na listagem pública.')});closeModal('watchCreateModal');$('watchCreateForm').reset();await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível criar a sala.'),6000)}}
-async function loadWatchRooms(){if(!state.user)return;loadPublicWatchRooms().catch(()=>{});const box=$('watchRoomsList');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await get(ref(db,`watchUserRooms/${state.user.uid}`));box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];$('homeWatchRecent').textContent=rows.length?`${rows.length} sala${rows.length===1?'':'s'}`:'Assistir e conversar';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala.</div>';return}rows.forEach(r=>{const item=document.createElement('div');item.className='room-item';const c=document.createElement('div');c.innerHTML=`<strong>${escText(r.name||r.code)}</strong><small>${escText(r.code)} • ${escText(r.role||'Participante')}</small>`;const acts=document.createElement('div');acts.className='room-item-actions';const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=()=>openWatchRoom(r.code);acts.appendChild(b);if(r.role==='Host'){const del=document.createElement('button');del.className='btn danger-ghost';del.textContent='Apagar';del.onclick=()=>deleteWatchRoom(r.code,r.name);acts.appendChild(del)}item.append(c,acts);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
-async function loadPublicWatchRooms(){if(!state.user)return;const box=$('watchPublicRoomsList');if(!box)return;box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await get(ref(db,'watchPublicRooms'));box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala pública.</div>';return}rows.sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).slice(0,40).forEach(r=>{const item=document.createElement('div');item.className='room-item';item.innerHTML=`<div><strong>${escText(r.name||'Watch Party')}</strong><small>${escText(r.code||'')}</small></div>`;const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=async()=>{await prewarmWatchMicrophone();await joinWatchRoom(r.code)};item.appendChild(b);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${escText(permissionMessage(e))}</div>`}}
-async function joinWatchRoom(code){if(!state.user)return;prewarmWatchMicrophone().catch(()=>{});try{const sn=await get(ref(db,`watchRooms/${code}`));if(!sn.exists())throw new Error('Sala não encontrada.');const room=sn.val();if(room.meta?.privacy==='invite'&&room.meta?.ownerUid!==state.user.uid){const inv=await get(ref(db,`watchInvites/${code}/${state.user.uid}`));if(!inv.exists())throw new Error('Essa sala aceita somente pessoas convidadas pelo host.')}const member={uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:room.meta?.ownerUid===state.user.uid?'Host':'Participante',joinedAt:nowIso()};await set(ref(db,`watchRooms/${code}/members/${state.user.uid}`),member);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name:room.meta?.name||code,role:member.role,joinedAt:nowIso()});$('watchJoinCode').value='';await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível entrar.'))}}
-async function openWatchRoom(code){if(state.watchCode&&state.watchCode!==code)await leaveWatchVoice(true);if(state.watchCode!==code){state.watchRtc.autoVoiceCode='';state.watchRtc.mutedPeers.clear();state.watchRtc.peerVolumes.clear()}clearUnsubs(state.watchUnsubs);state.watchCode=code;$('watchLobby').hidden=true;$('watchRoom').hidden=false;if($('watchCreateBtn'))$('watchCreateBtn').hidden=true;state.watchUnsubs.push(onValue(ref(db,`watchRooms/${code}`),sn=>{if(!sn.exists()){toast('Essa sala não existe mais.');closeWatchRoom(false);return}state.watchRoom=sn.val();renderWatchRoom()}));navigate('watch')}
+async function createWatchRoom(ev){ev.preventDefault();if(!state.user)return;try{const code=await uniqueWatchCode(),createdAt=nowIso(),name=$('watchNameInput').value.trim()||'Watch Party';const room={meta:{code,name,ownerUid:state.user.uid,createdAt},members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Host',joinedAt:createdAt}},media:{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}};await set(ref(db,`watchRooms/${code}`),room);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name,role:'Host',joinedAt:createdAt});closeModal('watchCreateModal');$('watchCreateForm').reset();await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível criar a sala.'),6000)}}
+async function loadWatchRooms(){if(!state.user)return;const box=$('watchRoomsList');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await get(ref(db,`watchUserRooms/${state.user.uid}`));box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];$('homeWatchRecent').textContent=rows.length?`${rows.length} sala${rows.length===1?'':'s'}`:'Assistir e conversar';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala.</div>';return}rows.forEach(r=>{const item=document.createElement('div');item.className='room-item';const c=document.createElement('div');c.innerHTML=`<strong>${escText(r.name||r.code)}</strong><small>${escText(r.code)} • ${escText(r.role||'Participante')}</small>`;const acts=document.createElement('div');acts.className='room-item-actions';const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=()=>openWatchRoom(r.code);acts.appendChild(b);if(r.role==='Host'){const del=document.createElement('button');del.className='btn danger-ghost';del.textContent='Apagar';del.onclick=()=>deleteWatchRoom(r.code,r.name);acts.appendChild(del)}item.append(c,acts);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
+async function joinWatchRoom(code){if(!state.user)return;try{const sn=await get(ref(db,`watchRooms/${code}`));if(!sn.exists())throw new Error('Sala não encontrada.');const room=sn.val(),member={uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:room.meta?.ownerUid===state.user.uid?'Host':'Participante',joinedAt:nowIso()};await set(ref(db,`watchRooms/${code}/members/${state.user.uid}`),member);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name:room.meta?.name||code,role:member.role,joinedAt:nowIso()});$('watchJoinCode').value='';await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível entrar.'))}}
+async function openWatchRoom(code){if(state.watchCode&&state.watchCode!==code)await leaveWatchVoice(true);clearUnsubs(state.watchUnsubs);state.watchCode=code;$('watchLobby').hidden=true;$('watchRoom').hidden=false;if($('watchCreateBtn'))$('watchCreateBtn').hidden=true;state.watchUnsubs.push(onValue(ref(db,`watchRooms/${code}`),sn=>{if(!sn.exists()){toast('Essa sala não existe mais.');closeWatchRoom(false);return}state.watchRoom=sn.val();renderWatchRoom()}));navigate('watch')}
 function isWatchHost(){return !!state.user&&state.watchRoom?.meta?.ownerUid===state.user.uid}
-function ensureWatchAutoVoice(){
-  if(!state.user||!state.watchCode||state.watchRtc.audioJoined||state.watchRtc.autoVoicePending||state.watchRtc.autoVoiceCode===state.watchCode)return;
-  state.watchRtc.autoVoiceCode=state.watchCode;state.watchRtc.autoVoicePending=true;
-  joinWatchVoice({automatic:true}).catch(()=>false).finally(()=>{state.watchRtc.autoVoicePending=false})
-}
 function renderWatchRoom(){
-  const r=state.watchRoom||{},m=r.meta||{};$('watchRoomName').textContent=m.name||'Watch Party';if($('watchPrivacyPill'))$('watchPrivacyPill').textContent=m.privacy==='public'?'Pública':m.privacy==='invite'?'Só por convite':'Privada';$('watchCode').textContent=state.watchCode||'------';$('watchHostPill').textContent=isWatchHost()?'Host':'Participante';$('watchMemberCount').textContent=String(Object.keys(r.members||{}).length);
-  const list=$('watchMemberList');list.innerHTML='';if($('watchInvitePanel'))$('watchInvitePanel').hidden=!isWatchHost();const wsel=$('watchInviteFriendSelect');if(wsel){const cur=wsel.value;wsel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';wsel.appendChild(o)});if(state.friends?.[cur])wsel.value=cur}Object.values(r.members||{}).forEach(x=>{const d=document.createElement('div');d.className='member-item watch-member-item';d.dataset.watchMemberUid=String(x.uid||'');const img=document.createElement('img');img.src=x.avatar||DEFAULT_AVATAR;const c=document.createElement('div');const vp=state.watchRtc.presence?.[x.uid]||{};const st=vp.audio?(vp.muted?'Na voz • microfone silenciado':'Na chamada de voz'):vp.screen?'Transmitindo':'Na sala';c.innerHTML=`<strong>${escText(x.name||'Usuário')}</strong><small class="watch-member-status">${escText(st)}</small>`;d.append(img,c);list.appendChild(d)});
+  const r=state.watchRoom||{},m=r.meta||{};$('watchRoomName').textContent=m.name||'Watch Party';$('watchCode').textContent=state.watchCode||'------';$('watchHostPill').textContent=isWatchHost()?'Host':'Participante';$('watchMemberCount').textContent=String(Object.keys(r.members||{}).length);
+  const list=$('watchMemberList');list.innerHTML='';Object.values(r.members||{}).forEach(x=>{const d=document.createElement('div');d.className='member-item watch-member-item';const img=document.createElement('img');img.src=x.avatar||DEFAULT_AVATAR;const c=document.createElement('div');c.innerHTML=`<strong>${escText(x.name||'Usuário')}</strong><small>${escText(x.role||'Participante')}</small>`;d.append(img,c);list.appendChild(d)});
   $('watchMediaInput').disabled=!isWatchHost();$('watchMediaForm').querySelector('button').disabled=!isWatchHost();$('watchPlayBtn').disabled=!isWatchHost();if($('watchLocalFileBtn'))$('watchLocalFileBtn').disabled=!isWatchHost();if($('watchMusicSkipBtn'))$('watchMusicSkipBtn').disabled=!isWatchHost();
-  renderWatchMedia(r.media||{});renderWatchChat(r.chat||{});renderWatchMusic(r.musicQueue||{},r.musicAccess||{},r.musicPlan||{},r.musicPlayback||{});watchVoiceUi();if(!state.watchRtc.joined)ensureWatchRtcSession().catch(()=>{});ensureWatchAutoVoice()
+  renderWatchMedia(r.media||{});renderWatchMusic(r.musicQueue||{},r.musicAccess||{},r.musicPlan||{},r.musicPlayback||{});watchVoiceUi();if(!state.watchRtc.joined)ensureWatchRtcSession().catch(()=>{})
 }
 function youtubeEmbed(url,viewerLocked=false){
   try{
@@ -1878,7 +1838,7 @@ function watchMusicPendingRows(queueObj=state.watchRoom?.musicQueue||{},playback
   const current=currentWatchMusic(queueObj,playback);
   return watchMusicRows(queueObj).filter(x=>!current||String(x.id)!==String(current.id))
 }
-function watchMusicCanHear(){return !!state.watchCode}
+function watchMusicCanHear(){return !!state.watchRtc.audioJoined}
 function watchMusicElapsed(item,playback=state.watchRoom?.musicPlayback||{}){
   const started=Number(playback?.currentId===item?.id?playback.startedAt:(item?.startedAt||Date.now()));
   return Math.max(0,(Date.now()-started)/1000)
@@ -1962,7 +1922,7 @@ function loadWatchMusicPlayback(current,playback={}){
 async function autoAdvanceWatchMusic(currentId){
   if(!currentId||state.watchMusic.lastAdvanceId===currentId||!watchMusicCanHear())return;
   state.watchMusic.lastAdvanceId=currentId;
-  try{await siteApi('watch_music_queue_site',{type:'advance',roomCode:state.watchCode,currentId},15000)}
+  try{await bridgeRequest('watch_music_advance',{roomCode:state.watchCode,currentId},20000)}
   catch(e){state.watchMusic.lastAdvanceId='';console.warn('[WATCH MUSIC ADVANCE]',e)}
 }
 function renderWatchMusic(queueObj={},accessObj={},planObj={},playback={}){
@@ -2005,42 +1965,31 @@ function renderWatchMusic(queueObj={},accessObj={},planObj={},playback={}){
   })
 }
 $('watchMusicActivateBtn')?.addEventListener('click',async()=>{
-  if(state.watchMusic.activating)return;
-  const button=$('watchMusicActivateBtn'),roomCode=state.watchCode;
   try{
-    state.watchMusic.activating=true;if(button)button.disabled=true;
-    if(state.watchRoom?.musicPlan?.active)return toast('Charlotte Music já está ativa para todos da sala.');
-    const r=await siteApi('watch_music_activate_site',{roomCode},15000);
+    if(!watchMusicCanHear()){toast('Entrando na chamada de voz...');await joinWatchVoice();if(!watchMusicCanHear())return}
+    const r=await bridgeRequest('watch_music_activate',{roomCode:state.watchCode},20000);
     toast(r.alreadyActive?'A Charlotte Music já está ativa nesta sala.':`Charlotte Music ativada por ₹${r.cost||50}.`)
-  }catch(e){toast(e.message,7500)}
-  finally{state.watchMusic.activating=false;if(button)button.disabled=false}
+  }catch(e){toast(e.message)}
 });
 $('watchMusicForm')?.addEventListener('submit',async ev=>{
-  ev.preventDefault();if(state.watchMusic.adding)return;if(!state.watchCode)return toast('Entre na sala primeiro.');
+  ev.preventDefault();if(state.watchMusic.adding)return;if(!watchMusicCanHear())return toast('Entre na chamada de voz primeiro.');
   const query=$('watchMusicInput').value.trim();if(!query)return;
   state.watchMusic.adding=true;renderWatchMusic(state.watchRoom?.musicQueue||{},state.watchRoom?.musicAccess||{},state.watchRoom?.musicPlan||{},state.watchRoom?.musicPlayback||{});
   try{
-    // A pesquisa externa pode demorar. Se a resposta expirar, verificar a fila
-    // em vez de criar outro pedido automaticamente (pode custar rúpias).
-    const key=`gremory_music_${state.user.uid}_${state.watchCode}`;let requestId=sessionStorage.getItem(key);if(!requestId){requestId='track_'+crypto.randomUUID().replace(/-/g,'');sessionStorage.setItem(key,requestId)}
-    const pendingQuery=sessionStorage.getItem(key+'_query')||query;sessionStorage.setItem(key+'_query',pendingQuery);
-    const r=await siteApi('watch_music_queue_site',{type:'add',roomCode:state.watchCode,query:pendingQuery,requestId},15000);sessionStorage.removeItem(key);sessionStorage.removeItem(key+'_query');
+    const r=await bridgeRequest('watch_music_add',{roomCode:state.watchCode,query},30000);
     $('watchMusicInput').value='';
     toast(r.started?'Música iniciada.':r.cost>0?`Adicionada à fila por ₹${r.cost}.`:'Adicionada à fila.')
-  }catch(e){if(e.pending===false){const key=`gremory_music_${state.user.uid}_${state.watchCode}`;sessionStorage.removeItem(key);sessionStorage.removeItem(key+'_query')}toast(e.message)}
+  }catch(e){toast(e.message)}
   finally{state.watchMusic.adding=false;renderWatchMusic(state.watchRoom?.musicQueue||{},state.watchRoom?.musicAccess||{},state.watchRoom?.musicPlan||{},state.watchRoom?.musicPlayback||{})}
 });
 $('watchMusicSkipBtn')?.addEventListener('click',async()=>{
   if(!isWatchHost())return toast('Somente o host pode pular.');
-  try{const r=await siteApi('watch_music_queue_site',{type:'skip',roomCode:state.watchCode,currentId:currentWatchMusic(state.watchRoom?.musicQueue||{},state.watchRoom?.musicPlayback||{})?.id||''},15000);toast(r.skipped?'Pulou para a próxima música.':'A playlist está vazia.')}catch(e){toast(e.message)}
+  try{const r=await bridgeRequest('watch_music_skip',{roomCode:state.watchCode},20000);toast(r.skipped?'Pulou para a próxima música.':'A playlist está vazia.')}catch(e){toast(e.message)}
 });
 
-function renderWatchChat(obj={}){const box=$('watchChatList');if(!box)return;const rows=Object.values(obj||{}).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0)).slice(-100);box.innerHTML='';if(!rows.length){box.innerHTML='<div class="empty-state small">Sem mensagens ainda.</div>';return}rows.forEach(m=>{const d=document.createElement('div');d.className='watch-chat-message'+(m.uid===state.user?.uid?' mine':'');d.innerHTML=`<strong>${escText(m.name||'Usuário')}</strong><span>${escText(m.text||'')}</span><small>${shortDateTime(m.createdAt)}</small>`;box.appendChild(d)});box.scrollTop=box.scrollHeight}
-$('watchChatForm')?.addEventListener('submit',async ev=>{ev.preventDefault();if(!state.user||!state.watchCode)return;const input=$('watchChatInput'),text=String(input?.value||'').trim();if(!text)return;try{await push(ref(db,`watchRooms/${state.watchCode}/chat`),{uid:state.user.uid,name:displayName(),text:text.slice(0,500),createdAt:Date.now()});input.value=''}catch(e){toast(permissionMessage(e))}});
-$('watchInviteFriendBtn')?.addEventListener('click',async()=>{if(!isWatchHost())return;const targetUid=$('watchInviteFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');try{await set(ref(db,`watchInvites/${state.watchCode}/${targetUid}`),{uid:targetUid,fromUid:state.user.uid,createdAt:Date.now()});await set(ref(db,`siteNotifications/${targetUid}/watch_${state.watchCode}`),{id:`watch_${state.watchCode}`,type:'watch_invite',actorUid:state.user.uid,title:'Convite para Watch Party',text:`${displayName()} convidou você para ${state.watchRoom?.meta?.name||'uma sala'}.`,link:`#watch`,watchCode:state.watchCode,createdAt:Date.now()});toast('Convite enviado.')}catch(e){toast(permissionMessage(e))}});
 async function closeWatchRoom(silent=false){await leaveWatchVoice(true);destroyWatchMusicPlayback();clearUnsubs(state.watchUnsubs);state.watchCode=null;state.watchRoom=null;$('watchRoom').hidden=true;$('watchLobby').hidden=false;if($('watchCreateBtn'))$('watchCreateBtn').hidden=false;if(!silent)loadWatchRooms()}
 async function exitWatchRoom(){if(!state.user||!state.watchCode)return;const code=state.watchCode;if(isWatchHost())return deleteWatchRoom(code,state.watchRoom?.meta?.name);try{await remove(ref(db,`watchRooms/${code}/members/${state.user.uid}`));await remove(ref(db,`watchUserRooms/${state.user.uid}/${code}`));await closeWatchRoom(false)}catch(e){toast(permissionMessage(e))}}
-async function deleteWatchRoom(code,name='Sala'){if(!state.user||!code||!confirm(`Apagar "${name||code}" para todos?`))return;try{const sn=await get(ref(db,`watchRooms/${code}`));const room=sn.val()||{};if(room.meta?.ownerUid!==state.user.uid)throw new Error('Só o host pode apagar.');await Promise.all(Object.keys(room.members||{}).map(uid=>remove(ref(db,`watchUserRooms/${uid}/${code}`)).catch(()=>{})));await remove(ref(db,`watchPublicRooms/${code}`)).catch(()=>{});await remove(ref(db,`watchInvites/${code}`)).catch(()=>{});await remove(ref(db,`watchRooms/${code}`));await remove(ref(db,`watchVoice/${code}`)).catch(()=>{});await remove(ref(db,`watchRtc/${code}`)).catch(()=>{});await closeWatchRoom(false);toast('Sala apagada.')}catch(e){toast(permissionMessage(e,e.message))}}
+async function deleteWatchRoom(code,name='Sala'){if(!state.user||!code||!confirm(`Apagar "${name||code}" para todos?`))return;try{const sn=await get(ref(db,`watchRooms/${code}`));const room=sn.val()||{};if(room.meta?.ownerUid!==state.user.uid)throw new Error('Só o host pode apagar.');await Promise.all(Object.keys(room.members||{}).map(uid=>remove(ref(db,`watchUserRooms/${uid}/${code}`)).catch(()=>{})));await remove(ref(db,`watchRooms/${code}`));await remove(ref(db,`watchVoice/${code}`)).catch(()=>{});await remove(ref(db,`watchRtc/${code}`)).catch(()=>{});await closeWatchRoom(false);toast('Sala apagada.')}catch(e){toast(permissionMessage(e,e.message))}}
 
 // WebRTC da Watch Party (separado do RPG)
 function watchVoiceUi(){
@@ -2068,34 +2017,17 @@ function watchScreenStreamFor(uid){
 function watchVoiceStreamFor(uid){
   return state.watchRtc.remoteVoiceStreams.get(String(uid||''))||null
 }
-function watchPeerMuted(uid){return state.watchRtc.mutedPeers.has(String(uid||''))}function watchPeerVolume(uid){return Math.max(0,Math.min(200,Number(state.watchRtc.peerVolumes.get(String(uid||''))??100)))}
-let watchPeerAudioCtx=null;const watchPeerAudioGraphs=new Map();
-function ensureWatchPeerAudioGraph(uid,audio){
-  uid=String(uid||'');if(!uid||!audio)return null;const old=watchPeerAudioGraphs.get(uid);if(old?.audio===audio)return old;
-  const AudioCtx=window.AudioContext||window.webkitAudioContext;if(!AudioCtx)return null;
-  try{if(!watchPeerAudioCtx)watchPeerAudioCtx=new AudioCtx({latencyHint:'interactive'});const source=watchPeerAudioCtx.createMediaElementSource(audio),gain=watchPeerAudioCtx.createGain(),limiter=watchPeerAudioCtx.createDynamicsCompressor();limiter.threshold.value=-5;limiter.knee.value=8;limiter.ratio.value=12;limiter.attack.value=.003;limiter.release.value=.2;source.connect(gain);gain.connect(limiter);limiter.connect(watchPeerAudioCtx.destination);const graph={audio,source,gain,limiter};watchPeerAudioGraphs.set(uid,graph);return graph}catch(e){console.warn('[WATCH VOICE GAIN]',e);return null}
-}
-function releaseWatchPeerAudioGraph(uid){const g=watchPeerAudioGraphs.get(String(uid||''));if(!g)return;try{g.source.disconnect();g.gain.disconnect();g.limiter.disconnect()}catch{}watchPeerAudioGraphs.delete(String(uid||''))}
-function applyWatchPeerMute(uid,card=null){
-  uid=String(uid||'');card=card||$('watchRemoteMedia')?.querySelector(`[data-watch-peer="${CSS.escape(uid)}"]`);if(!card)return;
-  const isSelf=uid===String(state.user?.uid||''),muted=watchPeerMuted(uid),audio=card.querySelector('audio'),btn=card.querySelector('.watch-mute-peer'),pct=watchPeerVolume(uid),level=(!state.watchRtc.audioJoined||muted)?0:pct/100;
-  if(audio){const graph=ensureWatchPeerAudioGraph(uid,audio);if(graph){audio.muted=false;audio.volume=1;try{graph.gain.gain.setTargetAtTime(level,watchPeerAudioCtx.currentTime,.015)}catch{graph.gain.gain.value=level};if(level>0)watchPeerAudioCtx.resume?.().catch(()=>{})}else{audio.muted=!state.watchRtc.audioJoined||muted;audio.volume=Math.min(1,pct/100)}}
-  if(btn){btn.hidden=isSelf;btn.textContent=muted?'Ouvir voz':'Silenciar voz';btn.classList.toggle('active',muted)}
-}
-function toggleWatchPeerMute(uid){uid=String(uid||'');if(!uid||uid===String(state.user?.uid||''))return;if(watchPeerMuted(uid))state.watchRtc.mutedPeers.delete(uid);else state.watchRtc.mutedPeers.add(uid);applyWatchPeerMute(uid)}
 function ensureWatchCallCard(uid){
   const grid=$('watchRemoteMedia');if(!grid)return null;let card=grid.querySelector(`[data-watch-peer="${CSS.escape(uid)}"]`);
   if(!card){
     card=document.createElement('div');card.className='watch-call-card';card.dataset.watchPeer=uid;
     const avatar=document.createElement('img');avatar.src=state.watchRoom?.members?.[uid]?.avatar||DEFAULT_AVATAR;avatar.alt='';
     const copy=document.createElement('div');copy.className='watch-call-copy';const name=document.createElement('strong');name.textContent=watchPeerName(uid);const status=document.createElement('small');status.textContent='Conectando...';copy.append(name,status);
-    const actions=document.createElement('div');actions.className='watch-call-actions';
     const view=document.createElement('button');view.type='button';view.className='mini-btn watch-view-screen';view.textContent='Assistir tela';view.hidden=true;
-    const mute=document.createElement('button');mute.type='button';mute.className='mini-btn watch-mute-peer';mute.textContent='Silenciar voz';mute.onclick=()=>toggleWatchPeerMute(uid);const vol=document.createElement('input');vol.type='range';vol.min='0';vol.max='200';vol.step='5';vol.value=String(watchPeerVolume(uid));vol.className='watch-peer-volume';vol.title='Volume desta pessoa';vol.oninput=()=>{state.watchRtc.peerVolumes.set(uid,Number(vol.value));applyWatchPeerMute(uid,card)};
-    const audio=document.createElement('audio');audio.autoplay=true;audio.muted=!state.watchRtc.audioJoined||watchPeerMuted(uid);
-    actions.append(view,mute,vol);card.append(avatar,copy,actions,audio);grid.appendChild(card)
+    const audio=document.createElement('audio');audio.autoplay=true;audio.muted=!state.watchRtc.audioJoined;
+    card.append(avatar,copy,view,audio);grid.appendChild(card)
   }
-  applyWatchPeerMute(uid,card);return card
+  return card
 }
 function watchRemoteHasScreen(uid,stream=watchScreenStreamFor(uid)){return state.watchRtc.screenSharers.has(String(uid||''))&&!!stream?.getVideoTracks?.().some(t=>t.readyState==='live')}
 function watchRemoteScreenFlowing(uid,stream=watchScreenStreamFor(uid)){return state.watchRtc.screenSharers.has(String(uid||''))&&!!stream?.getVideoTracks?.().some(t=>t.readyState==='live'&&!t.muted)}
@@ -2194,7 +2126,7 @@ async function negotiateWatchPeer(peerUid,{iceRestart=false,reason='update'}={})
 
 async function scheduleWatchRenegotiation(peerUid,reason='screen-sync',attempt=0){
   const pc=state.watchRtc.peers.get(String(peerUid||''));if(!pc||pc.signalingState==='closed')return false;
-  if(pc.signalingState!=='stable'||state.watchRtc.makingOffer.has(String(peerUid||''))){if(attempt<8)setTimeout(()=>scheduleWatchRenegotiation(peerUid,reason,attempt+1).catch(()=>{}),100+attempt*80);return false}
+  if(pc.signalingState!=='stable'||state.watchRtc.makingOffer.has(String(peerUid||''))){if(attempt<8)setTimeout(()=>scheduleWatchRenegotiation(peerUid,reason,attempt+1).catch(()=>{}),260+attempt*180);return false}
   return negotiateWatchPeer(String(peerUid),{iceRestart:false,reason}).catch(()=>false)
 }
 async function syncLocalScreenToPeer(peerUid,reason='late-join'){return offerWatchScreenToPeer(String(peerUid||''),reason,/request|retry|ice|reconnect/i.test(String(reason||'')))}
@@ -2217,7 +2149,7 @@ async function tuneWatchScreenAudioSender(pc){
 }
 async function requestWatchScreenFrom(uid,force=false){
   uid=String(uid||'');if(!uid||uid===state.user?.uid||!state.watchRtc.screenSharers.has(uid))return;
-  const last=Number(state.watchRtc.screenRetry.get(uid)||0);if(!force&&Date.now()-last<900)return;
+  const last=Number(state.watchRtc.screenRetry.get(uid)||0);if(!force&&Date.now()-last<3500)return;
   state.watchRtc.screenRetry.set(uid,Date.now());await sendWatchRtc(uid,{type:'screen_request'}).catch(()=>{})
 }
 
@@ -2276,19 +2208,9 @@ function refreshWatchScreenStage(){
   const vtrack=stream.getVideoTracks?.().find(t=>t.readyState==='live'),atrack=stream.getAudioTracks?.().find(t=>t.readyState==='live');
   const videoStream=new MediaStream();if(vtrack)videoStream.addTrack(vtrack);if(video.srcObject?.getVideoTracks?.()[0]?.id!==vtrack?.id)video.srcObject=videoStream;video.muted=true;video.playsInline=true;video.play?.().catch(()=>{});
   if(audio){
-    // O host NÃO reproduz localmente o áudio capturado da própria tela.
-    // O sistema/jogo já está tocando no computador; reproduzir a captura aqui
-    // criava retorno, áudio duplicado e chiado. A faixa continua sendo enviada
-    // normalmente aos convidados pelo WebRTC dedicado.
-    if(isLocal){
-      try{audio.pause()}catch{}
-      if(audio.srcObject)audio.srcObject=null;
-      audio.muted=true;
-    }else{
-      const audioStream=new MediaStream();if(atrack)audioStream.addTrack(atrack);if(audio.srcObject?.getAudioTracks?.()[0]?.id!==atrack?.id)audio.srcObject=atrack?audioStream:null;audio.volume=1;audio.muted=false;
-      if(atrack){const graph=applyWatchScreenVolume();if(!state.watchRtc.screenSoundMuted){graph?.ctx?.resume?.().catch(()=>{});audio.play?.().catch(()=>{state.watchRtc.screenSoundMuted=true;applyWatchScreenVolume();if(soundBtn)soundBtn.textContent='Toque para ativar som'})}}
-      else{try{audio.pause()}catch{}}
-    }
+    const audioStream=new MediaStream();if(atrack)audioStream.addTrack(atrack);if(audio.srcObject?.getAudioTracks?.()[0]?.id!==atrack?.id)audio.srcObject=atrack?audioStream:null;audio.volume=1;audio.muted=false;
+    if(atrack&&!isLocal){const graph=applyWatchScreenVolume();if(!state.watchRtc.screenSoundMuted){graph?.ctx?.resume?.().catch(()=>{});audio.play?.().catch(()=>{state.watchRtc.screenSoundMuted=true;applyWatchScreenVolume();if(soundBtn)soundBtn.textContent='Toque para ativar som'})}}
+    else if(!atrack){try{audio.pause()}catch{}}
   }
   if(label)label.textContent=isLocal?'Sua tela compartilhada':`${watchPeerName(uid)} está compartilhando`;
   if(soundBtn){const hasAudio=!!atrack;soundBtn.hidden=isLocal;soundBtn.disabled=!hasAudio;soundBtn.textContent=!hasAudio?'Sem áudio':(state.watchRtc.screenSoundMuted?'Ativar som':'Som ligado')}
@@ -2297,7 +2219,7 @@ function refreshWatchScreenStage(){
 function attachWatchRemote(uid){
   const voice=watchVoiceStreamFor(uid),screen=watchScreenStreamFor(uid),card=ensureWatchCallCard(uid),audio=card?.querySelector('audio');
   if(audio&&voice&&audio.srcObject!==voice)audio.srcObject=voice;
-  if(audio){audio.muted=!state.watchRtc.audioJoined||watchPeerMuted(uid);audio.play?.().catch(()=>{})}applyWatchPeerMute(uid,card)
+  if(audio){audio.muted=!state.watchRtc.audioJoined;audio.play?.().catch(()=>{})}
 
   for(const track of screen?.getVideoTracks?.()||[]){
     const refresh=()=>{updateWatchPeerScreenButton(uid);refreshWatchScreenStage()};
@@ -2315,7 +2237,7 @@ function attachWatchRemote(uid){
   refreshWatchScreenStage()
 }
 function removeWatchPeer(uid){
-  const pc=state.watchRtc.peers.get(uid);try{pc?.close()}catch{}state.watchRtc.peers.delete(uid);state.watchRtc.mutedPeers.delete(String(uid||''));state.watchRtc.peerVolumes.delete(String(uid||''));releaseWatchPeerAudioGraph(uid);closeWatchDedicatedScreen(state.watchRtc.screenOutPeers,uid);closeWatchDedicatedScreen(state.watchRtc.screenInPeers,uid);state.watchRtc.screenOutCandidates.delete(uid);state.watchRtc.screenInCandidates.delete(uid);state.watchRtc.screenOfferAt.delete(uid);state.watchRtc.remoteStreams.delete(uid);state.watchRtc.remoteVoiceStreams.delete(uid);state.watchRtc.remoteScreenStreams.delete(uid);state.watchRtc.pendingCandidates.delete(uid);state.watchRtc.screenRetry.delete(uid);
+  const pc=state.watchRtc.peers.get(uid);try{pc?.close()}catch{}state.watchRtc.peers.delete(uid);closeWatchDedicatedScreen(state.watchRtc.screenOutPeers,uid);closeWatchDedicatedScreen(state.watchRtc.screenInPeers,uid);state.watchRtc.screenOutCandidates.delete(uid);state.watchRtc.screenInCandidates.delete(uid);state.watchRtc.screenOfferAt.delete(uid);state.watchRtc.remoteStreams.delete(uid);state.watchRtc.remoteVoiceStreams.delete(uid);state.watchRtc.remoteScreenStreams.delete(uid);state.watchRtc.pendingCandidates.delete(uid);state.watchRtc.screenRetry.delete(uid);
   $('watchRemoteMedia')?.querySelector(`[data-watch-peer="${CSS.escape(uid)}"]`)?.remove();refreshWatchScreenStage()
 }
 async function createWatchPeer(peerUid,initiator=false){
@@ -2331,18 +2253,28 @@ async function createWatchPeer(peerUid,initiator=false){
   state.watchRtc.remoteStreams.set(peerUid,screenRemote);
   ensureWatchCallCard(peerUid);
 
-  // A chamada transporta SOMENTE a voz. Vídeo + áudio da transmissão usam
-  // a conexão WebRTC dedicada de tela/filme, evitando voz duplicada como no Discord.
   const voiceAudioTr=pc.addTransceiver('audio',{direction:'sendrecv'});
-  pc.__watchVoiceAudioSender=voiceAudioTr.sender;pc.__watchVoiceAudioTr=voiceAudioTr;
+  const videoTr=pc.addTransceiver('video',{direction:'sendrecv'});
+  const screenAudioTr=pc.addTransceiver('audio',{direction:'sendrecv'});
+  pc.__watchVoiceAudioSender=voiceAudioTr.sender;
+  pc.__watchVideoSender=videoTr.sender;
+  pc.__watchScreenAudioSender=screenAudioTr.sender;
+  pc.__watchVoiceAudioTr=voiceAudioTr;
+  pc.__watchVideoTr=videoTr;
+  pc.__watchScreenAudioTr=screenAudioTr;
 
   const micTrack=state.watchRtc.localStream?.getAudioTracks?.()[0];
   if(micTrack)await voiceAudioTr.sender.replaceTrack(micTrack);
 
   pc.ontrack=ev=>{
-    if(ev.track.kind!=='audio')return;
-    if(!voiceRemote.getTracks().some(t=>t.id===ev.track.id))voiceRemote.addTrack(ev.track);
-    ev.track.onunmute=()=>attachWatchRemote(peerUid);ev.track.onended=()=>attachWatchRemote(peerUid);attachWatchRemote(peerUid)
+    const isScreenVideo=ev.transceiver===pc.__watchVideoTr||ev.track.kind==='video';
+    const isScreenAudio=ev.transceiver===pc.__watchScreenAudioTr;
+    const target=(isScreenVideo||isScreenAudio)?screenRemote:voiceRemote;
+    if(!target.getTracks().some(t=>t.id===ev.track.id))target.addTrack(ev.track);
+    if(isScreenVideo){state.watchRtc.activeScreenUid=peerUid;setWatchRtcStatus('Vídeo recebido. Preparando reprodução...','ok')}
+    ev.track.onunmute=()=>{if(isScreenVideo)state.watchRtc.activeScreenUid=peerUid;attachWatchRemote(peerUid);refreshWatchScreenStage();if(isScreenVideo)setWatchRtcStatus(`${watchPeerName(peerUid)} está transmitindo`,'ok')};
+    ev.track.onended=()=>attachWatchRemote(peerUid);
+    attachWatchRemote(peerUid);refreshWatchScreenStage()
   };
 
   pc.onicecandidate=ev=>{if(ev.candidate)sendWatchRtc(peerUid,{type:'candidate',candidate:ev.candidate.toJSON()}).catch(()=>{})};
@@ -2359,7 +2291,7 @@ async function createWatchPeer(peerUid,initiator=false){
     if(pc.connectionState==='connected'){setWatchRtcStatus('Chamada conectada','ok');return}
     if(pc.connectionState==='disconnected'){
       setWatchRtcStatus('Conexão instável, recuperando...','warn');
-      setTimeout(()=>{if(pc.connectionState==='disconnected'){if(String(state.user?.uid).localeCompare(peerUid)<0)negotiateWatchPeer(peerUid,{iceRestart:true,reason:'disconnected'}).catch(()=>{});else if(state.watchRtc.screenSharers.has(peerUid))requestWatchScreenFrom(peerUid,true)}},700)
+      setTimeout(()=>{if(pc.connectionState==='disconnected'){if(String(state.user?.uid).localeCompare(peerUid)<0)negotiateWatchPeer(peerUid,{iceRestart:true,reason:'disconnected'}).catch(()=>{});else if(state.watchRtc.screenSharers.has(peerUid))requestWatchScreenFrom(peerUid,true)}},2200)
     }
   };
 
@@ -2410,9 +2342,9 @@ function watchWatchPresence(){
     const localSharing=!!state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live');
     for(const uid of ids){
       updateWatchPeerScreenButton(uid);
-      if(localSharing){[80,300,800].forEach((delay,idx)=>setTimeout(()=>{if(state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live'))syncLocalScreenToPeer(uid,idx?'late-join-retry':'late-join').catch(()=>{})},delay))}
+      if(localSharing){[250,1100,3000].forEach((delay,idx)=>setTimeout(()=>{if(state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live'))syncLocalScreenToPeer(uid,idx?'late-join-retry':'late-join').catch(()=>{})},delay))}
       if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteHasScreen(uid,watchScreenStreamFor(uid))){
-        [100,350,900,1800].forEach((delay,idx)=>setTimeout(()=>{if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteHasScreen(uid,watchScreenStreamFor(uid)))requestWatchScreenFrom(uid,idx>0).catch(()=>{})},delay))
+        [350,1200,2800,5200].forEach((delay,idx)=>setTimeout(()=>{if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteHasScreen(uid,watchScreenStreamFor(uid)))requestWatchScreenFrom(uid,idx>0).catch(()=>{})},delay))
       }
     }
     const remoteSharingUid=ids.find(uid=>state.watchRtc.screenSharers.has(uid));
@@ -2420,14 +2352,14 @@ function watchWatchPresence(){
     if(remoteSharingUid&&!remoteScreenReady)setWatchRtcStatus('Recebendo compartilhamento de tela...','warn');
     else if(remoteSharingUid&&remoteScreenReady)setWatchRtcStatus(`${watchPeerName(remoteSharingUid)} está transmitindo`,'ok');
     else if(ids.length&&!Array.from(state.watchRtc.peers.values()).some(pc=>pc.connectionState==='connected'))setWatchRtcStatus('Conectando mídia...','warn');else setWatchRtcStatus('Aguardando outras pessoas','');
-    for(const [uid,person] of Object.entries(p)){const card=ensureWatchCallCard(uid),statusText=person.screen?(person.screenKind==='file'?`Transmitindo ${person.screenLabel||'filme local'}`:'Compartilhando tela'):person.audio?(person.muted?'Na voz • microfone silenciado':'Na chamada de voz'):'Na sala';if(card){card.querySelector('strong').textContent=watchPeerName(uid)+(uid===state.user.uid?' (você)':'');card.querySelector('small').textContent=statusText;card.querySelector('img').src=person.avatar||state.watchRoom?.members?.[uid]?.avatar||DEFAULT_AVATAR}const member=$('watchMemberList')?.querySelector(`[data-watch-member-uid="${CSS.escape(uid)}"] .watch-member-status`);if(member)member.textContent=statusText}
+    for(const [uid,person] of Object.entries(p)){const card=ensureWatchCallCard(uid);if(card){card.querySelector('strong').textContent=watchPeerName(uid)+(uid===state.user.uid?' (você)':'');card.querySelector('small').textContent=person.screen?(person.screenKind==='file'?`Transmitindo ${person.screenLabel||'filme local'}`:'Compartilhando tela'):person.audio?(person.muted?'Microfone silenciado':'Na chamada de voz'):'Assistindo';card.querySelector('img').src=person.avatar||state.watchRoom?.members?.[uid]?.avatar||DEFAULT_AVATAR}}
     refreshWatchScreenStage();
     for(const uid of ids){if(state.watchRtc.screenSharers.has(uid))setTimeout(()=>{
       if(!state.watchRtc.screenSharers.has(uid)||watchRemoteHasScreen(uid,watchScreenStreamFor(uid)))return;
       const pc=state.watchRtc.peers.get(uid),st=pc?.connectionState||pc?.iceConnectionState||'';
       if(['failed','disconnected','closed'].includes(st))setWatchRtcStatus('A rede bloqueou a transmissão P2P. Tente a mesma rede Wi-Fi ou configure TURN.','warn');
       else if(watchRemoteHasScreen(uid,watchScreenStreamFor(uid)))setWatchRtcStatus('Transmissão recebida; aguardando quadros do vídeo...','warn');
-    },3000)}
+    },9000)}
   })
 }
 async function ensureWatchRtcSession(){
@@ -2441,27 +2373,16 @@ async function ensureWatchRtcSession(){
     watchWatchRtcInbox();watchWatchPresence();setWatchRtcStatus('Preparando conexão...','warn');watchVoiceUi();return true
   }catch(e){state.watchRtc.joined=false;toast(permissionMessage(e,'Não foi possível iniciar a chamada.'));return false}
 }
-async function joinWatchVoice({automatic=false}={}){
-  if(state.watchRtc.audioJoined){
-    // A presença pode ter expirado enquanto o microfone permaneceu aberto.
-    // Não informamos ao bridge que a chamada está pronta antes do RTDB confirmar.
-    try{await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:true,muted:!state.watchRtc.micEnabled});return true}
-    catch(e){console.warn('[WATCH VOICE] Sem confirmação de presença:',e);toast(permissionMessage(e,'Não foi possível confirmar a chamada no Firebase.'));return false}
-  }
-  if(!await ensureWatchRtcSession())return false;
+async function joinWatchVoice(){
+  if(!await ensureWatchRtcSession())return;
   try{
-    const existing=state.watchRtc.localStream;const stream=existing?.getAudioTracks?.().some(t=>t.readyState==='live')?existing:await navigator.mediaDevices.getUserMedia({audio:true,video:false});
-    if(existing&&existing!==stream)existing.getTracks?.().forEach(t=>{try{t.stop()}catch{}});state.watchRtc.localStream=stream;state.watchRtc.micEnabled=true;
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    state.watchRtc.localStream=stream;state.watchRtc.audioJoined=true;state.watchRtc.micEnabled=true;
     const track=stream.getAudioTracks()[0];
-    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:true,muted:false});
-    state.watchRtc.audioJoined=true;
-    // A transmissão P2P pode negociar depois; não bloqueie a música esperando ICE.
-    for(const [uid,pc] of state.watchRtc.peers){
-      const sender=watchPcSender(pc,'audio','voice');if(sender)await sender.replaceTrack(track).catch(()=>{});
-      if(pc.signalingState==='stable')negotiateWatchPeer(uid,{reason:'audio-join'}).catch(e=>console.warn('[WATCH VOICE] Negociação:',e));
-    }
-    $$('.watch-call-card').forEach(card=>{const uid=String(card.dataset.watchPeer||'');applyWatchPeerMute(uid,card);const a=card.querySelector('audio');a?.play?.().catch(()=>{})});watchVoiceUi();if(!automatic)toast('Você entrou na voz.');return true
-  }catch(e){state.watchRtc.audioJoined=false;watchVoiceUi();if(automatic)setWatchRtcStatus('Toque em “Entrar na voz” para liberar o microfone.','warn');else toast(e?.name==='NotAllowedError'?'Permissão do microfone negada.':permissionMessage(e,'Não foi possível confirmar a voz no Firebase.'));return false}
+    for(const [uid,pc] of state.watchRtc.peers){const sender=watchPcSender(pc,'audio','voice');if(sender)await sender.replaceTrack(track);if(pc.signalingState==='stable')await negotiateWatchPeer(uid,{reason:'audio-join'}).catch(()=>{})}
+    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:true}).catch(()=>{});
+    $$('.watch-call-card audio').forEach(a=>{a.muted=false;a.play?.().catch(()=>{})});watchVoiceUi();toast('Você entrou na voz.')
+  }catch(e){toast(e?.name==='NotAllowedError'?'Permissão do microfone negada.':'Não foi possível abrir o microfone.')}
 }
 function toggleWatchMic(){const track=state.watchRtc.localStream?.getAudioTracks?.()[0];if(!track)return;track.enabled=!track.enabled;state.watchRtc.micEnabled=track.enabled;update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{muted:!track.enabled}).catch(()=>{});watchVoiceUi()}
 async function leaveWatchAudio(silent=false){
@@ -2672,10 +2593,10 @@ async function leaveWatchVoice(silent=false){
   for(const pc of state.watchRtc.peers.values()){try{pc.close()}catch{}}
   for(const pc of state.watchRtc.screenOutPeers.values()){try{pc.close()}catch{}}for(const pc of state.watchRtc.screenInPeers.values()){try{pc.close()}catch{}}
   state.watchRtc.peers.clear();state.watchRtc.screenOutPeers.clear();state.watchRtc.screenInPeers.clear();state.watchRtc.remoteStreams.clear();state.watchRtc.remoteVoiceStreams.clear();state.watchRtc.remoteScreenStreams.clear();state.watchRtc.localStream?.getTracks?.().forEach(t=>t.stop());state.watchRtc.screenStream?.getTracks?.().forEach(t=>t.stop());
-  cleanupWatchLocalFilePlayer();state.watchRtc.localStream=null;state.watchRtc.screenStream=null;state.watchRtc.screenSource='';state.watchRtc.joined=false;state.watchRtc.audioJoined=false;state.watchRtc.activeScreenUid=null;state.watchRtc.micEnabled=true;state.watchRtc.autoVoiceCode='';state.watchRtc.autoVoicePending=false;state.watchRtc.mutedPeers.clear();
+  cleanupWatchLocalFilePlayer();state.watchRtc.localStream=null;state.watchRtc.screenStream=null;state.watchRtc.screenSource='';state.watchRtc.joined=false;state.watchRtc.audioJoined=false;state.watchRtc.activeScreenUid=null;state.watchRtc.micEnabled=true;
   state.watchRtc.processed.clear();state.watchRtc.pendingCandidates.clear();state.watchRtc.screenOutCandidates.clear();state.watchRtc.screenInCandidates.clear();state.watchRtc.screenOfferAt.clear();state.watchRtc.screenOfferLocks.clear();state.watchRtc.screenSharers.clear();state.watchRtc.presence={};state.watchRtc.screenRetry.clear();state.watchRtc.makingOffer.clear();
   if(code&&uid){await remove(ref(db,`watchVoice/${code}/${uid}`)).catch(()=>{});await remove(ref(db,`watchRtc/${code}/${uid}`)).catch(()=>{})}
-  for(const uid of [...watchPeerAudioGraphs.keys()])releaseWatchPeerAudioGraph(uid);try{watchPeerAudioCtx?.close?.()}catch{}watchPeerAudioCtx=null;if($('watchRemoteMedia'))$('watchRemoteMedia').innerHTML='';if($('watchVoiceCount'))$('watchVoiceCount').textContent='0';
+  if($('watchRemoteMedia'))$('watchRemoteMedia').innerHTML='';if($('watchVoiceCount'))$('watchVoiceCount').textContent='0';
   destroyWatchMusicPlayback();refreshWatchScreenStage();watchVoiceUi();if(!silent)toast('Você saiu da chamada.')
 }
 $('watchJoinVoiceBtn')?.addEventListener('click',joinWatchVoice);
@@ -2989,9 +2910,9 @@ $$('[data-studio-scroll]').forEach(btn=>btn.addEventListener('click',()=>$(btn.d
 function cardHtml(c){if(!c)return'';const red=c.s==='♥'||c.s==='♦';return `<i class="playing-card ${red?'red':''}"><b>${escText(c.r||'?')}</b><span>${escText(c.s||'')}</span></i>`}
 
 // 21 PvP
-$('blackjackCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('blackjackFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('blackjack',targetUid,Number($('blackjackBetInput')?.value||0),{mode:$('blackjackMode')?.value})}catch(e){toast(permissionMessage(e,e.message))}});
+$('blackjackCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('blackjackFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('blackjack',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
 function handleBlackjackIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.blackjack.game?.id!==active.id){subscribeBlackjack(active.id);focusNewSiteGame('blackjack',active.id)}return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.blackjack.game?.id!==finished.id)subscribeBlackjack(finished.id);else if(!finished)setBlackjackGame(null)}
-function subscribeBlackjack(id){if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}}if(state.blackjack.privateUnsub){try{state.blackjack.privateUnsub()}catch{}}state.blackjack.private=null;state.blackjack.unsub=onValue(ref(db,`blackjackGames/${id}`),sn=>setBlackjackGame(sn.exists()?{id,...sn.val()}:null));if(state.user)state.blackjack.privateUnsub=onValue(ref(db,`blackjackPrivate/${id}/${state.user.uid}`),sn=>{state.blackjack.private=sn.exists()?sn.val():null;if(state.blackjack.game?.id===id)renderBlackjackGame(state.blackjack.game)})}
+function subscribeBlackjack(id){if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}}state.blackjack.unsub=onValue(ref(db,`blackjackGames/${id}`),sn=>setBlackjackGame(sn.exists()?{id,...sn.val()}:null))}
 function blackjackCardLabel(c={}){return `${c.r||'?'}${c.s||''}`}
 function blackjackHandLabel(p={}){const cards=Array.isArray(p.cards)?p.cards:[];return `${cards.map(blackjackCardLabel).join(' + ')||'—'} = ${Number(p.score||0)}`}
 function blackjackResultReason(g,me,other){const my=Number(me.score||0),op=Number(other.score||0);if(me.busted&&other.busted)return `As duas mãos estouraram (${my} × ${op}).`;if(me.busted)return `Sua mão estourou com ${my}; ${other.name||'o adversário'} venceu com ${op}.`;if(other.busted)return `${other.name||'O adversário'} estourou com ${op}; sua mão venceu com ${my}.`;if(my===21&&op!==21)return `Você fechou 21 exato contra ${op}.`;if(op===21&&my!==21)return `${other.name||'O adversário'} fechou 21 exato contra ${my}.`;if(my===op)return `As duas mãos terminaram com ${my} pontos.`;const high=Math.max(my,op),low=Math.min(my,op);return `${high} venceu ${low} por ficar mais perto de 21 sem estourar.`}
@@ -3001,7 +2922,7 @@ function setBlackjackGame(g){
     if(!prev||prev.id!==g.id){playGameSfx('start');setTimeout(()=>playGameSfx('card'),80);if(g.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),220)}
     else if(prev.status==='active'){
       const prevPlayers=prev.players||{},nextPlayers=g.players||{},ids=new Set([...Object.keys(prevPlayers),...Object.keys(nextPlayers)]);let cardsAdded=0,stoodNow=false;
-      ids.forEach(uid=>{cardsAdded+=Math.max(0,Number(nextPlayers[uid]?.cardCount||0)-Number(prevPlayers[uid]?.cardCount||0));if(!prevPlayers[uid]?.stood&&nextPlayers[uid]?.stood)stoodNow=true});
+      ids.forEach(uid=>{cardsAdded+=Math.max(0,(nextPlayers[uid]?.cards?.length||0)-(prevPlayers[uid]?.cards?.length||0));if(!prevPlayers[uid]?.stood&&nextPlayers[uid]?.stood)stoodNow=true});
       if(cardsAdded)playGameSfx('card');else if(stoodNow)playGameSfx('stand');
       if(prev.turnUid!==g.turnUid&&g.turnUid===state.user?.uid)setTimeout(()=>playGameSfx('turn'),100);
     }
@@ -3015,27 +2936,21 @@ function setBlackjackGame(g){
     if(g?.status==='finished'&&g.id&&state.blackjack.seenActiveIds.has(g.id)){
       state.blackjack.seenActiveIds.delete(g.id);
       if(exit){showGameResult({title:iLeft?'Você saiu do 21':'Vitória por desistência no 21!',text:iLeft?'A partida foi encerrada para os dois jogadores. Seu adversário venceu por desistência.':`${leftName} saiu da partida. Você venceu por desistência.`,win:!iLeft,neutral:false,icon:iLeft?'↩':'21'});return}
-      const mePub=g.players?.[uid]||{},otherPub=Object.values(g.players||{}).find(x=>x.uid!==uid)||{},me={...mePub,...(g.revealedHands?.[uid]||{})},otherUid=otherPub.uid,other={...otherPub,...(g.revealedHands?.[otherUid]||{})};const reason=blackjackResultReason(g,me,other);const winner=draw?'Nenhuma mão venceu':won?`Mão vencedora: ${blackjackHandLabel(me)}`:`Mão vencedora: ${blackjackHandLabel(other)}`;const detail=`Sua mão: ${blackjackHandLabel(me)} • ${other.name||'Adversário'}: ${blackjackHandLabel(other)} • ${winner} • ${reason}${Number(g.wager?.amount||0)>0?` • Aposta: ₹${formatNumber(g.wager.amount)} cada`:''}`;showGameResult({title:draw?'Empate no 21!':won?'Você venceu no 21!':`${other.name||'Adversário'} venceu no 21`,text:detail,win:won,neutral:draw,icon:draw?'＝':won?'21':'✕'})
+      const me=g.players?.[uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==uid)||{};const reason=blackjackResultReason(g,me,other);const winner=draw?'Nenhuma mão venceu':won?`Mão vencedora: ${blackjackHandLabel(me)}`:`Mão vencedora: ${blackjackHandLabel(other)}`;const detail=`Sua mão: ${blackjackHandLabel(me)} • ${other.name||'Adversário'}: ${blackjackHandLabel(other)} • ${winner} • ${reason}`;showGameResult({title:draw?'Empate no 21!':won?'Você venceu no 21!':`${other.name||'Adversário'} venceu no 21`,text:detail,win:won,neutral:draw,icon:draw?'＝':won?'21':'✕'})
     }
     return;
   }
   state.blackjack.seenActiveIds.add(g.id);if(panel)panel.hidden=false;if(lobby)lobby.hidden=true;if($('blackjackStatus'))$('blackjackStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderBlackjackGame(g)
 }
-function renderBlackjackGame(g){
-  const uid=state.user?.uid,mePub=g.players?.[uid]||{},otherPub=Object.values(g.players||{}).find(x=>x.uid!==uid)||{},mine=state.blackjack.private||{};if($('blackjackTitle'))$('blackjackTitle').textContent=`${mePub.name||'Você'} × ${otherPub.name||'Amigo'}${Number(g.wager?.amount||0)>0?` • ₹${formatNumber(g.wager.amount)} cada`:''}`;if($('blackjackTurnText'))$('blackjackTurnText').textContent=g.turnUid===uid?'Sua vez de jogar':`Vez de ${otherPub.name||'seu amigo'}`;if($('blackjackOpponentName'))$('blackjackOpponentName').textContent=otherPub.name||'Adversário';if($('blackjackPlayer'))$('blackjackPlayer').innerHTML=(mine.cards||[]).map(cardHtml).join('');if($('blackjackDealer'))$('blackjackDealer').innerHTML=Array.from({length:Number(otherPub.cardCount||0)},()=>'<span class="playing-card hidden-card">🂠</span>').join('');if($('blackjackPlayerScore'))$('blackjackPlayerScore').textContent=String(mine.score??'—');if($('blackjackDealerScore'))$('blackjackDealerScore').textContent='?';if($('blackjackMyState'))$('blackjackMyState').textContent=mine.busted?'Estourou':mine.stood?'Parou':'Jogando';if($('blackjackOpponentState'))$('blackjackOpponentState').textContent=otherPub.busted?'Estourou':otherPub.stood?'Parou':'Jogando';const myTurn=g.turnUid===uid&&g.status==='active'&&!mine.stood&&!mine.busted;if($('blackjackHitBtn'))$('blackjackHitBtn').disabled=!myTurn;if($('blackjackStandBtn'))$('blackjackStandBtn').disabled=!myTurn||!!mine.lockStand;
-  const specials=$('blackjackNightmareCards');if(specials){specials.hidden=g.mode!=='nightmare';specials.querySelectorAll('[data-nightmare-card]').forEach(button=>{const card=button.dataset.nightmareCard;button.disabled=!myTurn||!!mine.specialsUsed?.[card]||(card==='swap'&&(mine.cards||[]).length<3);button.classList.toggle('used',!!mine.specialsUsed?.[card]);});}
-  if($('blackjackOmen'))$('blackjackOmen').textContent=mine.omen?`Seu Presságio: ${mine.omen}`:mine.shield?'Escudo preparado para proteger de um estouro.':mine.lockStand?'Você está sob efeito de Trava: compre uma carta.':'';
-  const log=$('blackjackLog');if(log)log.innerHTML=Object.values(g.log||{}).slice(-10).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'
-}
+function renderBlackjackGame(g){const me=g.players?.[state.user?.uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==state.user?.uid)||{};if($('blackjackTitle'))$('blackjackTitle').textContent=`${me.name||'Você'} × ${other.name||'Amigo'}`;if($('blackjackTurnText'))$('blackjackTurnText').textContent=g.turnUid===state.user?.uid?'Sua vez de jogar':`Vez de ${other.name||'seu amigo'}`;if($('blackjackOpponentName'))$('blackjackOpponentName').textContent=other.name||'Adversário';if($('blackjackPlayer'))$('blackjackPlayer').innerHTML=(me.cards||[]).map(cardHtml).join('');if($('blackjackDealer'))$('blackjackDealer').innerHTML=(other.cards||[]).map(cardHtml).join('');if($('blackjackPlayerScore'))$('blackjackPlayerScore').textContent=String(me.score??0);if($('blackjackDealerScore'))$('blackjackDealerScore').textContent=String(other.score??0);if($('blackjackMyState'))$('blackjackMyState').textContent=me.busted?'Estourou':me.stood?'Parou':'Jogando';if($('blackjackOpponentState'))$('blackjackOpponentState').textContent=other.busted?'Estourou':other.stood?'Parou':'Jogando';const myTurn=g.turnUid===state.user?.uid&&g.status==='active'&&!me.stood&&!me.busted;if($('blackjackHitBtn'))$('blackjackHitBtn').disabled=!myTurn;if($('blackjackStandBtn'))$('blackjackStandBtn').disabled=!myTurn;const log=$('blackjackLog');if(log)log.innerHTML=Object.values(g.log||{}).slice(-10).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
 function blackjackWinner(g){const rows=Object.values(g.players||{}),alive=rows.filter(p=>!p.busted),best=alive.length?Math.max(...alive.map(p=>Number(p.score||0))):-1,winners=alive.filter(p=>Number(p.score||0)===best);return winners.length===1?winners[0].uid:null}
 async function directBlackjackMove(gameId,action){const uid=state.user?.uid;if(!uid)return;let reason='';const tx=await runTransaction(ref(db,`blackjackGames/${gameId}`),g=>{if(!g||g.status!=='active'){reason='Partida encerrada.';return}if(g.turnUid!==uid){reason='Aguarde sua vez.';return}const me=g.players?.[uid],otherUid=Object.keys(g.players||{}).find(x=>x!==uid),other=g.players?.[otherUid];if(!me||!other){reason='Partida inválida.';return}g.deck=Array.isArray(g.deck)?g.deck:[];if(action==='hit'){const card=g.deck.pop();if(!card){reason='O baralho acabou.';return}me.cards=[...(me.cards||[]),card];me.score=blackjackScore(me.cards);if(me.score>21)me.busted=true;if(me.score===21)me.stood=true;appendGameLog(g,`${me.name||'Jogador'} pediu uma carta.`)}else if(action==='stand'){me.stood=true;appendGameLog(g,`${me.name||'Jogador'} parou com ${me.score||0}.`)}else{reason='Jogada inválida.';return}g.updatedAt=Date.now();const meDone=me.stood||me.busted,otherDone=other.stood||other.busted;if(me.busted||(meDone&&otherDone)){g.status='finished';g.winnerUid=blackjackWinner(g);g.finishedAt=Date.now()}else if(!otherDone)g.turnUid=otherUid;else g.turnUid=uid;return g});if(!tx.committed){if(reason)throw new Error(reason);return}const final={id:gameId,...tx.snapshot.val()};if(final.status==='finished')await finishIndexes('blackjack',final)}
-$('blackjackHitBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;playGameSfx('select');try{await siteGameRequest('blackjack_move',{gameId:g.id,action:'hit'},20000,false)}catch(e){toast(permissionMessage(e,e.message))}});
-$('blackjackStandBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;playGameSfx('select');try{await siteGameRequest('blackjack_move',{gameId:g.id,action:'stand'},20000,false)}catch(e){toast(permissionMessage(e,e.message))}});
-$('blackjackNightmareCards')?.addEventListener('click',async ev=>{const btn=ev.target.closest('[data-nightmare-card]'),g=state.blackjack.game;if(!btn||!g||btn.disabled)return;btn.disabled=true;try{await siteGameRequest('blackjack_move',{gameId:g.id,action:'special',special:btn.dataset.nightmareCard},20000,false)}catch(e){toast(permissionMessage(e,e.message))}finally{renderBlackjackGame(state.blackjack.game||g)}});
-$('blackjackExitBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;playGameSfx('reject');try{await siteGameRequest('blackjack_exit',{gameId:g.id},20000,false)}catch(e){toast(permissionMessage(e,e.message))}});
+$('blackjackHitBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;playGameSfx('select');try{await directBlackjackMove(g.id,'hit')}catch(e){toast(permissionMessage(e,e.message))}});
+$('blackjackStandBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;playGameSfx('select');try{await directBlackjackMove(g.id,'stand')}catch(e){toast(permissionMessage(e,e.message))}});
+$('blackjackExitBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;playGameSfx('reject');try{await directGameExit('blackjack',g)}catch(e){toast(permissionMessage(e,e.message))}});
 
 // Forca PvP
-$('hangmanCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('hangmanFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('hangman',targetUid,Number($('hangmanBetInput')?.value||0))}catch(e){toast(permissionMessage(e,e.message))}});
+$('hangmanCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('hangmanFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('hangman',targetUid)}catch(e){toast(permissionMessage(e,e.message))}});
 function handleHangmanIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.hangman.game?.id!==active.id){subscribeHangman(active.id);focusNewSiteGame('hangman',active.id)}return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.hangman.game?.id!==finished.id)subscribeHangman(finished.id);else if(!finished)setHangmanGame(null)}
 function subscribeHangman(id){if(state.hangman.unsub){try{state.hangman.unsub()}catch{}}state.hangman.unsub=onValue(ref(db,`hangmanGames/${id}`),sn=>setHangmanGame(sn.exists()?{id,...sn.val()}:null))}
 function setHangmanGame(g){
@@ -3063,11 +2978,12 @@ function setHangmanGame(g){
   }
   state.hangman.seenActiveIds.add(g.id);if(panel)panel.hidden=false;if(lobby)lobby.hidden=true;renderHangmanGame(g)
 }
-function renderHangmanGame(g){const me=g.players?.[state.user?.uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==state.user?.uid)||{},misses=Array.isArray(g.misses)?g.misses:Object.values(g.misses||{}),max=Number(g.maxMisses||6),guessed=g.guessed||{};if($('hangmanTitle'))$('hangmanTitle').textContent=`${me.name||'Você'} × ${other.name||'Amigo'}`;if($('hangmanTurnText'))$('hangmanTurnText').textContent=g.turnUid===state.user?.uid?'Sua vez de escolher uma letra':`Vez de ${other.name||'seu amigo'}`;if($('hangmanLives'))$('hangmanLives').textContent=`${Math.max(0,max-misses.length)} erros restantes`;if($('hangmanWord'))$('hangmanWord').textContent=String(g.mask||'').split('').map(ch=>ch===' '?'  ':ch).join(' ');if($('hangmanMeName'))$('hangmanMeName').textContent=me.name||'Você';if($('hangmanOpponentName'))$('hangmanOpponentName').textContent=other.name||'Adversário';if($('hangmanMeScore'))$('hangmanMeScore').textContent=String(me.score||0);if($('hangmanOpponentScore'))$('hangmanOpponentScore').textContent=String(other.score||0);const kb=$('hangmanKeyboard');if(kb){kb.innerHTML='';'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(ch=>{const b=document.createElement('button');b.type='button';b.textContent=ch;const used=guessed[ch];if(used)b.classList.add(used==='hit'?'correct':'wrong');b.disabled=!!used||g.turnUid!==state.user?.uid||g.status!=='active';b.onclick=()=>{playGameSfx('select');siteGameRequest('hangman_guess',{gameId:g.id,letter:ch},20000,false).catch(e=>toast(permissionMessage(e,e.message)))};kb.appendChild(b)})}const log=$('hangmanLog');if(log)log.innerHTML=Object.values(g.log||{}).slice(-10).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
+function renderHangmanGame(g){const me=g.players?.[state.user?.uid]||{},other=Object.values(g.players||{}).find(x=>x.uid!==state.user?.uid)||{},misses=Array.isArray(g.misses)?g.misses:Object.values(g.misses||{}),max=Number(g.maxMisses||6),guessed=g.guessed||{};if($('hangmanTitle'))$('hangmanTitle').textContent=`${me.name||'Você'} × ${other.name||'Amigo'}`;if($('hangmanTurnText'))$('hangmanTurnText').textContent=g.turnUid===state.user?.uid?'Sua vez de escolher uma letra':`Vez de ${other.name||'seu amigo'}`;if($('hangmanLives'))$('hangmanLives').textContent=`${Math.max(0,max-misses.length)} erros restantes`;if($('hangmanWord'))$('hangmanWord').textContent=String(g.mask||'').split('').map(ch=>ch===' '?'  ':ch).join(' ');if($('hangmanMeName'))$('hangmanMeName').textContent=me.name||'Você';if($('hangmanOpponentName'))$('hangmanOpponentName').textContent=other.name||'Adversário';if($('hangmanMeScore'))$('hangmanMeScore').textContent=String(me.score||0);if($('hangmanOpponentScore'))$('hangmanOpponentScore').textContent=String(other.score||0);const kb=$('hangmanKeyboard');if(kb){kb.innerHTML='';'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(ch=>{const b=document.createElement('button');b.type='button';b.textContent=ch;const used=guessed[ch];if(used)b.classList.add(used==='hit'?'correct':'wrong');b.disabled=!!used||g.turnUid!==state.user?.uid||g.status!=='active';b.onclick=()=>{playGameSfx('select');directHangmanGuess(g.id,ch).catch(e=>toast(permissionMessage(e,e.message)))};kb.appendChild(b)})}const log=$('hangmanLog');if(log)log.innerHTML=Object.values(g.log||{}).slice(-10).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'}
 async function directHangmanGuess(gameId,letter){const uid=state.user?.uid;if(!uid)return;let reason='';const tx=await runTransaction(ref(db,`hangmanGames/${gameId}`),g=>{if(!g||g.status!=='active'){reason='Partida encerrada.';return}if(g.turnUid!==uid){reason='Aguarde sua vez.';return}letter=String(letter||'').toUpperCase().replace(/[^A-Z]/g,'').slice(0,1);if(!letter){reason='Letra inválida.';return}g.guessed=g.guessed||{};if(g.guessed[letter]){reason='Essa letra já foi usada.';return}const answer=String(g.answer||'').toUpperCase(),hits=[...answer].filter(ch=>ch===letter).length,me=g.players?.[uid],otherUid=Object.keys(g.players||{}).find(x=>x!==uid);g.guessed[letter]=hits?'hit':'miss';g.misses=Array.isArray(g.misses)?g.misses:[];if(hits){me.score=Number(me.score||0)+hits;appendGameLog(g,`${me.name||'Jogador'} acertou ${letter}.`)}else{g.misses=[...g.misses,letter];appendGameLog(g,`${me.name||'Jogador'} errou ${letter}.`)}g.mask=hangmanMask(answer,g.guessed);g.updatedAt=Date.now();const solved=!g.mask.includes('_'),over=g.misses.length>=Number(g.maxMisses||6);if(solved||over){g.status='finished';const ps=Object.values(g.players||{}),top=Math.max(...ps.map(p=>Number(p.score||0))),wins=ps.filter(p=>Number(p.score||0)===top);g.winnerUid=wins.length===1?wins[0].uid:null;g.finishedAt=Date.now()}else g.turnUid=otherUid;return g});if(!tx.committed){if(reason)throw new Error(reason);return}const final={id:gameId,...tx.snapshot.val()};if(final.status==='finished')await finishIndexes('hangman',final)}
-$('hangmanExitBtn')?.addEventListener('click',async()=>{const g=state.hangman.game;if(!g)return;playGameSfx('reject');try{await siteGameRequest('hangman_exit',{gameId:g.id},20000,false)}catch(e){toast(permissionMessage(e,e.message))}});
+$('hangmanExitBtn')?.addEventListener('click',async()=>{const g=state.hangman.game;if(!g)return;playGameSfx('reject');try{await directGameExit('hangman',g)}catch(e){toast(permissionMessage(e,e.message))}});
 
-// Slots: o servidor do site define o prêmio; o bridge liquida a diferença na carteira real.
+// Slots solo — usa a carteira de Rupias já sincronizada com a Charlotte.
+// O site controla toda a experiência visual: aposta, giro, som e exibição do resultado.
 
 const initialRoute=(location.hash||'#home').slice(1);navigate(routeMeta[initialRoute]?initialRoute:'home');
 
@@ -3083,54 +2999,3 @@ watchEnable.addEventListener('click',async()=>{primeGameAudio();const stage=$('w
 async function renderPublicBadge(uid){let badge=$('publicEarnedBadge');if(!badge){badge=document.createElement('p');badge.id='publicEarnedBadge';badge.className='profile-badge';$('publicProfileName')?.after(badge)}badge.hidden=true;try{const id=(await get(ref(db,`profileEquippedBadge/${uid}`))).val();if(!id)return;const b=(await get(ref(db,`profileBadges/${uid}/${id}`))).val();if(b&&currentPublicProfile?.uid===uid){badge.textContent=`${b.icon} ${b.name}`;badge.hidden=false}}catch{}}
 
 $('adminVerifyEmail')?.addEventListener('click',async()=>{try{if(auth.currentUser?.emailVerified)return toast('Seu e-mail já está confirmado.');await sendEmailVerification(auth.currentUser);toast('Confirme o e-mail pelo link recebido; depois saia e entre novamente.')}catch(e){toast(e.message)}});
-
-// Só inicia Auth depois que todos os módulos, handlers e constantes estão definidos.
-await withTimeout(initialAuthPolicy(),7000,'PERSISTENCE_TIMEOUT').catch(e=>console.warn('[GREMORY AUTH] Inicialização de persistência não bloqueante:',e?.message||e));
-onAuthStateChanged(auth,user=>{
-  document.body.classList.remove('auth-loading');
-  state.user=user||null;
-
-  if(!user){
-    document.body.classList.remove('authenticated');
-    $('appShell').setAttribute('aria-hidden','true');
-    const reason=sessionStorage.getItem('gremory:banReason');
-    if(reason){$('authStatus').textContent=`Conta suspensa: ${reason}`;sessionStorage.removeItem('gremory:banReason')}
-    clearUserSubscriptions();
-    return;
-  }
-
-  // Abre o site imediatamente após o Auth. Dados complementares carregam em seguida.
-  document.body.classList.add('authenticated');
-  $('appShell').setAttribute('aria-hidden','false');
-  setTimeout(()=>{const gif=$('authGif');if(gif)gif.removeAttribute('src')},250);
-
-  if(!state.profile){
-    state.profile={
-      uid:user.uid,
-      nome:user.displayName||user.email?.split('@')[0]||'Usuário',
-      username:'',avatar:user.photoURL||'',bio:'',favoriteAnime:'',email:user.email||'',
-      raidWhatsappNotify:false,createdAt:user.metadata?.creationTime||nowIso()
-    };
-  }
-  renderAccount();
-  renderAdminAccess();
-  startUserSubscriptions();
-
-  withTimeout(readUserData(user),12000,'DB_TIMEOUT').then(()=>{
-    renderAccount();
-    if(!state.profile?.username)setTimeout(()=>{toast('Escolha seu nome de usuário para completar a conta.',5000);setDrawer(true)},700);
-  }).catch(e=>{
-    console.warn('[GREMORY AUTH] Perfil ainda não sincronizado:',e);
-    toast('Conta conectada. Algumas informações ainda estão sincronizando.',4000);
-  });
-
-  state.ttt.lastResultId=localStorage.getItem(`gremory:tttSeen:${user.uid}`)||'';
-  loadPokemonSources().catch(()=>{});
-
-  const params=new URLSearchParams(location.search);
-  const watchInvite=params.get('watch');
-  const rpgInvite=params.get('rpg');
-  if(watchInvite){navigate('watch');joinWatchRoom(watchInvite.toUpperCase()).catch(()=>{})}
-  else if(rpgInvite){navigate('rpg');joinRoom(rpgInvite.toUpperCase()).catch(()=>{})}
-});
-

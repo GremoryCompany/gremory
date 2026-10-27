@@ -1,0 +1,45 @@
+GREMORY SITE V5.1 — WATCH PARTY FIX
+====================================
+
+CORREÇÕES DESTA VERSÃO
+----------------------
+1. YouTube dentro da Watch Party
+   - Corrigida a Content-Security-Policy do Vercel para permitir os frames oficiais do YouTube.
+   - O player agora usa youtube-nocookie.com/embed.
+   - CSP também permite mídia HTTPS/blobs para vídeos diretos.
+   - IMPORTANTE: é necessário fazer um NOVO DEPLOY para o novo header CSP entrar em vigor.
+
+2. Compartilhamento de tela
+   - O botão "Compartilhar tela" foi movido para junto dos controles do player.
+   - Não é mais obrigatório ativar o microfone para começar a compartilhar.
+   - Ao entrar na sala, o navegador prepara silenciosamente a conexão WebRTC para receber uma tela compartilhada (sem pedir microfone).
+   - Quando alguém compartilha, a tela aparece em destaque logo abaixo do player do vídeo/YouTube.
+   - Adicionado botão "Tela cheia" para abrir a tela compartilhada em fullscreen.
+   - O compartilhamento local também mostra uma prévia em destaque.
+   - Melhoria na fila de ICE candidates para reduzir falhas de conexão por ordem de sinalização.
+   - Presença WebRTC usa onDisconnect para reduzir participantes presos após fechar a página.
+
+3. Voz
+   - "Entrar na voz" continua separado do compartilhamento de tela.
+   - O microfone só é solicitado quando a pessoa entra na voz.
+   - "Sair da voz" desliga apenas o áudio, sem impedir que a pessoa continue vendo uma tela compartilhada.
+
+4. Fotos dos membros gigantes
+   - Corrigida a classe usada na lista da Watch Party.
+   - Avatares agora ficam compactos (36x36) e com object-fit: cover.
+   - A lista de chamada também usa cards pequenos em vez de vídeo/avatares gigantes.
+
+ARQUIVOS ALTERADOS
+------------------
+- gremory-main/index.html
+- gremory-main/assets/js/app.js
+- gremory-main/assets/css/app.css
+- gremory-main/vercel.json
+
+FIREBASE / BOT
+--------------
+Não é necessário alterar o bot nem as regras do Firebase se você já está usando as regras da V5.
+
+OBSERVAÇÃO WEBRTC
+-----------------
+O projeto continua usando STUN público. Em redes NAT muito restritas, WebRTC P2P pode precisar de um servidor TURN para funcionar 100% entre redes diferentes.

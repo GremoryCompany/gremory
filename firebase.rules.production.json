@@ -71,8 +71,8 @@
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
         "$jobId": {
-          ".write": "auth != null && auth.uid === $uid && ((!data.exists() && newData.exists()) || (!newData.exists() && !data.child('__processingBy').exists()))",
-          ".validate": "!newData.exists() || (newData.child('type').isString() && !newData.child('__processingBy').exists() && !newData.child('__processingAt').exists() && newData.child('type').isString() && (!newData.child('requestId').exists() || newData.child('type').val() === 'slots_spin') && (newData.child('type').val() !== 'slots_spin' || (newData.child('requestId').isString() && newData.child('requestId').val() === $jobId && newData.child('requestId').val().matches(/^spin_[a-f0-9]{32}$/) && newData.child('bet').isNumber() && newData.child('bet').val() % 1 === 0 && newData.child('bet').val() >= 10 && newData.child('bet').val() <= 1000000000 && !newData.child('payout').exists() && !newData.child('symbols').exists() && !newData.child('spin').exists())) && (newData.child('type').val() !== 'site_game_accept' || (newData.child('challengeId').isString() && newData.child('challengeId').val().matches(/^[a-zA-Z0-9_-]{8,120}$/) && !newData.child('bet').exists() && !newData.child('targetUid').exists())) && ((newData.child('type').val() === 'site_game_accept' || newData.child('type').val() === 'ttt_move' || newData.child('type').val() === 'ttt_exit' || newData.child('type').val() === 'blackjack_move' || newData.child('type').val() === 'blackjack_exit' || newData.child('type').val() === 'hangman_guess' || newData.child('type').val() === 'hangman_exit' || newData.child('type').val() === 'slots_spin' || newData.child('type').val() === 'watch_music_activate' || newData.child('type').val() === 'buy_customization' || newData.child('type').val() === 'daily_claim' || newData.child('type').val() === 'duel_accept' || newData.child('type').val() === 'duel_challenge' || newData.child('type').val() === 'duel_decline' || newData.child('type').val() === 'duel_exit' || newData.child('type').val() === 'duel_move' || newData.child('type').val() === 'duel_switch' || newData.child('type').val() === 'equip_achievement' || newData.child('type').val() === 'equip_customization' || newData.child('type').val() === 'pokemon_buy_potion' || newData.child('type').val() === 'pokemon_capture' || newData.child('type').val() === 'pokemon_explore' || newData.child('type').val() === 'pokemon_heal_start' || newData.child('type').val() === 'pokemon_set_team' || newData.child('type').val() === 'pokemon_use_potion' || newData.child('type').val() === 'pokemon_wild_exit' || newData.child('type').val() === 'pokemon_wild_move' || newData.child('type').val() === 'premium_checkout' || newData.child('type').val() === 'premium_group_set' || newData.child('type').val() === 'premium_rupias_buy' || newData.child('type').val() === 'send_download_link' || newData.child('type').val() === 'site_raid_attack' || newData.child('type').val() === 'sync_account' || newData.child('type').val() === 'sync_identity' || newData.child('type').val() === 'sync_pokemon' || newData.child('type').val() === 'tinder_feed' || newData.child('type').val() === 'tinder_like' || newData.child('type').val() === 'tinder_profile_get' || newData.child('type').val() === 'tinder_profile_save' || newData.child('type').val() === 'watch_music_add' || newData.child('type').val() === 'watch_music_advance' || newData.child('type').val() === 'watch_music_skip' || newData.child('type').val() === 'youtube_bot_download') || (auth.token.email === 'losermodder@gmail.com' && (newData.child('type').val() === 'site_raid_start' || newData.child('type').val() === 'site_raid_auto' || newData.child('type').val() === 'admin_backup_now' || newData.child('type').val() === 'admin_restore_backup' || newData.child('type').val() === 'admin_create_link_code' || newData.child('type').val() === 'admin_reset_charlotte_link' || newData.child('type').val() === 'admin_feed_announce' || newData.child('type').val() === 'admin_grant_currency' || newData.child('type').val() === 'admin_grant_premium' || newData.child('type').val() === 'admin_store_delete' || newData.child('type').val() === 'admin_store_upsert' || newData.child('type').val() === 'admin_premium_group_set'))))"
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "!newData.exists() || (newData.child('type').isString() && (newData.child('type').val() === 'sync_pokemon' || newData.child('type').val() === 'sync_account' || newData.child('type').val() === 'daily_claim' || newData.child('type').val() === 'buy_customization' || newData.child('type').val() === 'equip_customization' || newData.child('type').val() === 'premium_checkout' || newData.child('type').val() === 'send_download_link' || newData.child('type').val() === 'youtube_bot_download' || newData.child('type').val() === 'pokemon_set_team' || newData.child('type').val() === 'pokemon_explore' || newData.child('type').val() === 'pokemon_wild_move' || newData.child('type').val() === 'pokemon_wild_exit' || newData.child('type').val() === 'pokemon_capture' || newData.child('type').val() === 'pokemon_heal_start' || newData.child('type').val() === 'duel_challenge' || newData.child('type').val() === 'duel_accept' || newData.child('type').val() === 'duel_decline' || newData.child('type').val() === 'duel_move' || newData.child('type').val() === 'duel_switch' || newData.child('type').val() === 'duel_exit' || newData.child('type').val() === 'ttt_create' || newData.child('type').val() === 'ttt_move' || newData.child('type').val() === 'ttt_exit' || newData.child('type').val() === 'tinder_feed' || newData.child('type').val() === 'tinder_like' || newData.child('type').val() === 'watch_music_activate' || newData.child('type').val() === 'watch_music_add' || newData.child('type').val() === 'watch_music_skip' || newData.child('type').val() === 'watch_music_advance' || newData.child('type').val() === 'sync_identity' || newData.child('type').val() === 'tinder_profile_get' || newData.child('type').val() === 'tinder_profile_save' || newData.child('type').val() === 'site_raid_start' || newData.child('type').val() === 'site_raid_auto' || newData.child('type').val() === 'site_raid_attack'))"
         }
       }
     },
@@ -207,60 +207,20 @@
     "watchUserRooms": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        "$code": {
-          ".write": "auth != null && (auth.uid === $uid || (!newData.exists() && root.child('watchRooms').child($code).child('meta').child('ownerUid').val() === auth.uid))"
-        }
+        ".write": "auth != null && auth.uid === $uid"
       }
     },
     "watchRooms": {
       "$code": {
         ".read": "auth != null",
-        ".write": "auth != null && ((!data.exists() && newData.exists() && newData.child('meta').child('ownerUid').val() === auth.uid && newData.child('members').child(auth.uid).child('uid').val() === auth.uid) || (data.exists() && !newData.exists() && data.child('meta').child('ownerUid').val() === auth.uid))",
-        "meta": {
-          ".write": "auth != null && root.child('watchRooms').child($code).child('meta').child('ownerUid').val() === auth.uid"
-        },
+        ".write": "auth != null && ((!data.exists() && newData.child('meta').child('ownerUid').val() === auth.uid && newData.child('members').child(auth.uid).child('uid').val() === auth.uid) || (data.exists() && data.child('meta').child('ownerUid').val() === auth.uid))",
         "members": {
           "$uid": {
-            ".write": "auth != null && (root.child('watchRooms').child($code).child('meta').child('ownerUid').val() === auth.uid || (auth.uid === $uid && ((!newData.exists()) || (!root.child('watchRooms').child($code).child('bans').child($uid).exists() && newData.child('uid').val() === auth.uid && (root.child('watchRooms').child($code).child('meta').child('privacy').val() !== 'invite' || root.child('watchInvites').child($code).child($uid).exists() || root.child('watchRooms').child($code).child('members').child($uid).exists())))))"
+            ".write": "auth != null && (auth.uid === $uid || root.child('watchRooms').child($code).child('meta').child('ownerUid').val() === auth.uid)"
           }
         },
         "media": {
           ".write": "auth != null && root.child('watchRooms').child($code).child('meta').child('ownerUid').val() === auth.uid"
-        },
-        "bans": {
-          "$uid": {
-            ".write": "auth != null && root.child('watchRooms').child($code).child('meta').child('ownerUid').val() === auth.uid",
-            ".validate": "!newData.exists() || newData.val() === true"
-          }
-        },
-        "chat": {
-          ".indexOn": [
-            "createdAt"
-          ],
-          "$messageId": {
-            ".write": "auth != null && root.child('watchRooms').child($code).child('members').child(auth.uid).exists() && !root.child('watchRooms').child($code).child('bans').child(auth.uid).exists() && ((!data.exists() && newData.child('uid').val() === auth.uid) || (!newData.exists() && data.child('uid').val() === auth.uid))",
-            ".validate": "!newData.exists() || (newData.child('uid').val() === auth.uid && newData.child('name').isString() && newData.child('name').val().length <= 40 && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 500 && newData.child('createdAt').isNumber())"
-          }
-        },
-        "musicQueue": {
-          ".write": false,
-          ".validate": false
-        },
-        "musicPlan": {
-          ".write": false,
-          ".validate": false
-        },
-        "musicPlayback": {
-          ".write": false,
-          ".validate": false
-        },
-        "musicAccess": {
-          ".write": false,
-          ".validate": false
-        },
-        "musicActivationLock": {
-          ".write": false,
-          ".validate": false
         }
       }
     },
@@ -268,7 +228,7 @@
       "$code": {
         ".read": "auth != null && root.child('watchRooms').child($code).child('members').child(auth.uid).exists()",
         "$uid": {
-          ".write": "auth != null && ((auth.uid === $uid && root.child('watchRooms').child($code).child('members').child(auth.uid).exists()) || (!newData.exists() && root.child('watchRooms').child($code).child('meta').child('ownerUid').val() === auth.uid))"
+          ".write": "auth != null && auth.uid === $uid && root.child('watchRooms').child($code).child('members').child(auth.uid).exists()"
         }
       }
     },
@@ -291,7 +251,7 @@
         ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'losermodder@gmail.com')",
         ".write": false,
         "$notificationId": {
-          ".write": "auth != null && ((auth.token.email === 'losermodder@gmail.com') || (auth.uid === $uid && !newData.exists()) || (!data.exists() && newData.child('type').val() === 'friend_request' && newData.child('actorUid').val() === auth.uid && root.child('friendRequests').child($uid).child(auth.uid).exists()) || (!data.exists() && newData.child('type').val() === 'watch_invite' && newData.child('actorUid').val() === auth.uid && root.child('friends').child(auth.uid).child($uid).exists() && root.child('watchRooms').child(newData.child('watchCode').val()).child('meta').child('ownerUid').val() === auth.uid))"
+          ".write": "auth != null && ((auth.token.email === 'losermodder@gmail.com') || (auth.uid === $uid && !newData.exists()) || (!data.exists() && newData.child('type').val() === 'friend_request' && newData.child('actorUid').val() === auth.uid && root.child('friendRequests').child($uid).child(auth.uid).exists()))"
         }
       },
       ".read": "auth != null && auth.token.email === 'losermodder@gmail.com'"
@@ -338,341 +298,6 @@
     "pokemonSiteRaidConfig": {
       ".read": "auth != null",
       ".write": false
-    },
-    "communityPosts": {
-      ".read": "auth != null",
-      ".indexOn": [
-        "createdAt"
-      ],
-      "$post": {
-        ".write": "auth != null && root.child('siteBans').child(auth.uid).child('active').val() !== true && ((!data.exists() && newData.child('uid').val() === auth.uid) || (!newData.exists() && (data.child('uid').val() === auth.uid || (auth != null && auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true))))",
-        ".validate": "newData.hasChildren(['uid','text','createdAt','mediaUrl','mediaKind']) && newData.child('uid').isString() && newData.child('text').isString() && newData.child('text').val().length <= 1800 && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 5000 && newData.child('createdAt').val() >= now - 60000 && newData.child('mediaUrl').isString() && newData.child('mediaUrl').val().length <= 2000 && (newData.child('mediaUrl').val() === '' || newData.child('mediaUrl').val().matches(/^https:\\/\\/.+/)) && (newData.child('mediaKind').val() === 'image' || newData.child('mediaKind').val() === 'video')",
-        "$other": {
-          ".validate": "$other === 'uid' || $other === 'text' || $other === 'createdAt' || $other === 'mediaUrl' || $other === 'mediaKind' || $other === 'storagePath'"
-        }
-      }
-    },
-    "communityLikes": {
-      "$post": {
-        ".read": "auth != null",
-        "$uid": {
-          ".write": "auth != null && root.child('siteBans').child(auth.uid).child('active').val() !== true && auth.uid === $uid && (!newData.exists() || root.child('communityPosts').child($post).exists())",
-          ".validate": "newData.val() === true"
-        }
-      }
-    },
-    "communityComments": {
-      "$post": {
-        ".read": "auth != null",
-        ".indexOn": [
-          "createdAt"
-        ],
-        "$comment": {
-          ".write": "auth != null && root.child('siteBans').child(auth.uid).child('active').val() !== true && ((!data.exists() && root.child('communityPosts').child($post).exists() && newData.child('uid').val() === auth.uid) || (!newData.exists() && (data.child('uid').val() === auth.uid || (auth != null && auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true))))",
-          ".validate": "newData.hasChildren(['uid','text','createdAt']) && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 500 && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 5000",
-          "$other": {
-            ".validate": "$other === 'uid' || $other === 'text' || $other === 'createdAt'"
-          }
-        }
-      }
-    },
-    "communityFollowing": {
-      "$uid": {
-        ".read": "auth != null",
-        "$target": {
-          ".write": "auth != null && root.child('siteBans').child(auth.uid).child('active').val() !== true && auth.uid === $uid && $uid !== $target",
-          ".validate": "newData.val() === true && root.child('directory').child($target).exists()"
-        }
-      }
-    },
-    "profileBadges": {
-      "$uid": {
-        ".read": "auth != null",
-        "$badge": {
-          ".write": "auth != null && auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true",
-          ".validate": "newData.hasChildren(['name','icon']) && newData.child('name').isString() && newData.child('name').val().length <= 60 && newData.child('icon').isString() && newData.child('icon').val().length <= 8"
-        }
-      }
-    },
-    "profileEquippedBadge": {
-      "$uid": {
-        ".read": "auth != null",
-        ".write": "auth != null && auth.uid === $uid",
-        ".validate": "newData.isString() && root.child('profileBadges').child($uid).child(newData.val()).exists()"
-      }
-    },
-    "botBackupStatus": {
-      ".read": "auth != null && auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true",
-      ".write": false
-    },
-    "supportChats": {
-      ".read": "auth != null && auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true",
-      "$uid": {
-        ".read": "auth != null && (auth.uid === $uid || (auth != null && auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true))",
-        "meta": {
-          ".write": "auth != null && (auth.uid === $uid || (auth != null && auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true))",
-          ".validate": "newData.child('uid').val() === $uid && newData.child('lastText').isString() && newData.child('lastText').val().length <= 120"
-        },
-        "messages": {
-          ".indexOn": [
-            "createdAt"
-          ],
-          "$msg": {
-            ".write": "auth != null && !data.exists() && (auth.uid === $uid || (auth != null && auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true))",
-            ".validate": "newData.child('senderUid').val() === auth.uid && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 500 && newData.child('createdAt').isNumber() && ((newData.child('role').val() === 'user' && auth.uid === $uid) || (newData.child('role').val() === 'admin' && (auth != null && auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true)))"
-          }
-        }
-      }
-    },
-    "siteStoreCatalog": {
-      ".read": "auth != null",
-      ".write": false
-    },
-    "siteNotificationDismissed": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        "$key": {
-          ".write": "auth != null && auth.uid === $uid",
-          ".validate": "!newData.exists() || (newData.child('seenAt').isNumber() && newData.child('notificationId').isString() && newData.child('type').isString())"
-        }
-      }
-    },
-    "siteGameChallenges": {
-      "$targetUid": {
-        ".read": "auth != null && auth.uid === $targetUid",
-        "$challengeId": {
-          ".write": "auth != null && ((!data.exists() && newData.exists() && newData.child('fromUid').val() === auth.uid && root.child('friends').child(auth.uid).child($targetUid).exists()) || (!newData.exists() && (auth.uid === $targetUid || data.child('fromUid').val() === auth.uid)))",
-          ".validate": "!newData.exists() || (newData.hasChildren(['id','type','fromUid','fromName','createdAt']) && newData.child('id').val() === $challengeId && newData.child('fromUid').val() === auth.uid && newData.child('fromName').isString() && newData.child('fromName').val().length <= 40 && newData.child('createdAt').isNumber() && (newData.child('type').val() === 'ttt' || newData.child('type').val() === 'blackjack' || newData.child('type').val() === 'hangman' || newData.child('type').val() === 'nightmare21' || newData.child('type').val() === 'chaos' || newData.child('type').val() === 'poker') && (!newData.child('bet').exists() || (newData.child('bet').isNumber() && (newData.child('bet').val() === 0 || (newData.child('bet').val() % 1 === 0 && newData.child('bet').val() >= 10 && newData.child('bet').val() <= 100000)))) && (!newData.child('mode').exists() || (newData.child('type').val() === 'blackjack' && (newData.child('mode').val() === 'nightmare' || newData.child('mode').val() === 'classic'))))"
-        }
-      }
-    },
-    "blackjackIndex": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        "$gameId": {
-          ".write": false
-        }
-      }
-    },
-    "blackjackGames": {
-      "$gameId": {
-        ".read": "auth != null && data.child('players').child(auth.uid).exists()",
-        ".write": false
-      }
-    },
-    "hangmanIndex": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        "$gameId": {
-          ".write": false
-        }
-      }
-    },
-    "hangmanGames": {
-      "$gameId": {
-        ".read": "auth != null && data.child('players').child(auth.uid).exists()",
-        ".write": false
-      }
-    },
-    "blackjackHands": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": false
-      }
-    },
-    "gameSecrets": {
-      ".read": false,
-      ".write": false
-    },
-    "gameWagerEscrows": {
-      ".read": false,
-      ".write": false
-    },
-    "gameWagerSettlements": {
-      ".read": false,
-      ".write": false
-    },
-    "userPlaylists": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        "$playlistId": {
-          ".write": "auth != null && auth.uid === $uid",
-          ".validate": "!newData.exists() || (newData.child('id').val() === $playlistId && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 80 && newData.child('sourceUrl').isString() && newData.child('sourceUrl').val().length <= 500)"
-        }
-      }
-    },
-    "directChats": {
-      "$ownerUid": {
-        ".read": "auth != null && auth.uid === $ownerUid",
-        "$peerUid": {
-          "$messageId": {
-            ".write": "auth != null && !data.exists() && newData.child('senderUid').val() === auth.uid && newData.child('recipientUid').isString() && ((auth.uid === $ownerUid && newData.child('recipientUid').val() === $peerUid) || (auth.uid === $peerUid && newData.child('recipientUid').val() === $ownerUid)) && root.child('friends').child(auth.uid).child(newData.child('recipientUid').val()).exists()",
-            ".validate": "newData.hasChildren(['id','senderUid','senderName','recipientUid','text','createdAt']) && newData.child('id').val() === $messageId && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 500 && newData.child('createdAt').isNumber()"
-          }
-        }
-      }
-    },
-    "watchPublicRooms": {
-      ".read": "auth != null",
-      "$code": {
-        ".write": "auth != null && root.child('watchRooms').child($code).child('meta').child('ownerUid').val() === auth.uid",
-        ".validate": "!newData.exists() || (newData.child('code').val() === $code && newData.child('name').isString() && newData.child('name').val().length <= 60 && newData.child('ownerUid').val() === auth.uid)"
-      },
-      ".indexOn": [
-        "updatedAt"
-      ]
-    },
-    "pokemonSiteRaidBattles": {
-      "$raidId": {
-        "$uid": {
-          ".read": "auth != null && auth.uid === $uid",
-          ".write": false
-        }
-      }
-    },
-    "premiumSiteGroups": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": false
-      }
-    },
-    "blackjackPrivate": {
-      "$gameId": {
-        "$uid": {
-          ".read": "auth != null && auth.uid === $uid",
-          ".write": false
-        }
-      }
-    },
-    "nightmare21Index": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        "$gameId": {
-          ".write": false
-        }
-      }
-    },
-    "nightmare21Games": {
-      "$gameId": {
-        ".read": "auth != null && data.child('players').child(auth.uid).exists()",
-        ".write": false
-      }
-    },
-    "nightmare21Private": {
-      "$gameId": {
-        "$uid": {
-          ".read": "auth != null && auth.uid === $uid",
-          ".write": false
-        }
-      }
-    },
-    "chaosIndex": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        "$gameId": {
-          ".write": false
-        }
-      }
-    },
-    "chaosGames": {
-      "$gameId": {
-        ".read": "auth != null && data.child('players').child(auth.uid).exists()",
-        ".write": false
-      }
-    },
-    "chaosPrivate": {
-      "$gameId": {
-        "$uid": {
-          ".read": "auth != null && auth.uid === $uid",
-          ".write": false
-        }
-      }
-    },
-    "pokerIndex": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        "$gameId": {
-          ".write": false
-        }
-      }
-    },
-    "pokerGames": {
-      "$gameId": {
-        ".read": "auth != null && data.child('players').child(auth.uid).exists()",
-        ".write": false
-      }
-    },
-    "pokerPrivate": {
-      "$gameId": {
-        "$uid": {
-          ".read": "auth != null && auth.uid === $uid",
-          ".write": false
-        }
-      }
-    },
-    "horseRaceLast": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": false
-      }
-    },
-    "siteFishing": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": false
-      }
-    },
-    "siteMining": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": false
-      }
-    },
-    "watchInvites": {
-      "$code": {
-        ".write": "auth != null && root.child('watchRooms').child($code).child('meta').child('ownerUid').val() === auth.uid",
-        "$uid": {
-          ".read": "auth != null && (auth.uid === $uid || root.child('watchRooms').child($code).child('meta').child('ownerUid').val() === auth.uid)",
-          ".validate": "!newData.exists() || (newData.child('uid').val() === $uid && newData.child('fromUid').val() === auth.uid && newData.child('createdAt').isNumber())"
-        }
-      }
-    },
-    "watchModeration": {
-      "$code": {
-        ".read": "auth != null && root.child('watchRooms').child($code).child('members').child(auth.uid).exists()",
-        "$uid": {
-          ".write": "auth != null && root.child('watchRooms').child($code).child('meta').child('ownerUid').val() === auth.uid",
-          ".validate": "!newData.exists() || (newData.child('forceMuted').isBoolean() && newData.child('updatedAt').isNumber() && newData.child('byUid').val() === auth.uid)"
-        }
-      }
-    },
-    "siteSlotsPending": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": false
-      }
-    },
-    "siteSlotsSettlements": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": false
-      }
-    },
-    "siteWallets": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": false
-      }
-    },
-    "siteGameEngine": {
-      ".read": false,
-      ".write": false
-    },
-    "siteGameAccepts": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": false
-      }
     }
   }
 }

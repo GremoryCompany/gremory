@@ -1,17 +1,14 @@
-GREMORY V14 — DEPLOY DO PROJETO COMPLETO
+GREMORY WEB V2 - DEPLOY
 
-Site: Vercel. Frontend usa Firebase Auth e Realtime Database para os jogos,
-carteira, Pokémon e sala. Não requer Firebase Admin na Vercel nesses fluxos.
+1. Suba a pasta gremory-main para o GitHub/Vercel.
+2. Na Vercel configure:
+   RAPIDAPI_KEY
+   DARKSTARS_API_KEY
+   GREMORY_PROXY_SECRET
+3. Revise firebase.rules.example.json antes de copiar para as regras do Realtime Database.
+4. Faça o deploy.
 
-Bot: Railway/Highway. Atualizar o arquivo database/gremory_site_bridge.js NA
-PASTA DO BOT e reiniciar. Firebase Admin + credenciais privadas ficam só aqui.
-
-Firebase: publicar TODO firebase.rules.production.json em Realtime Database
-Rules. Fazer backup do estado anterior. Não publicar firebase.rules.example.json.
-
-Ordem recomendada: backup, atualizar bridge do bot, publicar as regras, deploy
-do site, recarregar navegador com Ctrl+F5 e testar primeiro Jogo da Velha sem
-aposta, depois saldo, personalização, música e um giro de valor pequeno.
-
-Não limpar giros/apostas que já estejam em análise sem conferência financeira.
-Mais detalhes e comandos de teste: LEIA-ME.txt.
+IMPORTANTE:
+- O frontend antigo não é usado nesta versão.
+- Não copie style.css/app.js antigos para dentro desta versão.
+- Não coloque tokens/chaves secretas no JavaScript do navegador.

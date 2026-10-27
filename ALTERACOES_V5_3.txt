@@ -1,0 +1,36 @@
+GREMORY SITE V5.3 — WATCH PARTY + MOBILE
+========================================
+
+1) MOBILE
+- A barra inferior agora pode ser arrastada horizontalmente com o dedo.
+- Adicionados atalhos mobile para Charlotte, Downloads e Jogos.
+- Ao abrir uma aba, o atalho ativo é centralizado automaticamente.
+
+2) WATCH PARTY — PLAY/PAUSE DO HOST
+- O player do YouTube agora escuta eventos do iframe.
+- Quando o host dá play ou pause dentro do próprio player do YouTube, o estado é publicado na sala.
+- Os demais participantes recebem play/pause e posição pelo Firebase.
+- O botão Reproduzir/Pausar continua disponível para o host.
+
+3) COMPARTILHAMENTO DE TELA
+- Compartilhamento só começa após clicar em "Compartilhar tela".
+- Entrar na voz não marca mais o usuário como compartilhando tela.
+- Foi adicionado um estado explícito screen=true/false na presença da Watch Party.
+- A tela remota usa somente a faixa de vídeo, evitando áudio duplicado e bloqueio de autoplay.
+- A tela compartilhada continua com botão "Tela cheia".
+
+4) GOOGLE DRIVE
+- Links públicos no formato drive.google.com/file/d/ID/... ou open?id=ID são reconhecidos.
+- O vídeo é aberto pelo player de preview do Google Drive dentro da Watch Party.
+- IMPORTANTE: o Google Drive não expõe uma API de controle de reprodução cross-origin como o YouTube.
+  Por isso o carregamento funciona, mas Play/Pause sincronizado automaticamente fica disponível para
+  YouTube e vídeo direto; no Drive cada participante usa os controles do próprio player.
+
+5) CSP
+- Adicionados drive.google.com e drive.googleusercontent.com ao frame-src.
+
+ARQUIVOS ALTERADOS
+- index.html
+- assets/js/app.js
+- assets/css/app.css
+- vercel.json
