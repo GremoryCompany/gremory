@@ -206,9 +206,9 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   const HEAL_COST=100;
   const HEAL_MS_FREE=5*60*1000;
   const HEAL_MS_PREMIUM=2*60*1000;
-  const watchedUsers=new Set(),watchedRefs=new Map(),userQueues=new Map();
+  const watchedUsers=new Set(),watchedRefs=new Map(),walletRefs=new Map(),userQueues=new Map();
   const bridgeInstanceId=`bridge_${process.pid}_${crypto.randomBytes(6).toString('hex')}`;
-  let rootWatcher=null,healingTimer=null,syncTimer=null,raidTimer=null,backupTimer=null,premiumGroupTimer=null,syncingLinked=false,backupRunning=false,restoreRunning=false,backupRecoveryRequired=false,backupRestartRequired=false,backupAssessmentDone=false,backupRuntimeStarted=false;
+  let rootWatcher=null,walletWatcher=null,healingTimer=null,syncTimer=null,raidTimer=null,backupTimer=null,premiumGroupTimer=null,syncingLinked=false,backupRunning=false,restoreRunning=false,backupRecoveryRequired=false,backupRestartRequired=false,backupAssessmentDone=false,backupRuntimeStarted=false;
 
   function savePokemonDb(db){if(typeof saveGremonDB!=='function')throw new Error('saveGremonDB não está disponível no bot.');saveGremonDB(db);}
   function ensureMon(mon){if(!mon)return null;if(garantirHp){try{garantirHp(mon)}catch{}}if(!mon.uid)mon.uid=id('pk');if(!mon.maxHp)mon.maxHp=Math.max(1,Number(mon.hp||100));if(mon.hpAtual==null)mon.hpAtual=mon.maxHp;if(Number(mon.hpAtual)<=0){mon.hpAtual=0;mon.fainted=true;}return mon;}
@@ -596,7 +596,68 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
     const account={registered:registeredFor(jid),balance:balanceFor(jid),...readLevel(jid),premium:readPremium(jid).active};
     await backupAccountSnapshot(uid,jid,account,true).catch(()=>{});return{identity:{name,username},account}
   }
-  async function syncAccount(uid,jid){if(backupRestartRequired)throw new Error('Backup restaurado; reinicie a Charlotte para carregar os JSONs.');const pokemon=await syncPokemon(uid,jid).catch(()=>null),lvl=readLevel(jid),prem=readPremium(jid),ach=readAchievements(jid),account={registered:registeredFor(jid),balance:balanceFor(jid),level:lvl.level,xp:lvl.xp,messages:lvl.messages,premium:prem.active};const patch={account,achievements:ach,updatedAt:now()};if(pokemon)patch.pokemon=pokemon;await rtdb.ref(`charlotteSync/${uid}`).update(patch);backupAccountSnapshot(uid,jid,account,false).catch(()=>{});return{account,achievements:ach,pokemon};}
+  // Carteira primária no SITE: importar uma única vez o saldo local; depois
+  // o bot apenas espelha operações feitas pelo servidor do site.
+  async function siteWalletState(uid,jid,{importBotChanges=true}={}){
+    const ref=rtdb.ref(`siteWallets/${uid}`),local=Math.max(0,Math.floor(balanceFor(jid)));
+    const claim=await ref.transaction(old=>old||{balance:local,version:0,syncedVersion:0,updatedAt:Date.now(),origin:'charlotte-import'},undefined,false);
+    let value=claim.snapshot.val()||{};
+    // Se o site NÃO tem pendências de sincronização, aceitar alterações
+    // legítimas da Charlotte (comandos do bot, premiações antigas, etc.).
+    if(importBotChanges&&Number(value.syncedVersion||0)>=Number(value.version||0)&&Number(value.balance)!==local){
+      const imported=await ref.transaction(current=>{
+        if(!current||Number(current.syncedVersion||0)<Number(current.version||0))return;
+        if(Number(current.balance)===local)return current;
+        return{...current,balance:local,version:Number(current.version||0)+1,syncedVersion:Number(current.version||0)+1,updatedAt:Date.now(),origin:'charlotte-external'};
+      },undefined,false).catch(e=>{logger.log('[SITE WALLET] importação:',e.message);return null});
+      if(imported?.committed)value=imported.snapshot.val()||value;
+    }
+    return value;
+  }
+  async function mirrorSiteWallet(uid){
+    const jid=await linkedJidByUid(uid);
+    if(!jid)return;
+    return withExclusiveKeys(walletLocks,[jid],async()=>{
+      const ref=rtdb.ref(`siteWallets/${uid}`),wallet=(await ref.once('value')).val();
+      if(!wallet||Number(wallet.version||0)<=Number(wallet.syncedVersion||0))return;
+      if(backupRestartRequired)return;
+      if(!registeredFor(jid))return;
+      const target=Math.floor(Number(wallet.balance));
+      if(!Number.isSafeInteger(target)||target<0)throw new Error('Saldo do site inválido para espelhamento.');
+      const actual=Math.floor(balanceFor(jid)),delta=target-actual;
+      if(delta!==0){
+        if(delta<0){if(typeof economy.delkoin!=='function')throw new Error('delkoin indisponível');await economy.delkoin(jid,-delta);}
+        else{if(typeof economy.addkoin!=='function')throw new Error('addkoin indisponível');await economy.addkoin(jid,delta);}
+      }
+      // A versão só é marcada como espelhada quando o valor alvo foi obtido.
+      if(Math.floor(balanceFor(jid))!==target)throw new Error('O saldo da Charlotte não confirmou a sincronização.');
+      await ref.transaction(value=>{
+        if(!value)return;
+        if(Number(value.version||0)!==Number(wallet.version||0))return;
+        return{...value,syncedVersion:Number(wallet.version||0),syncedAt:Date.now()};
+      },undefined,false);
+      const accountRef=rtdb.ref(`charlotteSync/${uid}/account`);
+      await accountRef.update({balance:target}).catch(()=>{});
+    });
+  }
+  function watchSiteWallet(uid){
+    if(walletRefs.has(uid))return;
+    const walletRef=rtdb.ref(`siteWallets/${uid}`);
+    const onChange=sn=>{const w=sn.val();if(!w||Number(w.version||0)<=Number(w.syncedVersion||0))return;
+      mirrorSiteWallet(uid).catch(e=>logger.log('[SITE WALLET] sincronização pendente:',uid,e.message));
+    };
+    walletRef.on('value',onChange);walletRefs.set(uid,{walletRef,onChange});
+  }
+  async function syncAccount(uid,jid){
+    if(backupRestartRequired)throw new Error('Backup restaurado; reinicie a Charlotte para carregar os JSONs.');
+    const siteWallet=await siteWalletState(uid,jid).catch(e=>{logger.log('[SITE WALLET] inicialização:',e.message);return null});
+    const pokemon=await syncPokemon(uid,jid).catch(()=>null),lvl=readLevel(jid),prem=readPremium(jid),ach=readAchievements(jid);
+    const account={registered:registeredFor(jid),balance:siteWallet?Number(siteWallet.balance):balanceFor(jid),level:lvl.level,xp:lvl.xp,messages:lvl.messages,premium:prem.active};
+    const patch={account,achievements:ach,updatedAt:now()};if(pokemon)patch.pokemon=pokemon;
+    await rtdb.ref(`charlotteSync/${uid}`).update(patch);
+    backupAccountSnapshot(uid,jid,account,false).catch(()=>{});
+    return{account,achievements:ach,pokemon};
+  }
   async function findLinkCode(code){const snap=await rtdb.ref('charlotteLinkRequests').orderByChild('code').equalTo(String(code||'').trim().toUpperCase()).once('value');for(const[uid,req]of Object.entries(snap.val()||{}))if(Number(req.expiresAt||0)>=Date.now())return{uid,req};return null;}
   async function linkAccount(code,sender){
     const found=await findLinkCode(code);if(!found)throw new Error('Código inválido ou expirado. Gere outro no site.');
@@ -1594,8 +1655,8 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
   }
   function startOperationalRuntime({allowAutoBackup=true}={}){if(backupRuntimeStarted)return;backupRuntimeStarted=true;processDueHealingJobs().catch(()=>{});healingTimer=setInterval(()=>processDueHealingJobs().catch(()=>{}),30000);healingTimer.unref?.();setTimeout(()=>syncLinkedAccounts().catch(()=>{}),600).unref?.();setTimeout(()=>restoreTinderFromFirebase().catch(()=>{}),900).unref?.();setTimeout(()=>maybeAutoSiteRaid().catch(()=>{}),1200).unref?.();setTimeout(()=>checkPremiumGroups().catch(()=>{}),1500).unref?.();syncTimer=setInterval(()=>syncLinkedAccounts().catch(()=>{}),180000);syncTimer.unref?.();raidTimer=setInterval(()=>maybeAutoSiteRaid().catch(()=>{}),30000);raidTimer.unref?.();premiumGroupTimer=setInterval(()=>checkPremiumGroups().catch(()=>{}),30000);premiumGroupTimer.unref?.();if(allowAutoBackup){setTimeout(()=>backupOperationalJsons(false).catch(e=>logger.log('[FIREBASE BACKUP] inicial:',e.message)),10000).unref?.();backupTimer=setInterval(()=>backupOperationalJsons(false).catch(e=>logger.log('[FIREBASE BACKUP] ciclo:',e.message)),10*60*1000);backupTimer.unref?.();}else logger.log('🛡️ BACKUP REMOTO PROTEGIDO: backup automático pausado, mas Slots/Raid/sync e demais funções continuam ativas.');}
   async function initializeOperationalRuntime(){const state=await assessOperationalBackupState();backupRestartRequired=false;if(state.recoveryRequired)logger.log(`🛟 BACKUP REMOTO DIFERENTE: ${state.remoteFiles||0} arquivo(s) no Firebase. O backup automático ficará pausado até restaurar ou confirmar substituição; a Charlotte continuará funcionando normalmente.`);startOperationalRuntime({allowAutoBackup:!state.recoveryRequired})}
-  function start(){if(rootWatcher)return;rootWatcher=rtdb.ref('siteBridgeJobs');rootWatcher.on('child_added',sn=>watchUserJobs(sn.key));const timer=setTimeout(()=>initializeOperationalRuntime().catch(e=>logger.log('[FIREBASE BACKUP] avaliação:',e.message)),1500);timer.unref?.();logger.log('✅ GREMORY SITE BRIDGE ATIVO');}
-  function stop(){try{if(rootWatcher)rootWatcher.off()}catch{}for(const{userRef,handler}of watchedRefs.values()){try{userRef.off('child_added',handler)}catch{}}watchedRefs.clear();watchedUsers.clear();userQueues.clear();walletLocks.clear();gameActionLocks.clear();rootWatcher=null;if(healingTimer){clearInterval(healingTimer);healingTimer=null;}if(syncTimer){clearInterval(syncTimer);syncTimer=null;}if(raidTimer){clearInterval(raidTimer);raidTimer=null;}if(premiumGroupTimer){clearInterval(premiumGroupTimer);premiumGroupTimer=null;}if(backupTimer){clearInterval(backupTimer);backupTimer=null;}syncingLinked=false;backupRuntimeStarted=false;}
+  function start(){if(rootWatcher)return;rootWatcher=rtdb.ref('siteBridgeJobs');rootWatcher.on('child_added',sn=>watchUserJobs(sn.key));walletWatcher=rtdb.ref('siteWallets');walletWatcher.on('child_added',sn=>watchSiteWallet(sn.key));const timer=setTimeout(()=>initializeOperationalRuntime().catch(e=>logger.log('[FIREBASE BACKUP] avaliação:',e.message)),1500);timer.unref?.();logger.log('✅ GREMORY SITE BRIDGE ATIVO');}
+  function stop(){try{if(rootWatcher)rootWatcher.off()}catch{}try{walletWatcher?.off()}catch{}for(const{walletRef,onChange}of walletRefs.values()){try{walletRef.off('value',onChange)}catch{}}walletRefs.clear();walletWatcher=null;for(const{userRef,handler}of watchedRefs.values()){try{userRef.off('child_added',handler)}catch{}}watchedRefs.clear();watchedUsers.clear();userQueues.clear();walletLocks.clear();gameActionLocks.clear();rootWatcher=null;if(healingTimer){clearInterval(healingTimer);healingTimer=null;}if(syncTimer){clearInterval(syncTimer);syncTimer=null;}if(raidTimer){clearInterval(raidTimer);raidTimer=null;}if(premiumGroupTimer){clearInterval(premiumGroupTimer);premiumGroupTimer=null;}if(backupTimer){clearInterval(backupTimer);backupTimer=null;}syncingLinked=false;backupRuntimeStarted=false;}
   function rawIncomingText(info){
     return String(
       info?.message?.conversation||

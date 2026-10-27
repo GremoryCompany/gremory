@@ -17,7 +17,8 @@ test('Slots: browser cannot settle or trigger a second spin directly',()=>{
   assert.equal(validJob('slots_spin'),false);
   const src=fs.readFileSync(path.join(root,'api/slots.js'),'utf8');
   assert.match(src,/handleSlotsStatus/);
-  assert.match(src,/verifyIdToken/);
+  assert.match(src,/authenticate/);
+  assert.match(fs.readFileSync(path.join(root,'api/site-wallet.js'),'utf8'),/verifyIdToken/);
   assert.match(app,/querySlotStatus/);
   assert.doesNotMatch(between(app,'async function runSlotsSpin(', '// Delegação também funciona no mobile.'),/bridgeRequest\('slots_spin'/);
 });
@@ -37,4 +38,35 @@ test('Watch voice is confirmed by Firebase before the UI reports music availabil
   assert.match(bridge,/musicActivationLock/);
   assert.match(bridge,/musicPaidJobs/);
   assert.match(bridge,/processWatchMusicActivate/);
+});
+
+
+test('Site wallet: only owner reads and no browser can write; game engine stays server-only',()=>{
+  assert.equal(rules.siteWallets.$uid['.write'], false);
+  assert.match(rules.siteWallets.$uid['.read'], /auth.uid === \$uid/);
+  assert.equal(rules.siteGameEngine['.read'],false);
+  assert.equal(rules.siteGameEngine['.write'],false);
+  for(const action of ['ttt_create','ttt_move','blackjack_move','hangman_guess','watch_music_activate'])assert.equal(validJob(action),false,action);
+  assert.equal(validJob('watch_music_add'),true);
+});
+
+test('Slots: receipts remain available for idempotent replay and balance cannot go negative',()=>{
+  const source=fs.readFileSync(path.join(root,'api/site-wallet.js'),'utf8');
+  assert.doesNotMatch(source,/keys.length>80/);
+  const extracted=source.slice(source.indexOf('function applyEntry('),source.indexOf('async function applyWallet('));
+  const f=new Function('validMoney',extracted+';return applyEntry;')(n=>Number.isSafeInteger(n)&&n>=0&&n<=1e12);
+  const w={balance:1000,receipts:{},version:0};
+  const first=f(w,'spin_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',-100,'slot',{bet:100});
+  assert.equal(first.balance,900);
+  const retry=f(first,'spin_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',-100,'slot',{bet:100});
+  assert.equal(retry.balance,900);
+  assert.equal(retry.version,1);
+  assert.equal(f({balance:5,receipts:{},version:0},'entry_abc12345',-10,'game_entry'),undefined);
+});
+
+test('Game invite validates wager from real bet property, not obsolete wager key',()=>{
+  const expr=rules.siteGameChallenges.$targetUid.$challengeId['.validate'];
+  assert.match(expr,/newData.child\('bet'\)/);
+  assert.doesNotMatch(expr,/newData.child\('wager'\)/);
+  assert.match(expr,/newData.child\('mode'\)/);
 });

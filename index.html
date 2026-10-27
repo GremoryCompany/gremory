@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261027-v14-recovery">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261027-v14-sitewallet-b">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -627,7 +627,7 @@
             <div class="panel-head"><div><span class="tag">SLOTS</span><h3>Slots de Rupias</h3><small class="muted">A aposta é debitada da mesma carteira de Rupias vinculada à Charlotte.</small></div><span class="pill" id="slotsStatus">Pronto</span></div>
             <div class="slot-wallet"><span>Seu saldo</span><strong id="slotsBalance">₹ 0</strong></div>
             <div class="slot-bet-panel">
-              <label>Aposta<input id="slotsBetInput" type="number" min="10" max="5000" step="10" value="50"></label>
+              <label>Aposta<input id="slotsBetInput" type="number" min="10" max="1000000000" step="10" value="50"></label>
               <div class="slot-bet-presets" aria-label="Apostas rápidas"><button class="btn" data-slot-bet="10" type="button">₹10</button><button class="btn" data-slot-bet="50" type="button">₹50</button><button class="btn" data-slot-bet="100" type="button">₹100</button><button class="btn" data-slot-bet="500" type="button">₹500</button><button class="btn" data-slot-bet="1000" type="button">₹1.000</button></div>
             </div>
             <div class="slot-machine slot-machine-large"><div class="slot-reel" id="slotReel1">✦</div><div class="slot-reel" id="slotReel2">♛</div><div class="slot-reel" id="slotReel3">◆</div></div>
@@ -1113,6 +1113,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261027-v14-recovery"></script>
+  <script type="module" src="/assets/js/app.js?v=20261027-v14-sitewallet-b"></script>
 </body>
 </html>

@@ -1279,6 +1279,14 @@ module.exports = async (req, res) => {
     try{const got=await blobSdk.get(`backups/accounts/${uid}/latest.json`,{access:'private'});if(!got?.stream)return sendJson(res,404,{erro:'backup não encontrado'});const txt=await new Response(got.stream).text();return sendJson(res,200,{ok:true,snapshot:JSON.parse(txt)})}catch(e){return sendJson(res,404,{erro:'backup não encontrado',detalhe:e.message})}
   }
 
+  if (action === 'site_game') {
+    return require('./site-games').handleGame(req,res,{readJsonBody,sendJson});
+  }
+
+  if (action === 'watch_music_activate_site') {
+    return require('./site-music').handleActivate(req,res,{readJsonBody,sendJson});
+  }
+
   if (action === 'slots_spin_site') {
     return require('./slots').handleSlotsSpin(req,res,{readJsonBody,sendJson});
   }
