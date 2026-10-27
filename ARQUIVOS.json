@@ -1,0 +1,62 @@
+[
+  {
+    "file": "index.html",
+    "sha256": "71a47e17823a406f2e51420792ec2f5a314d8f04f6cea71b93ecc6a0b87ee78e"
+  },
+  {
+    "file": "sw.js",
+    "sha256": "ecd768dad23848b7ea253b916525630f3e800b2f4d154b1f66b0eae0922f3afc"
+  },
+  {
+    "file": "assets/js/app.js",
+    "sha256": "2bce7d47a4d48c5805fb92e488d4c8e47e763abf7903101608aee662f1742a72"
+  },
+  {
+    "file": "assets/js/bootstrap.js",
+    "sha256": "8a99242f203be7181ce8077aba3049c618bf22faaeb49f9e23aeacd90e935a8e"
+  },
+  {
+    "file": "assets/js/games-extra.js",
+    "sha256": "97df3d6818327b92332fdeb2eb9dff5d2e40a5efa2fbfa2b5448b11f40d9f3b5"
+  },
+  {
+    "file": "api/slots.js",
+    "sha256": "02fc72626553c8802f8495e7faa2b1a57615ee4bcabaf3ea20b17f2d993e289a"
+  },
+  {
+    "file": "database/gremory_site_bridge.js",
+    "sha256": "06ab683afca5418d1416a08bc8a64f385eb1ffd0e44719d271228ed096983330"
+  },
+  {
+    "file": "firebase.rules.production.json",
+    "sha256": "791fb450dabad1dd79b454c3f4168091cc6bc84ee216aed10c88648715b4115b"
+  },
+  {
+    "file": "package.json",
+    "sha256": "cd493cf340574ea192d33ed4070db7dfe78e15622c36f99a353a2f93f2b90ca5"
+  },
+  {
+    "file": "tests/regression.cjs",
+    "sha256": "d703299f1c1889c21442d42d5ffb04d9d86b69a759456d15027cdef9a985f895"
+  },
+  {
+    "file": "tests/auth.cjs",
+    "sha256": "cf9a007977e2695b78cc2c93d007c0cd032f81887d8e2e2a70d5b9e96e619ffa"
+  },
+  {
+    "file": "tests/actions.cjs",
+    "sha256": "18f0a57ef33c11e5b1583665eee842efe787f37afc38154ac2542e20dbf9a5bf"
+  },
+  {
+    "file": "tests/bridge-recovery.cjs",
+    "sha256": "c896978148ef0ff8780760b9e5cce61d92a48ce331f47058a1bc1b0759fa6122"
+  },
+  {
+    "file": "tests/fixtures/firebase-rules-before.json",
+    "sha256": "8692a1bce8e791d15cacefe0bf250a230a45e638eb2b521e8c697da123431326"
+  },
+  {
+    "file": "tests/fixtures/backup-hashes.json",
+    "sha256": "33aa46ad3ebcf6e59e3ee72f7499c4c0308b67b4bafbc64b845d69f50faf3fb9"
+  }
+]

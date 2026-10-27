@@ -70,3 +70,67 @@ test('Blackjack two-user view model keeps own hand private and opponent count pu
   assert.equal(view('playerA').ownScore,18);assert.equal(view('playerA').opponentCardCount,3);assert.equal(view('playerA').opponentCards,undefined);
   assert.equal(view('playerB').ownScore,19);assert.equal(view('playerB').opponentCardCount,2);assert.equal(view('playerB').opponentScore,undefined);
 });
+
+test('Authentication has one bootstrap path and no competing auth shell',()=>{
+  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+  assert.ok(!html.includes('auth-shell.js'));
+  assert.ok(app.includes("import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js'"));
+  assert.ok(app.includes('const app = initializeApp(firebaseConfig);'));
+  assert.ok(app.includes("$('loginForm').addEventListener('submit'"));
+  assert.ok(app.includes("$('registerForm').addEventListener('submit'"));
+  assert.ok(app.includes("$('resetPasswordBtn').addEventListener('click'"));
+});
+
+test('Watch Music is room-scoped and does not require voice presence',()=>{
+  const roomState=between(bridge,'  async function watchMusicRoomState','  function legacyWatchMusicPlan');
+  assert.ok(roomState.includes('room.members?.[uid]'));
+  assert.ok(!roomState.includes('watchVoice'));
+  const activate=between(bridge,'  async function processWatchMusicActivate','  async function processWatchMusicAdd');
+  assert.ok(activate.includes('musicPlan'));
+  assert.ok(activate.includes('musicActivationLock'));
+  const add=between(bridge,'  async function processWatchMusicAdd','  async function startNextWatchMusic');
+  assert.ok(add.includes('musicPlan/used'));
+  assert.ok(add.includes('premiumAtActivation'));
+  const frontend=between(app,"$('watchMusicActivateBtn')?.addEventListener", "$('watchMusicSkipBtn')?.addEventListener");
+  assert.ok(!frontend.includes('joinWatchVoice'));
+  assert.ok(!frontend.includes('Entre na chamada de voz'));
+});
+
+test('Watch Party rules support invites and host moderation without opening private writes',()=>{
+  assert.ok(rules.watchInvites?.$code?.$uid?.['.read'].includes('auth.uid === $uid'));
+  assert.ok(rules.watchModeration?.$code?.['.read'].includes("members').child(auth.uid).exists()"));
+  assert.ok(rules.watchModeration?.$code?.$uid?.['.write'].includes("ownerUid"));
+  assert.equal(rules.watchRooms.$code.musicPlan['.write'],false);
+  assert.equal(rules.watchRooms.$code.musicQueue['.write'],false);
+  assert.equal(rules.watchRooms.$code.musicActivationLock['.write'],false);
+});
+
+test('Watch room creation is guarded against double clicks and discovery never lists private rooms',()=>{
+  const create=between(app,'async function createWatchRoom(ev)','async function loadWatchRooms()');
+  assert.ok(create.includes('state.watchCreatingRoom'));
+  assert.ok(create.includes("privacy!=='private'"));
+  assert.ok(create.includes("submit.disabled=true"));
+  const publicRooms=between(app,'async function loadPublicWatchRooms(){','async function joinWatchRoom(code)');
+  assert.ok(publicRooms.includes("r.privacy==='invite'"));
+  assert.ok(publicRooms.includes('Somente convite'));
+});
+
+test('PVP wagers are validated and settled only in the bridge',()=>{
+  for(const fn of ['processTttCreate','processBlackjackCreate','processHangmanCreate','processNightmareCreate']){
+    const i=bridge.indexOf(`async function ${fn}`);assert.ok(i>=0,fn);
+    const chunk=bridge.slice(i,i+5000);assert.ok(chunk.includes('reserveGameWager'),`${fn} reserve`);
+  }
+  for(const kind of ['ttt','blackjack','hangman','nightmare21'])assert.ok(bridge.includes(`settleGameWager('${kind}'`),kind);
+  assert.ok(bridge.includes('economy.delkoin'));
+  assert.ok(bridge.includes('economy.addkoin'));
+  assert.equal(rules.gameWagerEscrows['.read'],false);assert.equal(rules.gameWagerEscrows['.write'],false);
+  assert.equal(rules.gameWagerSettlements['.read'],false);assert.equal(rules.gameWagerSettlements['.write'],false);
+});
+
+test('Nightmare 21 exposes optional wager input but keeps cards private',()=>{
+  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');const extra=fs.readFileSync(path.join(root,'assets/js/games-extra.js'),'utf8');
+  assert.ok(html.includes('id="nightmareBetInput"'));
+  assert.ok(extra.includes("Number($('nightmareBetInput')?.value||0)"));
+  assert.equal(rules.nightmare21Private.$gameId.$uid['.write'],false);
+  assert.ok(rules.nightmare21Private.$gameId.$uid['.read'].includes('auth.uid === $uid'));
+});

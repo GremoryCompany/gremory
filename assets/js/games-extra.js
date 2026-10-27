@@ -21,7 +21,7 @@ function cardScore(cards=[]){let t=0,a=0;for(const c of cards){if(c.r==='A'){t+=
 function renderType(type){if(type==='nightmare21')renderNightmare();else if(type==='chaos')renderChaos();else if(type==='poker')renderPoker()}
 
 // 21 Pesadelo
-$('nightmareCreateBtn')?.addEventListener('click',()=>sendChallenge('nightmare21',$('nightmareFriendSelect')?.value).catch(e=>toast(e.message)));
+$('nightmareCreateBtn')?.addEventListener('click',()=>sendChallenge('nightmare21',$('nightmareFriendSelect')?.value,Number($('nightmareBetInput')?.value||0)).catch(e=>toast(e.message)));
 $('nightmareHitBtn')?.addEventListener('click',()=>nightmareMove('hit'));
 $('nightmareStandBtn')?.addEventListener('click',()=>nightmareMove('stand'));
 $('nightmareExitBtn')?.addEventListener('click',()=>{const g=sessions.nightmare21.game;if(g)bridge('nightmare21_exit',{gameId:g.id}).catch(e=>toast(e.message))});

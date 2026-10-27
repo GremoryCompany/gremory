@@ -1,0 +1,12 @@
+[
+  {
+    "start": "  async function backupAccountSnapshot",
+    "end": "  async function syncIdentity",
+    "hash": "18c8218eff725fa0be9d11e2bcc1d779c7630fbb4c8e04cda7030b524cadfaa5"
+  },
+  {
+    "start": "  function backupFileKey",
+    "end": "  async function siteAdmin",
+    "hash": "a1675807bf4fdba2877a89e3b33a75c9060c68e714536a6d0ba5fc403866ece0"
+  }
+]

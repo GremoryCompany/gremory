@@ -1,0 +1,34 @@
+PATCH INCREMENTAL — RAIDS, SALAS E SLOTS — 27/10/2026
+
+APLICAÇÃO (as três partes são necessárias)
+1. SITE: copie o conteúdo deste patch sobre o projeto atual, mantendo os caminhos. Faça o deploy do site. Não substitua pelo ZIP antigo completo.
+2. FIREBASE: publique TODO o conteúdo de firebase.rules.production.json em Realtime Database > Rules. Este arquivo parte das regras que você enviou nesta conversa, preservando os demais caminhos.
+3. CHARLOTTE: substitua database/gremory_site_bridge.js no projeto do bot pelo arquivo deste patch e REINICIE a Charlotte. Substituir só esse arquivo no projeto do site não atualiza o bot.
+4. Feche as abas/PWA antigas e abra o site novamente para carregar o cache novo.
+
+SLOTS E HOSPEDAGEM
+O sorteio continua no servidor do site e a carteira continua na Charlotte.
+A hospedagem do site precisa das credenciais Firebase Admin (FIREBASE_SERVICE_ACCOUNT_JSON; alternativamente FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL e FIREBASE_PRIVATE_KEY). Use o mesmo projeto Firebase da Charlotte. FIREBASE_DATABASE_URL deve apontar para o banco correto.
+Configure as credenciais SOMENTE nas variáveis de ambiente da hospedagem. Não coloque essas chaves no navegador nem neste ZIP. Não é necessário GREMORY_BACKUP_SECRET para Slots.
+Se o servidor de Slots estiver sem configuração, a tela agora mostra a falha e para o giro, em vez de tentar um comando slots_spin que esse bridge não implementa.
+
+O QUE FOI CORRIGIDO
+- Raid: responde após gravar a raid; os avisos de WhatsApp seguem em segundo plano. Criação simultânea usa transação.
+- Admin da raid: usa a identidade do Firebase Auth, sem depender da sincronização do e-mail em profiles.
+- Jobs presos após reinício: a trava é reavaliada quando vence, mantendo a fila por usuário e a proteção contra cobrança duplicada.
+- Slots: limite de espera da chamada HTTP; animação e som param mesmo se o servidor não responder; recibos duráveis e recuperação da mesma aposta pendente; nenhuma repetição automática de débito em análise.
+- Liquidação de Slots: sincronização complementar de Pokémon deixa de segurar a resposta financeira.
+- Salas: listagem secundária não impede abrir uma sala criada; clique duplicado é bloqueado; nomes respeitam o limite das regras.
+- Restaurados os ajustes de Watch Party do patch V19 já existente: convite/moderação, música da sala independente do microfone e proteção contra retorno do próprio áudio.
+- Login: fluxo único, correção de sintaxe preservada, observador após inicialização e sem signOut concorrente.
+- Regras: adicionados leitura dos próprios recibos/pendências de Slots e caminhos de convite/moderação; escrita de planos de música continua no bridge.
+- Mantido o campo opcional de aposta do 21 Pesadelo que já existia no patch V19.
+
+VALIDAÇÃO
+35 testes passaram: 20 regressões da base V19, 3 testes de autenticação e 12 testes de ações/recuperação.
+Todos os scripts do navegador passaram na análise de sintaxe. Bridge e API Slots também passaram. Inicialização do painel simulada concluída.
+Os trechos de backup/restauração do bridge que você enviou foram preservados byte a byte e isso é verificado nos testes.
+Teste local: npm test (com os demais arquivos do projeto presentes).
+
+Não foi feito login real nem teste de raid/sala/giro no site publicado: não foi fornecido acesso à hospedagem/conta. O patch não publica automaticamente as mudanças.
+Uma aposta marcada como review/processing NÃO é apagada para destravar outro giro: confira o extrato antes de qualquer correção manual.

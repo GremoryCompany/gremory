@@ -1,7 +1,5 @@
-// Keep load failures visible even when a dependency fails before app.js executes.
-import('./app.js?v=20261027-login-fix').then(()=>{
-  window.gremoryPanelReady?.();
-}).catch(err=>{
-  console.error('[GREMORY BOOT]',err);
-  window.gremoryPanelFailed?.(err);
+import('./app.js?v=20261027-raids-salas-slots').catch(error=>{
+ console.error('[GREMORY BOOT]',error);
+ const status=document.getElementById('authStatus');
+ if(status)status.textContent='O painel não carregou. Recarregue a página e verifique sua conexão.';
 });

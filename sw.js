@@ -1,11 +1,10 @@
-const CACHE='gremory-login-fix-20261027';
+const CACHE='gremory-raids-salas-slots-20261027';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261027-login-fix',
-  '/assets/js/bootstrap.js?v=20261027-login-fix',
-  '/assets/js/app.js?v=20261027-login-fix',
-  '/assets/js/auth-shell.js?v=20261027-login-fix',
+  '/assets/css/app.css?v=20261027-raids-salas-slots',
+  '/assets/js/bootstrap.js?v=20261027-raids-salas-slots',
+  '/assets/js/app.js?v=20261027-raids-salas-slots',
   '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
@@ -17,6 +16,6 @@ self.addEventListener('fetch',e=>{
   const r=e.request;if(r.method!=='GET')return;const u=new URL(r.url);if(u.origin!==location.origin)return;if(u.pathname.startsWith('/api/'))return;
   if(r.mode==='navigate'){e.respondWith(fetch(r).then(x=>{const c=x.clone();caches.open(CACHE).then(k=>k.put('/index.html',c));return x}).catch(()=>caches.match('/index.html')));return}
   // JS/CSS usam network-first para evitar manter versão antiga após um deploy.
-  if(u.pathname.endsWith('.js')||u.pathname.endsWith('.css')||u.pathname.startsWith('/assets/audio/custom/')){e.respondWith(fetch(r).then(x=>{if(x.ok)caches.open(CACHE).then(c=>c.put(r,x.clone()));return x}).catch(()=>caches.match(r)));return}
-  e.respondWith(caches.match(r).then(hit=>{const fresh=fetch(r).then(x=>{if(x.ok)caches.open(CACHE).then(c=>c.put(r,x.clone()));return x}).catch(()=>hit);return hit||fresh}))
+  if(u.pathname.endsWith('.js')||u.pathname.endsWith('.css')||u.pathname.startsWith('/assets/audio/custom/')){e.respondWith(fetch(r).then(x=>{if(x.ok){const copy=x.clone();caches.open(CACHE).then(c=>c.put(r,copy)).catch(()=>{});}return x}).catch(()=>caches.match(r)));return}
+  e.respondWith(caches.match(r).then(hit=>{const fresh=fetch(r).then(x=>{if(x.ok){const copy=x.clone();caches.open(CACHE).then(c=>c.put(r,copy)).catch(()=>{});}return x}).catch(()=>hit);return hit||fresh}))
 });
