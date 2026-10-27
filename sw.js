@@ -1,10 +1,10 @@
-const CACHE='gremory-v17-direct-fix-20261026';
+const CACHE='gremory-v14-base-pro-20261026';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261026-v17-direct-fix',
-  '/assets/js/app.js?v=20261026-v17-direct-fix',
-  '/assets/js/community.js?v=20261026-v17-direct-fix',
+  '/assets/css/app.css?v=20261026-v14-base-pro',
+  '/assets/js/app.js?v=20261026-v14-base-pro',
+  '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
   '/manifest.webmanifest'
