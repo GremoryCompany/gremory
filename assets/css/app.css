@@ -1276,3 +1276,13 @@ body.watch-pseudo-fullscreen #watchScreenStage.watch-fullscreen-ui-hidden{cursor
 
 /* V14 profile music + admin */
 .public-profile-music{display:grid;gap:8px;padding:14px 0;border-top:1px solid var(--border,rgba(255,255,255,.08))}.public-profile-music>span{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;opacity:.65}.public-profile-music .modal-actions.compact{justify-content:flex-start;margin:0}.admin-economy-grid .full-span{grid-column:1/-1}
+
+/* 21 Pesadelo: mesa de cartas discreta, sem afetar os outros jogos */
+#blackjackGamePanel .card-table-pvp{background:radial-gradient(ellipse at center,#193b35 0%,#0b2222 65%,#090e13 100%);border:1px solid #346054;border-radius:22px;padding:18px}
+#blackjackGamePanel .card-table-pvp .card-seat{background:rgba(5,14,15,.5);border-color:rgba(139,200,169,.19)}
+.nightmare-cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:16px 0 9px}
+.nightmare-cards[hidden]{display:none}
+.nightmare-card{border:1px solid #744f55;border-radius:13px;background:linear-gradient(135deg,#2e1b28,#15121b);color:#f9dfd1;min-height:74px;padding:9px 6px;cursor:pointer;text-align:center}
+.nightmare-card b,.nightmare-card small{display:block}.nightmare-card b{font-size:13px}.nightmare-card small{font-size:11px;color:#d5abb5;margin-top:5px}.nightmare-card:disabled,.nightmare-card.used{opacity:.4;cursor:default}
+.nightmare-hint:not(:empty){margin:10px 0;text-align:center}
+@media(max-width:700px){.nightmare-cards{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.nightmare-card{min-height:64px}#blackjackGamePanel .card-table-pvp{padding:8px}}

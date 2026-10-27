@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261026-v13-15-1-login-fix">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261027-v14-recovery">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -581,6 +581,7 @@
               <div class="game-lobby-row" id="blackjackLobby">
                 <label>Adversário<select id="blackjackFriendSelect"><option value="">Escolha um amigo</option></select></label>
                 <label>Aposta opcional<input id="blackjackBetInput" type="number" min="0" max="100000" step="10" value="0" placeholder="0 = sem aposta"></label>
+                <label>Modo de jogo<select id="blackjackMode"><option value="classic">21 Clássico</option><option value="nightmare">21 Pesadelo — cartas especiais</option></select></label>
                 <button class="btn primary" id="blackjackCreateBtn" type="button">Desafiar</button>
               </div>
               <div id="blackjackInvites" class="people-list game-invites" hidden></div>
@@ -591,6 +592,14 @@
                   <div class="card-seat my-seat"><small>Você</small><div class="playing-cards" id="blackjackPlayer"></div><strong id="blackjackPlayerScore">0</strong><span id="blackjackMyState">Jogando</span></div>
                 </div>
                 <div class="arcade-actions game-primary-actions"><button class="btn primary" id="blackjackHitBtn" type="button">Pedir carta</button><button class="btn" id="blackjackStandBtn" type="button">Parar</button></div>
+                <div class="nightmare-cards" id="blackjackNightmareCards" hidden aria-label="Cartas especiais do modo Pesadelo">
+                  <button class="nightmare-card" type="button" data-nightmare-card="shield" title="Impede uma compra que estouraria sua mão"><b>🛡 Escudo</b><small>Evita 1 estouro</small></button>
+                  <button class="nightmare-card" type="button" data-nightmare-card="omen" title="Mostra somente a faixa de valor da carta seguinte"><b>☽ Presságio</b><small>Pressente a próxima</small></button>
+                  <button class="nightmare-card" type="button" data-nightmare-card="order" title="Força o adversário a comprar uma carta"><b>♠ Ordem</b><small>Rival compra carta</small></button>
+                  <button class="nightmare-card" type="button" data-nightmare-card="lock" title="Impede o adversário de parar antes de pedir carta"><b>⛓ Trava</b><small>Rival deve comprar</small></button>
+                  <button class="nightmare-card" type="button" data-nightmare-card="swap" title="Substitui a última carta de sua mão"><b>↻ Troca</b><small>Substitui última</small></button>
+                </div>
+                <div class="muted nightmare-hint" id="blackjackOmen" aria-live="polite"></div>
                 <div class="duel-log" id="blackjackLog"></div>
               </div>
             </article>
@@ -1104,6 +1113,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261026-v14-base-pro"></script>
+  <script type="module" src="/assets/js/app.js?v=20261027-v14-recovery"></script>
 </body>
 </html>

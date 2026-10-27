@@ -50,22 +50,6 @@ function newSpin(uid,bet){
 }
 function publicSpin(s){return{ok:true,spinId:s.spinId,jobId:s.jobId,bet:s.bet,payout:s.payout,symbols:s.symbols,jackpot:s.jackpot,label:s.label,settlement:'pending'};}
 
-async function recoverPendingSpin(db,uid,prior,res,sendJson){
-  const pendingRef=db.ref(`siteSlotsPending/${uid}`);
-      // Recover the same committed spin after an interrupted request; never create a second bet.
-      if(!/^spin_[a-f0-9]{32}$/.test(String(prior.spinId||''))||!String(prior.jobId||'')||prior.uid!==uid)
-        return sendJson(res,409,{erro:'A aposta pendente precisa de conferência no extrato.',pending:true});
-      const receipt=(await db.ref(`siteSlotsSettlements/${uid}/${prior.spinId}`).once('value')).val();
-      if(receipt?.status==='done'){
-        await pendingRef.transaction(current=>current?.spinId===prior.spinId?null:undefined,undefined,false);
-        return sendJson(res,200,{...publicSpin(prior),settlement:'done',recovered:true,balance:receipt.balance});
-      }
-      if(!receipt){
-        await db.ref(`siteBridgeJobs/${uid}/${prior.jobId}`).transaction(current=>current?undefined:{type:'slots_settle',spinId:prior.spinId,createdAt:new Date().toISOString()},undefined,false);
-      }
-      return sendJson(res,409,{erro:receipt?.status==='review'?'A liquidação está em análise. Confira o extrato.':'A aposta anterior está sendo confirmada. Acompanhando a mesma aposta.',pending:true,jobId:String(prior.jobId),spinId:String(prior.spinId),bet:prior.bet,payout:prior.payout});
-}
-
 async function handleSlotsSpin(req,res,{readJsonBody,sendJson}){
   if(req.method!=='POST')return sendJson(res,405,{erro:'Método inválido.'});
   res.setHeader('Cache-Control','no-store');
@@ -87,18 +71,16 @@ async function handleSlotsSpin(req,res,{readJsonBody,sendJson}){
     if(!linkedSn.val())return sendJson(res,400,{erro:'Vincule sua conta à Charlotte para usar a carteira de rúpias.'});
     const acc=accSn.val()||{};
     if(acc.registered===false)return sendJson(res,400,{erro:'Use /reg na Charlotte antes de jogar Slots.'});
-
+    if(!Number.isFinite(Number(acc.balance))||Number(acc.balance)<bet)return sendJson(res,409,{erro:'Saldo sincronizado insuficiente para essa aposta.'});
 
     // O lock é criado ANTES da resposta. Somente o servidor pode gravá-lo:
     // ninguém pode descartar apostas perdedoras ou forjar prêmios no console.
-    const pendingRef=db.ref(`siteSlotsPending/${uid}`);
-    const existing=(await pendingRef.once('value')).val();
-    if(existing)return recoverPendingSpin(db,uid,existing,res,sendJson);
-    if(!Number.isFinite(Number(acc.balance))||Number(acc.balance)<bet)return sendJson(res,409,{erro:'Saldo sincronizado insuficiente para essa aposta.'});
     const spin=newSpin(uid,bet);
+    const pendingRef=db.ref(`siteSlotsPending/${uid}`);
     const tx=await pendingRef.transaction(current=>current?undefined:spin,undefined,false);
     if(!tx.committed){
-      return recoverPendingSpin(db,uid,tx.snapshot.val()||{},res,sendJson);
+      const prior=tx.snapshot.val()||{};
+      return sendJson(res,409,{erro:'O giro anterior ainda está sendo creditado ou debitado. Aguarde a atualização do saldo.',pending:true,jobId:String(prior.jobId||'')});
     }
     try{
       // Acesso administrativo do servidor. O navegador não pode criar slots_settle.
@@ -113,4 +95,33 @@ async function handleSlotsSpin(req,res,{readJsonBody,sendJson}){
     return sendJson(res,503,{erro:'Não foi possível registrar a aposta no servidor. Nenhum resultado foi confirmado.'});
   }
 }
-module.exports={handleSlotsSpin,pick,newSpin,publicSpin};
+
+// Consulta somente-leitura. Permite recuperar uma aposta mesmo quando o
+// navegador fecha, perde o fetch ou recarrega antes da resposta do bridge.
+async function handleSlotsStatus(req,res,{readJsonBody,sendJson}){
+  if(req.method!=='POST')return sendJson(res,405,{erro:'Método inválido.'});
+  res.setHeader('Cache-Control','no-store');
+  try{
+    const body=await readJsonBody(req);
+    const token=String(body?.idToken||'');
+    if(!token||token.length>10000)return sendJson(res,401,{erro:'Entre na conta do site.'});
+    const {auth,db}=getAdmin();
+    let decoded;
+    try{decoded=await auth.verifyIdToken(token);}catch{return sendJson(res,401,{erro:'Sessão expirada. Entre novamente.'});}
+    const uid=String(decoded.uid||'');
+    if(!uid)return sendJson(res,401,{erro:'Usuário inválido.'});
+    const spinId=String(body?.spinId||'');
+    if(spinId&&!/^spin_[a-f0-9]{32}$/.test(spinId))return sendJson(res,400,{erro:'Identificador inválido.'});
+    const pending=(await db.ref(`siteSlotsPending/${uid}`).once('value')).val()||null;
+    const queryId=spinId||(pending?.spinId||'');
+    const receipt=queryId?(await db.ref(`siteSlotsSettlements/${uid}/${queryId}`).once('value')).val()||null:null;
+    if(receipt){
+      // Nunca expor dados de outras carteiras nem informar que o saldo foi
+      // atualizado enquanto o recibo ainda está em processing/review.
+      return sendJson(res,200,{ok:true,status:receipt.status,spinId:queryId,bet:receipt.bet,balance:receipt.status==='done'?receipt.balance:null,pending:!!pending});
+    }
+    return sendJson(res,200,{ok:true,status:pending?'pending':'none',spinId:queryId||null,jobId:pending?.jobId||null,bet:pending?.bet||0,pending:!!pending});
+  }catch(e){console.error('[SITE SLOTS STATUS]',e?.message||e);return sendJson(res,503,{erro:'Consulta da aposta indisponível.'});}
+}
+module.exports={handleSlotsSpin,handleSlotsStatus,pick,newSpin,publicSpin};
+

@@ -222,7 +222,7 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
   async function linkedUidByJid(jid){const snap=await rtdb.ref('charlottePrivate').orderByChild('whatsappJid').equalTo(cleanJid(jid)).once('value');const val=snap.val()||{};return Object.keys(val)[0]||null;}
   async function linkedJidByUid(uid){const snap=await rtdb.ref(`charlottePrivate/${uid}/whatsappJid`).once('value');return cleanJid(snap.val()||'');}
   async function syncLinkedAccounts(){
-    if(backupRecoveryRequired)return;
+    if(backupRestartRequired)return;
     if(syncingLinked)return;
     syncingLinked=true;
     try{
@@ -319,16 +319,84 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
     if(!readPremium(jid).active)throw new Error('Esse usuário não possui Premium ativo.');
     return processPremiumGroupSet(targetUid,jid,{groupLink,replace:true});
   }
+  // Serialização por identidade da carteira (não apenas por UID do site).
+  // Dois desafiantes diferentes podem tentar debitar o mesmo adversário.
+  const walletLocks=new Map(),gameActionLocks=new Map();
+  async function withExclusiveKeys(table,keys,action){
+    const releases=[];
+    for(const key of [...new Set(keys.map(String))].sort()){
+      const previous=table.get(key)||Promise.resolve();
+      let unlock;
+      const owned=new Promise(resolve=>{unlock=resolve});
+      const tail=previous.catch(()=>{}).then(()=>owned);
+      table.set(key,tail);
+      await previous.catch(()=>{});
+      releases.push(()=>{unlock();if(table.get(key)===tail)table.delete(key)});
+    }
+    try{return await action()}finally{releases.reverse().forEach(release=>release())}
+  }
   async function prepareGameWager(gameId,playerUids,bet){
-    bet=normalizeGameBet(bet);if(!bet)return{amount:0,pot:0,settled:true};if(!Array.isArray(playerUids)||playerUids.length!==2)throw new Error('Aposta inválida.');
-    const jids=[];for(const uid of playerUids){const jid=await linkedJidByUid(uid);if(!jid)throw new Error('Os dois jogadores precisam vincular a Charlotte para apostar.');if(balanceFor(jid)<bet)throw new Error('Um dos jogadores não possui saldo suficiente para essa aposta.');jids.push(jid)}
-    if(typeof economy.delkoin!=='function'||typeof economy.addkoin!=='function')throw new Error('Sistema de Rúpias indisponível.');let debited=0;try{for(const jid of jids){await economy.delkoin(jid,bet);debited++}}catch(e){for(let i=0;i<debited;i++)await economy.addkoin(jids[i],bet).catch?.(()=>{});throw e}
-    await rtdb.ref(`gameWagers/${gameId}`).set({amount:bet,pot:bet*2,players:{[playerUids[0]]:true,[playerUids[1]]:true},settled:false,createdAt:Date.now()});return{amount:bet,pot:bet*2,settled:false}
+    bet=normalizeGameBet(bet);
+    if(!bet)return{amount:0,pot:0,settled:true};
+    if(!Array.isArray(playerUids)||playerUids.length!==2||new Set(playerUids).size!==2)throw new Error('Aposta inválida.');
+    const jids=[];
+    for(const uid of playerUids){const jid=await linkedJidByUid(uid);if(!jid)throw new Error('Os dois jogadores precisam vincular a Charlotte para apostar.');jids.push(jid)}
+    if(new Set(jids).size!==2)throw new Error('Uma carteira não pode apostar contra si mesma.');
+    if(typeof economy.delkoin!=='function'||typeof economy.addkoin!=='function')throw new Error('Sistema de Rúpias indisponível.');
+    return withExclusiveKeys(walletLocks,jids,async()=>{
+      for(const jid of jids)if(balanceFor(jid)<bet)throw new Error('Um dos jogadores não possui saldo suficiente para essa aposta.');
+      const wr=rtdb.ref(`gameWagers/${gameId}`);
+      const initial={amount:bet,pot:bet*2,players:{[playerUids[0]]:true,[playerUids[1]]:true},settled:false,status:'preparing',createdAt:Date.now(),debits:{}};
+      const claim=await wr.transaction(current=>current?undefined:initial,undefined,false);
+      if(!claim.committed)throw new Error('Essa aposta já existe; verifique a liquidação antes de repetir.');
+      for(let i=0;i<2;i++){
+        const uid=playerUids[i],jid=jids[i];
+        // Gravado ANTES de mexer no JSON financeiro: reinício não repete o débito.
+        await wr.child(`debits/${uid}`).set({status:'processing',at:Date.now()});
+        try{await economy.delkoin(jid,bet)}catch(e){
+          await wr.update({status:'review',error:'Falha ao debitar carteira; reconciliação manual obrigatória.',reviewAt:Date.now()}).catch(()=>{});
+          throw new Error('Aposta em análise financeira. Nenhum novo débito deve ser tentado.');
+        }
+        await wr.child(`debits/${uid}`).update({status:'done',finishedAt:Date.now()}).catch(e=>{
+          throw new Error(`Débito aplicado, mas registro pendente: ${e.message}`);
+        });
+      }
+      await wr.update({status:'active',preparedAt:Date.now()});
+      return{amount:bet,pot:bet*2,settled:false};
+    });
   }
   async function settleGameWager(gameId,winnerUid=null){
-    const wr=rtdb.ref(`gameWagers/${gameId}`),claim=await wr.transaction(v=>{if(!v||v.settled)return;return{...v,settled:true,settledAt:Date.now(),winnerUid:winnerUid||null}},undefined,false);if(!claim.committed)return null;const w=claim.snapshot.val()||{},amount=Number(w.amount||0),uids=Object.keys(w.players||{});if(!amount||!uids.length)return w;
-    if(winnerUid){const jid=await linkedJidByUid(winnerUid);if(jid&&typeof economy.addkoin==='function')await economy.addkoin(jid,amount*2)}else{for(const uid of uids){const jid=await linkedJidByUid(uid);if(jid&&typeof economy.addkoin==='function')await economy.addkoin(jid,amount)}}
-    for(const uid of uids){const jid=await linkedJidByUid(uid);if(jid)await syncAccount(uid,jid).catch(()=>{})}return w
+    const wr=rtdb.ref(`gameWagers/${gameId}`),snapshot=(await wr.once('value')).val();
+    if(!snapshot)return null;
+    const uids=Object.keys(snapshot.players||{}),amount=Number(snapshot.amount||0);
+    if(winnerUid&&!uids.includes(winnerUid))throw new Error('Vencedor não pertence à partida.');
+    if(!amount)return snapshot;
+    if(snapshot.status!=='active'){
+      if(snapshot.status==='done'||snapshot.settled)return snapshot;
+      throw new Error('Liquidação dessa aposta exige conferência financeira.');
+    }
+    const jids={};for(const uid of uids){jids[uid]=await linkedJidByUid(uid);if(!jids[uid])throw new Error('A carteira de um jogador foi desvinculada; requer conferência.');}
+    return withExclusiveKeys(walletLocks,Object.values(jids),async()=>{
+      const claim=await wr.transaction(v=>{
+        if(!v||v.status!=='active'||v.settled)return;
+        return{...v,status:'settling',winnerUid:winnerUid||null,settlementStartedAt:Date.now()};
+      },undefined,false);
+      if(!claim.committed)return null;
+      const payouts=winnerUid?[[winnerUid,amount*2]]:uids.map(uid=>[uid,amount]);
+      for(const [uid,value] of payouts){
+        // A liquidação só é concluída DEPOIS de pagar; no caso de queda,
+        // permanece bloqueada para reconciliação e nunca paga duas vezes.
+        await wr.child(`payouts/${uid}`).set({status:'processing',value,at:Date.now()});
+        try{await economy.addkoin(jids[uid],value)}catch(e){
+          await wr.update({status:'review',reviewAt:Date.now(),error:'Falha durante pagamento; verificar a carteira.'}).catch(()=>{});
+          throw new Error('Prêmio em análise. Não repetir pagamento automaticamente.');
+        }
+        await wr.child(`payouts/${uid}`).update({status:'done',finishedAt:Date.now()});
+      }
+      await wr.update({status:'done',settled:true,settledAt:Date.now()});
+      for(const uid of uids)await syncAccount(uid,jids[uid]).catch(()=>{});
+      return{...claim.snapshot.val(),status:'done',settled:true};
+    });
   }
 
   async function resolveCustomizationItem(itemId){
@@ -528,7 +596,7 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
     const account={registered:registeredFor(jid),balance:balanceFor(jid),...readLevel(jid),premium:readPremium(jid).active};
     await backupAccountSnapshot(uid,jid,account,true).catch(()=>{});return{identity:{name,username},account}
   }
-  async function syncAccount(uid,jid){if(backupRecoveryRequired)throw new Error('Charlotte aguardando restauração do backup do Firebase.');const pokemon=await syncPokemon(uid,jid).catch(()=>null),lvl=readLevel(jid),prem=readPremium(jid),ach=readAchievements(jid),account={registered:registeredFor(jid),balance:balanceFor(jid),level:lvl.level,xp:lvl.xp,messages:lvl.messages,premium:prem.active};const patch={account,achievements:ach,updatedAt:now()};if(pokemon)patch.pokemon=pokemon;await rtdb.ref(`charlotteSync/${uid}`).update(patch);backupAccountSnapshot(uid,jid,account,false).catch(()=>{});return{account,achievements:ach,pokemon};}
+  async function syncAccount(uid,jid){if(backupRestartRequired)throw new Error('Backup restaurado; reinicie a Charlotte para carregar os JSONs.');const pokemon=await syncPokemon(uid,jid).catch(()=>null),lvl=readLevel(jid),prem=readPremium(jid),ach=readAchievements(jid),account={registered:registeredFor(jid),balance:balanceFor(jid),level:lvl.level,xp:lvl.xp,messages:lvl.messages,premium:prem.active};const patch={account,achievements:ach,updatedAt:now()};if(pokemon)patch.pokemon=pokemon;await rtdb.ref(`charlotteSync/${uid}`).update(patch);backupAccountSnapshot(uid,jid,account,false).catch(()=>{});return{account,achievements:ach,pokemon};}
   async function findLinkCode(code){const snap=await rtdb.ref('charlotteLinkRequests').orderByChild('code').equalTo(String(code||'').trim().toUpperCase()).once('value');for(const[uid,req]of Object.entries(snap.val()||{}))if(Number(req.expiresAt||0)>=Date.now())return{uid,req};return null;}
   async function linkAccount(code,sender){
     const found=await findLinkCode(code);if(!found)throw new Error('Código inválido ou expirado. Gere outro no site.');
@@ -788,11 +856,92 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
     const uids=Object.keys(g.players||{}),hands=await blackjackHands(g.id,uids),finishedAt=Date.now();g.status='finished';g.winnerUid=winnerUid||null;g.turnUid=null;g.finishedAt=finishedAt;g.updatedAt=finishedAt;g.revealedHands=hands;g.log=g.log||{};g.log[id('log')]={text:reason,at:now()};await gr.set(g);await settleGameWager(g.id,winnerUid||null);await rtdb.ref(`gameSecrets/blackjack/${g.id}`).remove().catch(()=>{});await rtdb.ref(`blackjackPrivate/${g.id}`).remove().catch(()=>{});await Promise.all(uids.map(x=>rtdb.ref(`blackjackIndex/${x}/${g.id}`).update({status:'finished',winnerUid:winnerUid||null,updatedAt:finishedAt})));return{winnerUid:winnerUid||null,draw:!winnerUid}
   }
   async function processBlackjackCreate(uid,data){
-    const targetUid=String(data.targetUid||'');if(!targetUid||targetUid===uid)throw new Error('Amigo inválido.');if(!(await reciprocalFriends(uid,targetUid)))throw new Error('Jogue apenas com amigos confirmados.');await ensureNoActiveGame('blackjackIndex',[uid,targetUid]);const[a,b]=await Promise.all([rtdb.ref(`directory/${uid}`).once('value'),rtdb.ref(`directory/${targetUid}`).once('value')]),gameId=id('bj'),deck=bjDeck(),cardsA=[deck.pop(),deck.pop()],cardsB=[deck.pop(),deck.pop()],first=crypto.randomInt(0,2)===0?uid:targetUid,createdAt=Date.now(),wager=await prepareGameWager(gameId,[uid,targetUid],data.bet);const hA={cards:cardsA,score:bjScore(cardsA),stood:false,busted:false},hB={cards:cardsB,score:bjScore(cardsB),stood:false,busted:false};const game={id:gameId,status:'active',createdAt,updatedAt:createdAt,turnUid:first,wager,players:{[uid]:{uid,name:a.val()?.nome||'Jogador',cardCount:2,stood:false,busted:false},[targetUid]:{uid:targetUid,name:b.val()?.nome||'Jogador',cardCount:2,stood:false,busted:false}},log:{}};await Promise.all([rtdb.ref(`gameSecrets/blackjack/${gameId}`).set({deck}),rtdb.ref(`blackjackPrivate/${gameId}/${uid}`).set(hA),rtdb.ref(`blackjackPrivate/${gameId}/${targetUid}`).set(hB),rtdb.ref(`blackjackGames/${gameId}`).set(game),rtdb.ref(`blackjackIndex/${uid}/${gameId}`).set({status:'active',createdAt,updatedAt:createdAt,opponentUid:targetUid}),rtdb.ref(`blackjackIndex/${targetUid}/${gameId}`).set({status:'active',createdAt,updatedAt:createdAt,opponentUid:uid})]);return{gameId,wager};
+    const mode=data.mode==='nightmare'?'nightmare':'classic';
+    const targetUid=String(data.targetUid||'');if(!targetUid||targetUid===uid)throw new Error('Amigo inválido.');if(!(await reciprocalFriends(uid,targetUid)))throw new Error('Jogue apenas com amigos confirmados.');await ensureNoActiveGame('blackjackIndex',[uid,targetUid]);const[a,b]=await Promise.all([rtdb.ref(`directory/${uid}`).once('value'),rtdb.ref(`directory/${targetUid}`).once('value')]),gameId=id('bj'),deck=bjDeck(),cardsA=[deck.pop(),deck.pop()],cardsB=[deck.pop(),deck.pop()],first=crypto.randomInt(0,2)===0?uid:targetUid,createdAt=Date.now(),wager=await prepareGameWager(gameId,[uid,targetUid],data.bet);const hA={cards:cardsA,score:bjScore(cardsA),stood:false,busted:false},hB={cards:cardsB,score:bjScore(cardsB),stood:false,busted:false};const game={id:gameId,mode,status:'active',createdAt,updatedAt:createdAt,turnUid:first,wager,players:{[uid]:{uid,name:a.val()?.nome||'Jogador',cardCount:2,stood:false,busted:false},[targetUid]:{uid:targetUid,name:b.val()?.nome||'Jogador',cardCount:2,stood:false,busted:false}},log:{}};await Promise.all([rtdb.ref(`gameSecrets/blackjack/${gameId}`).set({deck}),rtdb.ref(`blackjackPrivate/${gameId}/${uid}`).set(hA),rtdb.ref(`blackjackPrivate/${gameId}/${targetUid}`).set(hB),rtdb.ref(`blackjackGames/${gameId}`).set(game),rtdb.ref(`blackjackIndex/${uid}/${gameId}`).set({status:'active',createdAt,updatedAt:createdAt,opponentUid:targetUid}),rtdb.ref(`blackjackIndex/${targetUid}/${gameId}`).set({status:'active',createdAt,updatedAt:createdAt,opponentUid:uid})]);return{gameId,wager};
   }
+  // 21 Pesadelo: cartas especiais originais. O baralho e os resultados das
+  // ações são exclusivamente calculados no bridge; mãos em blackjackPrivate.
   async function processBlackjackMove(uid,data){
-    const gameId=String(data.gameId||''),action=String(data.action||'').toLowerCase(),gr=rtdb.ref(`blackjackGames/${gameId}`),sn=await gr.once('value');if(!sn.exists())throw new Error('Partida não encontrada.');const g={id:gameId,...sn.val()};if(g.status!=='active'||!g.players?.[uid])throw new Error('Partida encerrada.');if(g.turnUid!==uid)throw new Error('Ainda não é sua vez.');const hr=rtdb.ref(`blackjackPrivate/${gameId}/${uid}`),hs=await hr.once('value'),me=hs.val()||{};if(me.stood||me.busted)throw new Error('Sua jogada já terminou.');g.log=g.log||{};
-    if(action==='hit'){const secret=(await rtdb.ref(`gameSecrets/blackjack/${gameId}`).once('value')).val()||{},deck=Array.isArray(secret.deck)?secret.deck:[];if(!deck.length)throw new Error('Baralho indisponível.');const card=deck.pop();me.cards=Array.isArray(me.cards)?me.cards:[];me.cards.push(card);me.score=bjScore(me.cards);if(me.score>=21){me.stood=true;me.busted=me.score>21}await rtdb.ref(`gameSecrets/blackjack/${gameId}`).set({deck});g.log[id('log')]={text:`${g.players[uid].name} pediu uma carta${me.busted?' e estourou.':me.score===21?' e fez 21!':'.'}`,at:now()};}else if(action==='stand'){me.stood=true;g.log[id('log')]={text:`${g.players[uid].name} parou.`,at:now()};}else throw new Error('Jogada inválida.');await hr.set(me);g.players[uid].cardCount=Array.isArray(me.cards)?me.cards.length:0;g.players[uid].stood=!!me.stood;g.players[uid].busted=!!me.busted;const uids=Object.keys(g.players),hands=await blackjackHands(gameId,uids),done=uids.every(x=>hands[x].stood||hands[x].busted);if(done){const winnerUid=blackjackWinnerFromHands(hands);return finishBlackjack(gr,g,winnerUid,winnerUid?`${g.players[winnerUid].name} venceu a partida de 21.`:'A partida terminou empatada.')}const otherUid=uids.find(x=>x!==uid);g.turnUid=otherUid&&!hands[otherUid].stood&&!hands[otherUid].busted?otherUid:uid;g.updatedAt=Date.now();await gr.set(g);return{turnUid:g.turnUid,score:me.score,busted:!!me.busted};
+    const gameId=String(data.gameId||''),action=String(data.action||'').toLowerCase(),
+      gr=rtdb.ref(`blackjackGames/${gameId}`),sn=await gr.once('value');
+    if(!sn.exists())throw new Error('Partida não encontrada.');
+    const g={id:gameId,...sn.val()};
+    if(g.status!=='active'||!g.players?.[uid])throw new Error('Partida encerrada.');
+    if(g.turnUid!==uid)throw new Error('Ainda não é sua vez.');
+    const uids=Object.keys(g.players),otherUid=uids.find(x=>x!==uid);
+    const hr=rtdb.ref(`blackjackPrivate/${gameId}/${uid}`),me=(await hr.once('value')).val()||{};
+    if(me.stood||me.busted)throw new Error('Sua jogada já terminou.');
+    const privateRef=id=>rtdb.ref(`blackjackPrivate/${gameId}/${id}`);
+    const secretRef=rtdb.ref(`gameSecrets/blackjack/${gameId}`);
+    let deck=null,other=null,deckChanged=false,otherChanged=false;
+    const getDeck=async()=>{
+      if(deck===null){const obj=(await secretRef.once('value')).val()||{};deck=Array.isArray(obj.deck)?obj.deck:[];}
+      if(!deck.length)throw new Error('O baralho acabou.');
+      return deck;
+    };
+    const draw=async hand=>{
+      const cards=await getDeck(),card=cards.pop();deckChanged=true;
+      hand.cards=Array.isArray(hand.cards)?hand.cards:[];
+      hand.cards.push(card);hand.score=bjScore(hand.cards);
+      if(hand.score>21&&hand.shield){
+        hand.cards.pop();hand.score=bjScore(hand.cards);hand.shield=false;hand.shieldSaved=true;
+      }else if(hand.score>=21){hand.stood=true;hand.busted=hand.score>21;}
+    };
+    g.log=g.log||{};
+    let message='';
+    if(action==='hit'){
+      await draw(me);if(me.lockStand)me.lockStand=false;
+      message=`${g.players[uid].name} pediu carta${me.shieldSaved?' (escudo protegeu a mão).':me.busted?' e estourou.':me.score===21?' e fez 21!':'.'}`;
+      me.shieldSaved=false;
+    }else if(action==='stand'){
+      if(me.lockStand)throw new Error('A carta Trava exige que você compre uma carta antes de parar.');
+      me.stood=true;message=`${g.players[uid].name} parou.`;
+    }else if(action==='special'){
+      if(g.mode!=='nightmare')throw new Error('Cartas especiais disponíveis apenas no Modo Pesadelo.');
+      const special=String(data.special||'').toLowerCase();
+      if(!['shield','omen','order','lock','swap'].includes(special))throw new Error('Carta especial inválida.');
+      me.specialsUsed=me.specialsUsed||{};
+      if(me.specialsUsed[special])throw new Error('Você já usou essa carta nesta partida.');
+      if(special==='shield'){
+        if(me.shield)throw new Error('Você já possui um Escudo ativo.');
+        me.shield=true;message=`${g.players[uid].name} ativou Escudo.`;
+      }else if(special==='omen'){
+        const cards=await getDeck(),top=cards[cards.length-1];
+        const points=top.r==='A'?11:['J','Q','K'].includes(top.r)?10:Number(top.r||0);
+        me.omen=points<=5?'Carta baixa (2–5)':points<=9?'Carta média (6–9)':'Carta alta (10 ou Ás)';
+        message=`${g.players[uid].name} consultou o Presságio.`;
+      }else if(special==='order'){
+        other=(await privateRef(otherUid).once('value')).val()||{};
+        if(other.stood||other.busted)throw new Error('O adversário já encerrou sua mão.');
+        await draw(other);otherChanged=true;
+        message=`${g.players[uid].name} usou Ordem: o rival comprou uma carta.`;
+      }else if(special==='lock'){
+        other=(await privateRef(otherUid).once('value')).val()||{};
+        if(other.stood||other.busted)throw new Error('O adversário já encerrou sua mão.');
+        other.lockStand=true;otherChanged=true;
+        message=`${g.players[uid].name} usou Trava: o rival precisa comprar carta.`;
+      }else if(special==='swap'){
+        if(!Array.isArray(me.cards)||me.cards.length<3)throw new Error('Compre uma carta antes de usar Troca.');
+        await getDeck();me.cards.pop(); // A troca descarta a última carta antes de comprar outra.
+        const card=deck.pop();me.cards.push(card);deckChanged=true;
+        me.score=bjScore(me.cards);
+        if(me.score>=21){me.stood=true;me.busted=me.score>21;}
+        message=`${g.players[uid].name} usou Troca em sua última carta.`;
+      }
+      me.specialsUsed[special]=true;
+    }else throw new Error('Jogada inválida.');
+    if(deckChanged)await secretRef.set({deck});
+    await hr.set(me);
+    if(otherChanged)await privateRef(otherUid).set(other);
+    g.players[uid].cardCount=Array.isArray(me.cards)?me.cards.length:0;
+    g.players[uid].stood=!!me.stood;g.players[uid].busted=!!me.busted;
+    if(otherChanged){g.players[otherUid].cardCount=Array.isArray(other.cards)?other.cards.length:0;g.players[otherUid].stood=!!other.stood;g.players[otherUid].busted=!!other.busted;}
+    g.log[id('log')]={text:message,at:now()};
+    const hands=await blackjackHands(gameId,uids),done=uids.every(x=>hands[x].stood||hands[x].busted);
+    if(done){const winnerUid=blackjackWinnerFromHands(hands);return finishBlackjack(gr,g,winnerUid,winnerUid?`${g.players[winnerUid].name} venceu a partida de 21.`:'A partida terminou empatada.');}
+    g.turnUid=otherUid&&!hands[otherUid].stood&&!hands[otherUid].busted?otherUid:uid;
+    g.updatedAt=Date.now();await gr.set(g);
+    return{turnUid:g.turnUid,score:me.score,busted:!!me.busted};
   }
   async function processBlackjackExit(uid,data){const gameId=String(data.gameId||''),gr=rtdb.ref(`blackjackGames/${gameId}`),sn=await gr.once('value');if(!sn.exists())return{};const g={id:gameId,...sn.val()};if(g.status!=='active'||!g.players?.[uid])return{};const winnerUid=Object.keys(g.players).find(x=>x!==uid);g.leftUid=uid;g.finishReason='exit';return finishBlackjack(gr,g,winnerUid,`${g.players[uid].name} saiu da partida.`)}
 
@@ -1014,7 +1163,7 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
     }
     return plan;
   }
-  async function processWatchMusicActivate(uid,jid,data){
+  async function processWatchMusicActivate(uid,jid,data,jobId=''){
     const roomCode=String(data.roomCode||'').trim().toUpperCase();
     if(!roomCode)throw new Error('Sala inválida.');
     const room=await watchMusicRoomState(roomCode,uid);
@@ -1025,16 +1174,29 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
     const cost=50,balance=balanceFor(jid);
     if(balance<cost)throw new Error(`Você precisa de ₹${cost} para ativar a música nesta sala. Saldo: ₹${balance}.`);
     if(typeof economy.delkoin!=='function')throw new Error('Sistema de rúpias não disponível.');
-    await economy.delkoin(jid,cost);
-
+    // Uma trava na sala é registrada ANTES do débito. Em caso de reinício
+    // durante a cobrança, a operação passa por revisão: NUNCA debitar duas vezes.
+    const lock=rtdb.ref(`watchRooms/${roomCode}/musicActivationLock`);
+    const claim=await lock.transaction(current=>current?undefined:{status:'processing',jobId,uid,startedAt:Date.now()},undefined,false);
+    if(!claim.committed)throw new Error('Ativação pendente de confirmação. Não pague novamente.');
     const premium=readPremium(jid).active,activatedAt=Date.now();
     const access={active:true,activatedAt,activationCost:cost,used:0,premiumAtActivation:premium};
     const plan={active:true,activatedBy:uid,activatedAt,activationCost:cost,used:0,premiumAtActivation:premium,premium};
-    await rtdb.ref().update({
-      [`watchRooms/${roomCode}/musicAccess/${uid}`]:access,
-      [`watchRooms/${roomCode}/musicPlan`]:plan
-    });
-    await syncAccount(uid,jid).catch(()=>{});
+    try{
+      await economy.delkoin(jid,cost);
+      await rtdb.ref().update({
+        [`watchRooms/${roomCode}/musicAccess/${uid}`]:access,
+        [`watchRooms/${roomCode}/musicPlan`]:plan,
+        [`watchRooms/${roomCode}/musicActivationLock/status`]:'done',
+        [`watchRooms/${roomCode}/musicActivationLock/finishedAt`]:Date.now()
+      });
+    }catch(e){
+      await lock.update({status:'review',reviewAt:Date.now(),error:'Conferir cobrança e ativação'}).catch(()=>{});
+      throw new Error('Ativação em verificação; confira a sala antes de solicitar outra cobrança.');
+    }
+    // O estado da sala já está publicado. A sincronização da carteira não
+    // deve prolongar a resposta do botão de música.
+    syncAccount(uid,jid).catch(e=>logger.log('[WATCH MUSIC] atualização de saldo:',e.message));
     return{alreadyActive:false,cost,access,plan,premium};
   }
   async function processWatchMusicAdd(uid,jid,data,jobId=''){
@@ -1044,7 +1206,6 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
     const plan=await ensureWatchMusicRoomPlan(roomCode,room);
     if(!plan?.active)throw new Error('A Charlotte Music ainda não foi ativada nesta sala. Qualquer participante pode ativar por ₹50.');
 
-    const yts=safeRequire('yt-search');if(!yts)throw new Error('Busca de música não disponível.');
     let video=null;
     const ytId=(()=>{
       try{
@@ -1055,11 +1216,19 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
       }catch{}
       return'';
     })();
-    if(ytId){
-      try{video=await yts({videoId:ytId})}catch{}
-    }
-    if(!video?.videoId){
-      const result=await yts(query);video=result?.videos?.[0];
+    // Link direto funciona sem serviço de pesquisa externo nem travar o bot.
+    if(ytId&&/^[A-Za-z0-9_-]{11}$/.test(ytId)){
+      video={videoId:ytId,title:'Vídeo do YouTube',url:`https://www.youtube.com/watch?v=${ytId}`,seconds:0};
+    }else{
+      const yts=safeRequire('yt-search');if(!yts)throw new Error('Busca de música indisponível no bot. Use um link do YouTube.');
+      let timeout;
+      try{
+        const found=await Promise.race([
+          Promise.resolve().then(()=>yts(query)),
+          new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('Busca demorou demais. Use o link da música no YouTube.')),9000);timeout.unref?.()})
+        ]);
+        video=found?.videos?.[0];
+      }finally{clearTimeout(timeout)}
     }
     if(!video?.videoId)throw new Error('Música não encontrada.');
 
@@ -1070,7 +1239,13 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
       const balance=balanceFor(jid);
       if(balance<cost)throw new Error(`As 10 músicas inclusas da sala acabaram. Você precisa de ₹${cost} para adicionar esta faixa.`);
       if(typeof economy.delkoin!=='function')throw new Error('Sistema de rúpias não disponível.');
-      await economy.delkoin(jid,cost);
+      const receiptRef=rtdb.ref(`watchRooms/${roomCode}/musicPaidJobs/${jobId}`);
+      const claim=await receiptRef.transaction(v=>v?undefined:{uid,cost,status:'processing',at:Date.now()},undefined,false);
+      if(!claim.committed)throw new Error('Esta música já tem uma cobrança pendente; verifique a fila.');
+      try{await economy.delkoin(jid,cost)}catch(e){
+        await receiptRef.update({status:'review',at:Date.now()}).catch(()=>{});
+        throw new Error('Cobrança da música em verificação. Não tente novamente até conferir o saldo.');
+      }
     }
 
     const queueRows=await compactWatchMusicQueue(roomCode,room.musicQueue||{});const queueEntries=queueRows.map(x=>[x.id,x]);
@@ -1094,8 +1269,14 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
     patch[`watchRooms/${roomCode}/musicPlan/used`]=used+1;
     patch[`watchRooms/${roomCode}/musicPlan/lastAddedAt`]=createdAt;
     patch[`watchRooms/${roomCode}/musicPlan/lastAddedBy`]=uid;
-    await rtdb.ref().update(patch);
-    if(jid)await syncAccount(uid,jid).catch(()=>{});
+    try{
+      if(cost>0)patch[`watchRooms/${roomCode}/musicPaidJobs/${jobId}/status`]='done';
+      await rtdb.ref().update(patch);
+    }catch(e){
+      if(cost>0)await rtdb.ref(`watchRooms/${roomCode}/musicPaidJobs/${jobId}`).update({status:'review',at:Date.now()}).catch(()=>{});
+      throw new Error('Música aguardando confirmação de gravação; não repita cobrança.');
+    }
+    if(jid)syncAccount(uid,jid).catch(e=>logger.log('[WATCH MUSIC] atualização de saldo:',e.message));
     return{item,cost,premium,used:used+1,includedRemaining:premium?null:Math.max(0,10-(used+1)),roomWide:true};
   }
   async function startNextWatchMusic(roomCode,room){
@@ -1316,7 +1497,14 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
   }
   async function processJobNow(uid,jobId,data){
     const claim=await claimSiteBridgeJob(uid,jobId).catch(e=>{logger.log('[SITE BRIDGE] claim:',e.message);return{claimed:false,data:null}});
-    if(!claim.claimed)return;
+    if(!claim.claimed){
+      const lockedAt=Number(claim.data?.__processingAt||0);
+      if(lockedAt&&Date.now()-lockedAt<120000){
+        const delay=Math.max(1000,120500-(Date.now()-lockedAt));
+        const retry=setTimeout(()=>processJob(uid,jobId,data),delay);retry.unref?.();
+      }
+      return;
+    }
     data=claim.data||data;
     const type=String(data?.type||'');
     try{
@@ -1361,23 +1549,23 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
       else if(type==='admin_create_link_code')payload=await processAdminCreateLinkCode(uid,data);
       else if(type==='admin_reset_charlotte_link')payload=await processAdminResetCharlotteLink(uid,data);
       else if(type==='ttt_create')payload=await processTttCreate(uid,data);
-      else if(type==='ttt_move')payload=await processTttMove(uid,data);
-      else if(type==='ttt_exit')payload=await processTttExit(uid,data);
+      else if(type==='ttt_move')payload=await withExclusiveKeys(gameActionLocks,['ttt:'+String(data.gameId||'')],()=>processTttMove(uid,data));
+      else if(type==='ttt_exit')payload=await withExclusiveKeys(gameActionLocks,['ttt:'+String(data.gameId||'')],()=>processTttExit(uid,data));
       else if(type==='blackjack_create')payload=await processBlackjackCreate(uid,data);
-      else if(type==='blackjack_move')payload=await processBlackjackMove(uid,data);
-      else if(type==='blackjack_exit')payload=await processBlackjackExit(uid,data);
+      else if(type==='blackjack_move')payload=await withExclusiveKeys(gameActionLocks,['blackjack:'+String(data.gameId||'')],()=>processBlackjackMove(uid,data));
+      else if(type==='blackjack_exit')payload=await withExclusiveKeys(gameActionLocks,['blackjack:'+String(data.gameId||'')],()=>processBlackjackExit(uid,data));
       else if(type==='hangman_create')payload=await processHangmanCreate(uid,data);
-      else if(type==='hangman_guess')payload=await processHangmanGuess(uid,data);
-      else if(type==='hangman_exit')payload=await processHangmanExit(uid,data);
-      else if(type==='slots_spin')payload=await processSlotsSpin(uid,jid,data);
-      else if(type==='slots_settle')payload=await processSlotsSettle(uid,jid,data,jobId);
+      else if(type==='hangman_guess')payload=await withExclusiveKeys(gameActionLocks,['hangman:'+String(data.gameId||'')],()=>processHangmanGuess(uid,data));
+      else if(type==='hangman_exit')payload=await withExclusiveKeys(gameActionLocks,['hangman:'+String(data.gameId||'')],()=>processHangmanExit(uid,data));
+      else if(type==='slots_spin')payload=await withExclusiveKeys(walletLocks,[jid],()=>processSlotsSpin(uid,jid,data));
+      else if(type==='slots_settle')payload=await withExclusiveKeys(walletLocks,[jid],()=>processSlotsSettle(uid,jid,data,jobId));
       else if(type==='sync_identity')payload=await syncIdentity(uid,jid,data);
       else if(type==='tinder_profile_get')payload=await processTinderProfileGet(uid,jid);
       else if(type==='tinder_profile_save')payload=await processTinderProfileSave(uid,jid,data);
       else if(type==='tinder_feed')payload=await processTinderFeed(uid,jid,data);
       else if(type==='tinder_like')payload=await processTinderLike(uid,jid,data);
-      else if(type==='watch_music_activate')payload=await processWatchMusicActivate(uid,jid,data);
-      else if(type==='watch_music_add')payload=await processWatchMusicAdd(uid,jid,data,jobId);
+      else if(type==='watch_music_activate')payload=await withExclusiveKeys(gameActionLocks,['watchMusic:'+String(data.roomCode||'').toUpperCase()],()=>withExclusiveKeys(walletLocks,[jid],()=>processWatchMusicActivate(uid,jid,data,jobId)));
+      else if(type==='watch_music_add')payload=await withExclusiveKeys(gameActionLocks,['watchMusic:'+String(data.roomCode||'').toUpperCase()],()=>withExclusiveKeys(walletLocks,[jid||'free:'+uid],()=>processWatchMusicAdd(uid,jid,data,jobId)));
       else if(type==='watch_music_skip')payload=await processWatchMusicSkip(uid,data);
       else if(type==='watch_music_advance')payload=await processWatchMusicAdvance(uid,data);
       else throw new Error('Ação do site não permitida.');
@@ -1407,7 +1595,7 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
   function startOperationalRuntime({allowAutoBackup=true}={}){if(backupRuntimeStarted)return;backupRuntimeStarted=true;processDueHealingJobs().catch(()=>{});healingTimer=setInterval(()=>processDueHealingJobs().catch(()=>{}),30000);healingTimer.unref?.();setTimeout(()=>syncLinkedAccounts().catch(()=>{}),600).unref?.();setTimeout(()=>restoreTinderFromFirebase().catch(()=>{}),900).unref?.();setTimeout(()=>maybeAutoSiteRaid().catch(()=>{}),1200).unref?.();setTimeout(()=>checkPremiumGroups().catch(()=>{}),1500).unref?.();syncTimer=setInterval(()=>syncLinkedAccounts().catch(()=>{}),180000);syncTimer.unref?.();raidTimer=setInterval(()=>maybeAutoSiteRaid().catch(()=>{}),30000);raidTimer.unref?.();premiumGroupTimer=setInterval(()=>checkPremiumGroups().catch(()=>{}),30000);premiumGroupTimer.unref?.();if(allowAutoBackup){setTimeout(()=>backupOperationalJsons(false).catch(e=>logger.log('[FIREBASE BACKUP] inicial:',e.message)),10000).unref?.();backupTimer=setInterval(()=>backupOperationalJsons(false).catch(e=>logger.log('[FIREBASE BACKUP] ciclo:',e.message)),10*60*1000);backupTimer.unref?.();}else logger.log('🛡️ BACKUP REMOTO PROTEGIDO: backup automático pausado, mas Slots/Raid/sync e demais funções continuam ativas.');}
   async function initializeOperationalRuntime(){const state=await assessOperationalBackupState();backupRestartRequired=false;if(state.recoveryRequired)logger.log(`🛟 BACKUP REMOTO DIFERENTE: ${state.remoteFiles||0} arquivo(s) no Firebase. O backup automático ficará pausado até restaurar ou confirmar substituição; a Charlotte continuará funcionando normalmente.`);startOperationalRuntime({allowAutoBackup:!state.recoveryRequired})}
   function start(){if(rootWatcher)return;rootWatcher=rtdb.ref('siteBridgeJobs');rootWatcher.on('child_added',sn=>watchUserJobs(sn.key));const timer=setTimeout(()=>initializeOperationalRuntime().catch(e=>logger.log('[FIREBASE BACKUP] avaliação:',e.message)),1500);timer.unref?.();logger.log('✅ GREMORY SITE BRIDGE ATIVO');}
-  function stop(){try{if(rootWatcher)rootWatcher.off()}catch{}for(const{userRef,handler}of watchedRefs.values()){try{userRef.off('child_added',handler)}catch{}}watchedRefs.clear();watchedUsers.clear();userQueues.clear();rootWatcher=null;if(healingTimer){clearInterval(healingTimer);healingTimer=null;}if(syncTimer){clearInterval(syncTimer);syncTimer=null;}if(raidTimer){clearInterval(raidTimer);raidTimer=null;}if(premiumGroupTimer){clearInterval(premiumGroupTimer);premiumGroupTimer=null;}if(backupTimer){clearInterval(backupTimer);backupTimer=null;}syncingLinked=false;backupRuntimeStarted=false;}
+  function stop(){try{if(rootWatcher)rootWatcher.off()}catch{}for(const{userRef,handler}of watchedRefs.values()){try{userRef.off('child_added',handler)}catch{}}watchedRefs.clear();watchedUsers.clear();userQueues.clear();walletLocks.clear();gameActionLocks.clear();rootWatcher=null;if(healingTimer){clearInterval(healingTimer);healingTimer=null;}if(syncTimer){clearInterval(syncTimer);syncTimer=null;}if(raidTimer){clearInterval(raidTimer);raidTimer=null;}if(premiumGroupTimer){clearInterval(premiumGroupTimer);premiumGroupTimer=null;}if(backupTimer){clearInterval(backupTimer);backupTimer=null;}syncingLinked=false;backupRuntimeStarted=false;}
   function rawIncomingText(info){
     return String(
       info?.message?.conversation||

@@ -380,7 +380,7 @@ $('profileForm').addEventListener('submit',async ev=>{
   }
 });
 
-function clearUserSubscriptions(){try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}if(state.gameRealtimePoll){clearInterval(state.gameRealtimePoll);state.gameRealtimePoll=null}state.gameRealtimeSyncing=false;clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.blackjack.privateUnsub){try{state.blackjack.privateUnsub()}catch{}state.blackjack.privateUnsub=null}if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonAudio={encounterId:'',resultId:''};state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.private=null;state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.notificationDismissed={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null;state.watchRtc.peerVolumes.clear()}
+function clearUserSubscriptions(){if(slotSettlementTimer)clearTimeout(slotSettlementTimer);try{slotSettlementUnsub?.()}catch{}slotSettlementUnsub=null;activeSlotJob='';slotBusy=false;try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}if(state.gameRealtimePoll){clearInterval(state.gameRealtimePoll);state.gameRealtimePoll=null}state.gameRealtimeSyncing=false;clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.blackjack.privateUnsub){try{state.blackjack.privateUnsub()}catch{}state.blackjack.privateUnsub=null}if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonAudio={encounterId:'',resultId:''};state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.private=null;state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.notificationDismissed={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null;state.watchRtc.peerVolumes.clear()}
 async function syncSiteGameRealtimeState(){
   if(!state.user||state.gameRealtimeSyncing)return;
   const uid=state.user.uid;
@@ -419,6 +419,10 @@ function startUserSubscriptions(){
   state.userUnsubs.push(onValue(ref(db,`charlottePublic/${uid}`),s=>{state.charlottePublic=s.exists()?s.val():null;renderCharlotteStatus()}));
   state.userUnsubs.push(onValue(ref(db,`charlotteSync/${uid}`),s=>{state.charlotteSync=s.exists()?s.val():null;renderCharlotteSync();renderAccount();loadPokemonSources();renderCollection();renderStore();renderPokemonInventory()}));
   state.userUnsubs.push(onValue(ref(db,`siteBridgeResults/${uid}`),s=>{state.bridgeResults=s.exists()?s.val():{}}));
+  state.userUnsubs.push(onValue(ref(db,`siteSlotsPending/${uid}`),sn=>{
+    if(!sn.exists()||!state.user||state.user.uid!==uid)return;
+    const spin=sn.val();if(spin?.jobId)watchSlotSettlement(spin.jobId,spin.bet,spin.payout);
+  },e=>console.warn('[SLOTS] Reserva indisponível:',e?.message||e)));
   state.userUnsubs.push(onValue(ref(db,`siteInventory/${uid}`),s=>{state.siteInventory=s.exists()?s.val():{};renderStore()}));
   state.userUnsubs.push(onValue(ref(db,`siteCustomization/${uid}`),s=>{state.siteCustomization=s.exists()?s.val():{};applyCustomization();renderStore();syncPublicCustomization().catch(()=>{})}));
   state.userUnsubs.push(onValue(ref(db,'siteStoreCatalog'),sn=>{state.storeCatalog=sn.exists()?sn.val():{};mergeRemoteStoreCatalog(state.storeCatalog);renderStore();applyCustomization();}));
@@ -450,10 +454,12 @@ function startUserSubscriptions(){
   // Fallback leve: se um listener do Firebase for cancelado (ex.: regras foram publicadas com o site aberto),
   // convites e partidas continuam aparecendo sem precisar recarregar a página.
   scheduleGameRealtimeSync(350);
-  state.gameRealtimePoll=setInterval(()=>syncSiteGameRealtimeState().catch(()=>{}),1200);
+  // Listeners são a via principal; uma revisão lenta recupera estados perdidos sem
+  // quatro novas leituras do Firebase a cada 1,2 segundo por jogador.
+  state.gameRealtimePoll=setInterval(()=>{if(!document.hidden)syncSiteGameRealtimeState().catch(()=>{});},45000);
 }
 
-await initialAuthPolicy();
+await withTimeout(initialAuthPolicy(),7000,'PERSISTENCE_TIMEOUT').catch(e=>console.warn('[GREMORY AUTH] Inicialização de persistência não bloqueante:',e?.message||e));
 onAuthStateChanged(auth,user=>{
   document.body.classList.remove('auth-loading');
   state.user=user||null;
@@ -681,37 +687,83 @@ const SLOT_SYMBOLS=['♛','✦','◆','♥','☾','⚡','7'];
 let slotBusy=false;
 const slotWait=ms=>new Promise(r=>setTimeout(r,ms));
 
-function watchSlotSettlement(jobId,bet,payout){
-  // O recibo já chega pelo listener Firebase habitual. Não há timeout da Charlotte.
-  let unsub=()=>{};
-  const receiptRef=ref(db,`siteBridgeResults/${state.user.uid}/${jobId}`);
-  const onReceipt=sn=>{
-    if(!sn.exists())return;
-    try{unsub()}catch{}
-    const r=sn.val()||{};
-    if(r.ok===false){
-      if($('slotsStatus'))$('slotsStatus').textContent='Aposta não aplicada';
-      if($('slotsLastWin'))$('slotsLastWin').textContent=`A carteira não foi alterada: ${String(r.error||'Falha na liquidação.')}`;
-      toast('A aposta não foi aplicada na carteira.',6000);
-    }else{
-      const balance=Number(r.balance);
-      if(Number.isFinite(balance)){
-        state.charlotteSync=state.charlotteSync||{};
-        state.charlotteSync.account=state.charlotteSync.account||{};
-        state.charlotteSync.account.balance=balance;
-        renderAccount();
-      }
-      if($('slotsLastWin'))$('slotsLastWin').textContent+=` • saldo confirmado ₹${formatNumber(balance)}`;
-    }
-    slotBusy=false;
-    if($('slotsSpinBtn'))$('slotsSpinBtn').disabled=false;
-  };
-  unsub=onValue(receiptRef,onReceipt,e=>{
-    console.warn('[SLOTS] Acompanhamento do saldo:',e?.message||e);
-    if($('slotsLastWin'))$('slotsLastWin').textContent+=' • consulte seu saldo antes da próxima aposta';
-    slotBusy=false;
-    if($('slotsSpinBtn'))$('slotsSpinBtn').disabled=false;
+// Após recarga ou falha da API, não iniciamos outro giro enquanto existir
+// uma reserva pendente. A API oferece um diagnóstico, sem disparar novo débito.
+let activeSlotJob='',slotSettlementUnsub=null,slotSettlementTimer=null;
+async function querySlotStatus(spinId=''){
+  const idToken=await state.user.getIdToken();
+  const response=await fetch('/api/main?action=slots_status_site',{
+    method:'POST',headers:{'content-type':'application/json'},cache:'no-store',
+    signal:AbortSignal.timeout(12000),body:JSON.stringify({idToken,spinId})
   });
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data.erro||'Não foi possível consultar a aposta.');
+  return data;
+}
+function watchSlotSettlement(jobId,bet,payout){
+  if(!jobId||!state.user)return;
+  if(activeSlotJob===jobId)return;
+  try{slotSettlementUnsub?.()}catch{}
+  if(slotSettlementTimer)clearTimeout(slotSettlementTimer);
+  activeSlotJob=jobId;slotBusy=true;
+  if($('slotsSpinBtn'))$('slotsSpinBtn').disabled=true;
+  const uid=state.user.uid;
+  const finish=(ok,value={})=>{
+    if(activeSlotJob!==jobId)return;
+    if(slotSettlementTimer)clearTimeout(slotSettlementTimer);
+    try{slotSettlementUnsub?.()}catch{}
+    slotSettlementUnsub=null;activeSlotJob='';slotBusy=false;
+    if($('slotsSpinBtn'))$('slotsSpinBtn').disabled=false;
+    if(value.balance!=null&&Number.isFinite(Number(value.balance))){
+      state.charlotteSync=state.charlotteSync||{};
+      state.charlotteSync.account=state.charlotteSync.account||{};
+      state.charlotteSync.account.balance=Number(value.balance);renderAccount();
+    }
+    if($('slotsStatus'))$('slotsStatus').textContent=ok?'Carteira confirmada':'Aposta não liquidada';
+    if($('slotsLastWin'))$('slotsLastWin').textContent=ok
+      ?`Giro concluído • saldo ₹${formatNumber(value.balance??accountSnapshot().balance)}`
+      :String(value.error||'Aposta não concluída. Confira o extrato da Charlotte.');
+  };
+  slotSettlementUnsub=onValue(ref(db,`siteBridgeResults/${uid}/${jobId}`),sn=>{
+    if(uid!==state.user?.uid||!sn.exists())return;
+    const result=sn.val()||{};
+    if(result.ok===false){
+      // Um erro pode ter acontecido DEPOIS do débito. Só reabrimos o jogo
+      // quando o servidor informar que não existe uma operação em revisão.
+      querySlotStatus().then(status=>{
+        if(status.status==='review'||status.status==='processing'){
+          if($('slotsStatus'))$('slotsStatus').textContent='Aposta em análise';
+          if($('slotsLastWin'))$('slotsLastWin').textContent='A carteira está em revisão. Não faça outra aposta até a confirmação.';
+        }else finish(false,{error:result.error});
+      }).catch(()=>{if($('slotsStatus'))$('slotsStatus').textContent='Verifique sua carteira';});
+      return;
+    }
+    finish(true,result);
+  },e=>{
+    console.warn('[SLOTS] Monitoramento:',e?.message||e);
+    if($('slotsStatus'))$('slotsStatus').textContent='Conexão interrompida';
+  });
+  slotSettlementTimer=setTimeout(async()=>{
+    if(activeSlotJob!==jobId||state.user?.uid!==uid)return;
+    try{
+      const status=await querySlotStatus();
+      if(activeSlotJob!==jobId)return;
+      if(status.status==='done')return finish(true,status);
+      if(status.status==='review'||status.status==='processing'){
+        if($('slotsStatus'))$('slotsStatus').textContent='Aposta em análise';
+        if($('slotsLastWin'))$('slotsLastWin').textContent='Operação financeira pendente de conferência; nenhum novo giro será autorizado.';
+      }else if(status.status==='pending'){
+        if($('slotsStatus'))$('slotsStatus').textContent='Aguardando Charlotte';
+        if($('slotsLastWin'))$('slotsLastWin').textContent='Resultado salvo. A liquidação da carteira está pendente; você pode sair e voltar.';
+      }else{
+        // Sem reserva e sem recibo, aguardar também o retorno do listener.
+        if($('slotsStatus'))$('slotsStatus').textContent='Conferindo giro';
+      }
+    }catch(e){
+      if($('slotsStatus'))$('slotsStatus').textContent='Verificação pendente';
+      if($('slotsLastWin'))$('slotsLastWin').textContent=e.message;
+    }
+  },22000);
 }
 async function runSlotsSpin(){
   if(slotBusy)return;
@@ -734,20 +786,18 @@ async function runSlotsSpin(){
   let timer=setInterval(()=>els.forEach(e=>{if(e)e.textContent=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]}),78);
   const stopVisual=()=>{if(timer){clearInterval(timer);timer=null;}try{stopSound()}catch{}els.forEach(e=>e?.classList.remove('spinning'));};
 
-  let handedOff=false,directBridge=false,r=null;
+  let handedOff=false,r=null;
   try{
     const idToken=await state.user.getIdToken();
     const response=await fetch('/api/main?action=slots_spin_site',{
-      method:'POST',headers:{'content-type':'application/json'},cache:'no-store',body:JSON.stringify({idToken,bet})
+      method:'POST',headers:{'content-type':'application/json'},cache:'no-store',signal:AbortSignal.timeout(18000),body:JSON.stringify({idToken,bet})
     });
     r=await response.json().catch(()=>({}));
     if(!response.ok){
       if(r.pending&&r.jobId){watchSlotSettlement(r.jobId,bet,0);handedOff=true;throw new Error(r.erro||'A aposta anterior ainda está sendo liquidada.');}
-      // Mantém o backend atual como caminho principal. Se ele estiver indisponível
-      // (ex.: service account da hospedagem), usa o bridge já conectado à Charlotte
-      // como fallback e continua na MESMA carteira de rúpias.
-      if([404,500,501,502,503,504].includes(Number(response.status))){r=await bridgeRequest('slots_spin',{bet},30000,true);directBridge=true}
-      else throw new Error(r.erro||'O site não conseguiu registrar a aposta.');
+      // Nunca refazer uma aposta pelo bridge após erro da API: o servidor pode
+      // já ter criado a reserva, causando dois débitos na mesma carteira.
+      throw new Error(r.erro||'Falha no servidor do Slots. Verifique a configuração do Firebase na Vercel.');
     }
     await slotWait(Math.max(0,1550-(Date.now()-started)));
     stopVisual();
@@ -761,17 +811,18 @@ async function runSlotsSpin(){
     if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':payout>0?'Você ganhou!':'Sem prêmio';
     if($('slotsLastWin'))$('slotsLastWin').textContent=(payout>0
       ? `${symbols.join(' ')} • prêmio ₹${formatNumber(payout)}`
-      : `${symbols.join(' ')} • perdeu ₹${formatNumber(bet)}`)+(directBridge?' • saldo confirmado':' • saldo atualiza automaticamente');
+      : `${symbols.join(' ')} • perdeu ₹${formatNumber(bet)}`)+' • saldo atualiza automaticamente';
     if(jackpot){
       playGameSfx('jackpot');setTimeout(()=>playGameSfx('coins'),240);
-      showGameResult({title:'JACKPOT!',text:`${symbols.join(' ')} • prêmio ₹${formatNumber(payout)}.${directBridge?' Saldo confirmado.':' Crédito em processamento.'}`,win:true,icon:'7'});
+      showGameResult({title:'JACKPOT!',text:`${symbols.join(' ')} • prêmio ₹${formatNumber(payout)}. Crédito em processamento.`,win:true,icon:'7'});
     }else if(payout>0){playVictoryTone();setTimeout(()=>playGameSfx('coins'),220);}
     else{playGameSfx('debit');setTimeout(()=>playDefeatTone(),180);}
-    if(directBridge){
-      const balance=Number(r.balance);if(Number.isFinite(balance)){state.charlotteSync=state.charlotteSync||{};state.charlotteSync.account=state.charlotteSync.account||{};state.charlotteSync.account.balance=balance;renderAccount();if($('slotsLastWin'))$('slotsLastWin').textContent+=` • ₹${formatNumber(balance)} na carteira`}
-    }else{watchSlotSettlement(r.jobId,bet,payout);handedOff=true}
+    watchSlotSettlement(r.jobId,bet,payout);handedOff=true;
   }catch(e){
     stopVisual();
+    if(!handedOff){
+      try{const status=await querySlotStatus();if(status.pending&&status.jobId){watchSlotSettlement(status.jobId,status.bet||bet,0);handedOff=true;}}catch{}
+    }
     if($('slotsStatus'))$('slotsStatus').textContent=handedOff?'Pagamento pendente':'Giro não iniciado';
     if($('slotsLastWin'))$('slotsLastWin').textContent=String(e?.message||'Não foi possível registrar a aposta.');
     toast(e?.message||'Não foi possível registrar o giro.',5500);
@@ -1316,7 +1367,7 @@ async function bridgeRequest(type,data={},timeoutMs=22000,requireLink=true){
   if(!state.user) throw new Error('Entre na sua conta.');
   if(requireLink&&!linkedCharlotte()) throw new Error('Vincule a Charlotte primeiro.');
   const jobRef=push(ref(db,`siteBridgeJobs/${state.user.uid}`));const jobId=jobRef.key;await set(jobRef,{type,...data,createdAt:nowIso()});
-  return await new Promise((resolve,reject)=>{let done=false;let unsub=null;const timer=setTimeout(()=>{if(done)return;done=true;try{unsub?.()}catch{}reject(new Error('A Charlotte demorou para responder. Tente novamente.'))},timeoutMs);unsub=onValue(ref(db,`siteBridgeResults/${state.user.uid}/${jobId}`),sn=>{if(done||!sn.exists())return;done=true;clearTimeout(timer);try{unsub?.()}catch{}const v=sn.val()||{};if(v.ok===false)reject(new Error(v.error||'Não foi possível concluir.'));else resolve(v)},e=>{if(done)return;done=true;clearTimeout(timer);reject(e)})});
+  return await new Promise((resolve,reject)=>{let done=false;let unsub=null;const timer=setTimeout(()=>{if(done)return;done=true;try{unsub?.()}catch{}reject(Object.assign(new Error('A Charlotte ainda não confirmou a operação. Ela pode estar pendente; não repita pagamentos. Verifique o estado da sala ou tente atualizar a página.'),{pending:true,jobId,type}))},timeoutMs);unsub=onValue(ref(db,`siteBridgeResults/${state.user.uid}/${jobId}`),sn=>{if(done||!sn.exists())return;done=true;clearTimeout(timer);try{unsub?.()}catch{}const v=sn.val()||{};if(v.ok===false)reject(new Error(v.error||'Não foi possível concluir.'));else resolve(v)},e=>{if(done)return;done=true;clearTimeout(timer);reject(e)})});
 }
 async function requestAccountSync(){return bridgeRequest('sync_account',{},25000)}
 function resultBox(){return $('siteCommandResult')}
@@ -1606,14 +1657,14 @@ const SITE_GAME_META={
 };
 function gameRows(obj){return Object.entries(obj||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0))}
 function siteGameName(uid){return state.directory?.[uid]?.nome||state.friends?.[uid]?.nome||(uid===state.user?.uid?displayName():'Jogador')}
-async function sendSiteGameChallenge(type,targetUid,bet=0){
+async function sendSiteGameChallenge(type,targetUid,bet=0,options={}){
   if(!state.user)throw new Error('Entre na sua conta.');if(!SITE_GAME_META[type])throw new Error('Jogo inválido.');if(!targetUid||targetUid===state.user.uid)throw new Error('Escolha um amigo válido.');if(!state.friends?.[targetUid])throw new Error('Esse usuário precisa estar na sua lista de amigos.');bet=Math.max(0,Math.floor(Number(bet||0)));if(bet&&(!Number.isSafeInteger(bet)||bet<10||bet>100000))throw new Error('A aposta deve ficar entre ₹10 e ₹100.000.');if(bet&&!linkedCharlotte())throw new Error('Vincule a Charlotte para apostar.');
-  const challengeRef=push(ref(db,`siteGameChallenges/${targetUid}`));await set(challengeRef,{id:challengeRef.key,type,fromUid:state.user.uid,fromName:displayName(),bet,createdAt:Date.now()});toast(`Convite de ${SITE_GAME_META[type].label}${bet?` com aposta de ₹${formatNumber(bet)}`:''} enviado.`);
+  const challengeRef=push(ref(db,`siteGameChallenges/${targetUid}`));await set(challengeRef,{id:challengeRef.key,type,fromUid:state.user.uid,fromName:displayName(),bet,...(type==='blackjack'?{mode:options.mode==='nightmare'?'nightmare':'classic'}:{}),createdAt:Date.now()});toast(`Convite de ${SITE_GAME_META[type].label}${bet?` com aposta de ₹${formatNumber(bet)}`:''} enviado.`);
 }
 async function rejectSiteGameChallenge(id){if(!state.user||!id)return;await remove(ref(db,`siteGameChallenges/${state.user.uid}/${id}`));playGameSfx('reject');toast('Convite recusado.')}
 function challengeRow(ch){
   const row=document.createElement('div');row.className='person-row game-invite-row';
-  const copy=document.createElement('div');copy.className='person-copy';copy.innerHTML=`<strong>${escText(ch.fromName||'Amigo')}</strong><small>desafiou você para ${escText(SITE_GAME_META[ch.type]?.label||'uma partida')}${Number(ch.bet||0)>0?` • aposta ₹${formatNumber(ch.bet)}`:' • sem aposta'}</small>`;
+  const copy=document.createElement('div');copy.className='person-copy';copy.innerHTML=`<strong>${escText(ch.fromName||'Amigo')}</strong><small>desafiou você para ${escText(SITE_GAME_META[ch.type]?.label||'uma partida')}${ch.type==='blackjack'&&ch.mode==='nightmare'?' • Modo Pesadelo':''}${Number(ch.bet||0)>0?` • aposta ₹${formatNumber(ch.bet)}`:' • sem aposta'}</small>`;
   const acts=document.createElement('div');acts.className='person-actions';
   const yes=document.createElement('button');yes.type='button';yes.className='btn primary';yes.textContent='Aceitar';yes.onclick=async()=>{try{yes.disabled=true;await acceptSiteGameChallenge(ch)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível aceitar.'))}finally{yes.disabled=false}};
   const no=document.createElement('button');no.type='button';no.className='btn';no.textContent='Recusar';no.onclick=()=>rejectSiteGameChallenge(ch.id).catch(e=>toast(permissionMessage(e)));
@@ -1653,7 +1704,7 @@ async function createSiteGame(type,opponentUid){
   const idx={id:gameId,type,status:'active',createdAt,updatedAt:createdAt,createdBy:me,opponentUid:other};
   const updates={};updates[`${meta.games}/${gameId}`]=game;updates[`${meta.index}/${me}/${gameId}`]=idx;updates[`${meta.index}/${other}/${gameId}`]={...idx,opponentUid:me};await update(ref(db),updates);return gameId
 }
-async function acceptSiteGameChallenge(ch){if(!state.user||!ch?.id||!ch?.fromUid)throw new Error('Convite inválido.');const job={ttt:'ttt_create',blackjack:'blackjack_create',hangman:'hangman_create'}[ch.type];if(!job)throw new Error('Jogo inválido.');const r=await bridgeRequest(job,{targetUid:ch.fromUid,bet:Number(ch.bet||0)},30000,false),gameId=r.gameId;if(ch.type==='ttt')subscribeTtt(gameId);else if(ch.type==='blackjack')subscribeBlackjack(gameId);else if(ch.type==='hangman')subscribeHangman(gameId);await remove(ref(db,`siteGameChallenges/${state.user.uid}/${ch.id}`));scheduleGameRealtimeSync(20);navigate('games');playGameSfx('accept');toast(`${SITE_GAME_META[ch.type]?.label||'Partida'} iniciada${Number(ch.bet||0)>0?` • pote ₹${formatNumber(Number(ch.bet||0)*2)}`:''}.`);return gameId}
+async function acceptSiteGameChallenge(ch){if(!state.user||!ch?.id||!ch?.fromUid)throw new Error('Convite inválido.');const job={ttt:'ttt_create',blackjack:'blackjack_create',hangman:'hangman_create'}[ch.type];if(!job)throw new Error('Jogo inválido.');const r=await bridgeRequest(job,{targetUid:ch.fromUid,bet:Number(ch.bet||0),...(ch.type==='blackjack'?{mode:ch.mode==='nightmare'?'nightmare':'classic'}:{})},30000,false),gameId=r.gameId;if(ch.type==='ttt')subscribeTtt(gameId);else if(ch.type==='blackjack')subscribeBlackjack(gameId);else if(ch.type==='hangman')subscribeHangman(gameId);await remove(ref(db,`siteGameChallenges/${state.user.uid}/${ch.id}`));scheduleGameRealtimeSync(20);navigate('games');playGameSfx('accept');toast(`${SITE_GAME_META[ch.type]?.label||'Partida'} iniciada${Number(ch.bet||0)>0?` • pote ₹${formatNumber(Number(ch.bet||0)*2)}`:''}.`);return gameId}
 async function finishIndexes(type,game){if(!game?.id)return;const meta=SITE_GAME_META[type];if(!meta)return;const updates={};const now=Number(game.updatedAt||game.finishedAt||Date.now());for(const uid of Object.keys(game.players||{})){const base=`${meta.index}/${uid}/${game.id}`;updates[`${base}/status`]=game.status||'finished';updates[`${base}/updatedAt`]=now;updates[`${base}/finishedAt`]=Number(game.finishedAt||now);if(game.winnerUid!=null)updates[`${base}/winnerUid`]=game.winnerUid;if(game.finishReason)updates[`${base}/finishReason`]=game.finishReason;if(game.leftUid)updates[`${base}/leftUid`]=game.leftUid}try{await update(ref(db),updates)}catch(e){console.warn('[GAME EXIT] Não foi possível sincronizar os índices:',e?.message||e)}}
 function applyFinishedGameLocally(type,game){if(!game?.id)return;if(type==='ttt'&&state.ttt.game?.id===game.id)setTttGame(game);else if(type==='blackjack'&&state.blackjack.game?.id===game.id)setBlackjackGame(game);else if(type==='hangman'&&state.hangman.game?.id===game.id)setHangmanGame(game)}
 async function directGameExit(type,game){if(!state.user||!game?.id)return;const meta=SITE_GAME_META[type],uid=state.user.uid;if(!meta)throw new Error('Jogo inválido.');let failReason='';const gameRef=ref(db,`${meta.games}/${game.id}`);const tx=await runTransaction(gameRef,g=>{if(!g){failReason='Partida não encontrada.';return}if(!g.players?.[uid]){failReason='Você não participa desta partida.';return}if(g.status!=='active'){failReason='Partida já encerrada.';return}const other=Object.keys(g.players).find(x=>x!==uid)||null,now=Date.now();g.status='finished';g.winnerUid=other;g.leftUid=uid;g.finishReason='exit';g.finishedAt=now;g.updatedAt=now;g.turnUid=null;appendGameLog(g,`${g.players[uid]?.name||'Jogador'} saiu da partida. ${other?`${g.players[other]?.name||'Adversário'} venceu por desistência.`:'Partida encerrada.'}`);return g});if(!tx.committed){const current=await get(gameRef).catch(()=>null);if(current?.exists()){const value={id:game.id,...current.val()};if(value.status!=='active'){applyFinishedGameLocally(type,value);return value}}throw new Error(failReason||'Não foi possível encerrar a partida.')}const final={id:game.id,...tx.snapshot.val()};await finishIndexes(type,final);applyFinishedGameLocally(type,final);toast('Você saiu. A partida foi encerrada para os dois jogadores.');return final}
@@ -2037,18 +2088,25 @@ function renderWatchMusic(queueObj={},accessObj={},planObj={},playback={}){
   })
 }
 $('watchMusicActivateBtn')?.addEventListener('click',async()=>{
+  if(state.watchMusic.activating)return;
+  const button=$('watchMusicActivateBtn'),roomCode=state.watchCode;
   try{
-    if(!watchMusicCanHear()){toast('Entrando na chamada de voz...');await joinWatchVoice();if(!watchMusicCanHear())return}
-    const r=await bridgeRequest('watch_music_activate',{roomCode:state.watchCode},20000);
+    state.watchMusic.activating=true;if(button)button.disabled=true;
+    if(!await joinWatchVoice())throw new Error('A chamada de voz ainda não foi confirmada no Firebase.');
+    if(state.watchRoom?.musicPlan?.active)return toast('Charlotte Music já está ativa para todos da sala.');
+    const r=await bridgeRequest('watch_music_activate',{roomCode},16000);
     toast(r.alreadyActive?'A Charlotte Music já está ativa nesta sala.':`Charlotte Music ativada por ₹${r.cost||50}.`)
-  }catch(e){toast(e.message)}
+  }catch(e){toast(e.message,7500)}
+  finally{state.watchMusic.activating=false;if(button)button.disabled=false}
 });
 $('watchMusicForm')?.addEventListener('submit',async ev=>{
   ev.preventDefault();if(state.watchMusic.adding)return;if(!watchMusicCanHear())return toast('Entre na chamada de voz primeiro.');
   const query=$('watchMusicInput').value.trim();if(!query)return;
   state.watchMusic.adding=true;renderWatchMusic(state.watchRoom?.musicQueue||{},state.watchRoom?.musicAccess||{},state.watchRoom?.musicPlan||{},state.watchRoom?.musicPlayback||{});
   try{
-    const r=await bridgeRequest('watch_music_add',{roomCode:state.watchCode,query},30000);
+    // A pesquisa externa pode demorar. Se a resposta expirar, verificar a fila
+    // em vez de criar outro pedido automaticamente (pode custar rúpias).
+    const r=await bridgeRequest('watch_music_add',{roomCode:state.watchCode,query},16000);
     $('watchMusicInput').value='';
     toast(r.started?'Música iniciada.':r.cost>0?`Adicionada à fila por ₹${r.cost}.`:'Adicionada à fila.')
   }catch(e){toast(e.message)}
@@ -2466,15 +2524,26 @@ async function ensureWatchRtcSession(){
   }catch(e){state.watchRtc.joined=false;toast(permissionMessage(e,'Não foi possível iniciar a chamada.'));return false}
 }
 async function joinWatchVoice({automatic=false}={}){
-  if(state.watchRtc.audioJoined)return true;if(!await ensureWatchRtcSession())return false;
+  if(state.watchRtc.audioJoined){
+    // A presença pode ter expirado enquanto o microfone permaneceu aberto.
+    // Não informamos ao bridge que a chamada está pronta antes do RTDB confirmar.
+    try{await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:true,muted:!state.watchRtc.micEnabled});return true}
+    catch(e){console.warn('[WATCH VOICE] Sem confirmação de presença:',e);toast(permissionMessage(e,'Não foi possível confirmar a chamada no Firebase.'));return false}
+  }
+  if(!await ensureWatchRtcSession())return false;
   try{
     const existing=state.watchRtc.localStream;const stream=existing?.getAudioTracks?.().some(t=>t.readyState==='live')?existing:await navigator.mediaDevices.getUserMedia({audio:true,video:false});
-    if(existing&&existing!==stream)existing.getTracks?.().forEach(t=>{try{t.stop()}catch{}});state.watchRtc.localStream=stream;state.watchRtc.audioJoined=true;state.watchRtc.micEnabled=true;
+    if(existing&&existing!==stream)existing.getTracks?.().forEach(t=>{try{t.stop()}catch{}});state.watchRtc.localStream=stream;state.watchRtc.micEnabled=true;
     const track=stream.getAudioTracks()[0];
-    for(const [uid,pc] of state.watchRtc.peers){const sender=watchPcSender(pc,'audio','voice');if(sender)await sender.replaceTrack(track);if(pc.signalingState==='stable')await negotiateWatchPeer(uid,{reason:'audio-join'}).catch(()=>{})}
-    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:true,muted:false}).catch(()=>{});
+    await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:true,muted:false});
+    state.watchRtc.audioJoined=true;
+    // A transmissão P2P pode negociar depois; não bloqueie a música esperando ICE.
+    for(const [uid,pc] of state.watchRtc.peers){
+      const sender=watchPcSender(pc,'audio','voice');if(sender)await sender.replaceTrack(track).catch(()=>{});
+      if(pc.signalingState==='stable')negotiateWatchPeer(uid,{reason:'audio-join'}).catch(e=>console.warn('[WATCH VOICE] Negociação:',e));
+    }
     $$('.watch-call-card').forEach(card=>{const uid=String(card.dataset.watchPeer||'');applyWatchPeerMute(uid,card);const a=card.querySelector('audio');a?.play?.().catch(()=>{})});watchVoiceUi();if(!automatic)toast('Você entrou na voz.');return true
-  }catch(e){watchVoiceUi();if(automatic)setWatchRtcStatus('Toque em “Entrar na voz” para liberar o microfone.','warn');else toast(e?.name==='NotAllowedError'?'Permissão do microfone negada.':'Não foi possível abrir o microfone.');return false}
+  }catch(e){state.watchRtc.audioJoined=false;watchVoiceUi();if(automatic)setWatchRtcStatus('Toque em “Entrar na voz” para liberar o microfone.','warn');else toast(e?.name==='NotAllowedError'?'Permissão do microfone negada.':permissionMessage(e,'Não foi possível confirmar a voz no Firebase.'));return false}
 }
 function toggleWatchMic(){const track=state.watchRtc.localStream?.getAudioTracks?.()[0];if(!track)return;track.enabled=!track.enabled;state.watchRtc.micEnabled=track.enabled;update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{muted:!track.enabled}).catch(()=>{});watchVoiceUi()}
 async function leaveWatchAudio(silent=false){
@@ -3002,7 +3071,7 @@ $$('[data-studio-scroll]').forEach(btn=>btn.addEventListener('click',()=>$(btn.d
 function cardHtml(c){if(!c)return'';const red=c.s==='♥'||c.s==='♦';return `<i class="playing-card ${red?'red':''}"><b>${escText(c.r||'?')}</b><span>${escText(c.s||'')}</span></i>`}
 
 // 21 PvP
-$('blackjackCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('blackjackFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('blackjack',targetUid,Number($('blackjackBetInput')?.value||0))}catch(e){toast(permissionMessage(e,e.message))}});
+$('blackjackCreateBtn')?.addEventListener('click',async()=>{const targetUid=$('blackjackFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');playGameSfx('select');try{await sendSiteGameChallenge('blackjack',targetUid,Number($('blackjackBetInput')?.value||0),{mode:$('blackjackMode')?.value})}catch(e){toast(permissionMessage(e,e.message))}});
 function handleBlackjackIndex(obj){const rows=gameRows(obj),active=rows.find(x=>x.status==='active');if(active){if(state.blackjack.game?.id!==active.id){subscribeBlackjack(active.id);focusNewSiteGame('blackjack',active.id)}return}const finished=rows.find(x=>x.status==='finished');if(finished&&state.blackjack.game?.id!==finished.id)subscribeBlackjack(finished.id);else if(!finished)setBlackjackGame(null)}
 function subscribeBlackjack(id){if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}}if(state.blackjack.privateUnsub){try{state.blackjack.privateUnsub()}catch{}}state.blackjack.private=null;state.blackjack.unsub=onValue(ref(db,`blackjackGames/${id}`),sn=>setBlackjackGame(sn.exists()?{id,...sn.val()}:null));if(state.user)state.blackjack.privateUnsub=onValue(ref(db,`blackjackPrivate/${id}/${state.user.uid}`),sn=>{state.blackjack.private=sn.exists()?sn.val():null;if(state.blackjack.game?.id===id)renderBlackjackGame(state.blackjack.game)})}
 function blackjackCardLabel(c={}){return `${c.r||'?'}${c.s||''}`}
@@ -3035,12 +3104,16 @@ function setBlackjackGame(g){
   state.blackjack.seenActiveIds.add(g.id);if(panel)panel.hidden=false;if(lobby)lobby.hidden=true;if($('blackjackStatus'))$('blackjackStatus').textContent=g.turnUid===state.user?.uid?'Sua vez':'Vez do amigo';renderBlackjackGame(g)
 }
 function renderBlackjackGame(g){
-  const uid=state.user?.uid,mePub=g.players?.[uid]||{},otherPub=Object.values(g.players||{}).find(x=>x.uid!==uid)||{},mine=state.blackjack.private||{};if($('blackjackTitle'))$('blackjackTitle').textContent=`${mePub.name||'Você'} × ${otherPub.name||'Amigo'}${Number(g.wager?.amount||0)>0?` • ₹${formatNumber(g.wager.amount)} cada`:''}`;if($('blackjackTurnText'))$('blackjackTurnText').textContent=g.turnUid===uid?'Sua vez de jogar':`Vez de ${otherPub.name||'seu amigo'}`;if($('blackjackOpponentName'))$('blackjackOpponentName').textContent=otherPub.name||'Adversário';if($('blackjackPlayer'))$('blackjackPlayer').innerHTML=(mine.cards||[]).map(cardHtml).join('');if($('blackjackDealer'))$('blackjackDealer').innerHTML=Array.from({length:Number(otherPub.cardCount||0)},()=>'<span class="playing-card hidden-card">🂠</span>').join('');if($('blackjackPlayerScore'))$('blackjackPlayerScore').textContent=String(mine.score??'—');if($('blackjackDealerScore'))$('blackjackDealerScore').textContent='?';if($('blackjackMyState'))$('blackjackMyState').textContent=mine.busted?'Estourou':mine.stood?'Parou':'Jogando';if($('blackjackOpponentState'))$('blackjackOpponentState').textContent=otherPub.busted?'Estourou':otherPub.stood?'Parou':'Jogando';const myTurn=g.turnUid===uid&&g.status==='active'&&!mine.stood&&!mine.busted;if($('blackjackHitBtn'))$('blackjackHitBtn').disabled=!myTurn;if($('blackjackStandBtn'))$('blackjackStandBtn').disabled=!myTurn;const log=$('blackjackLog');if(log)log.innerHTML=Object.values(g.log||{}).slice(-10).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'
+  const uid=state.user?.uid,mePub=g.players?.[uid]||{},otherPub=Object.values(g.players||{}).find(x=>x.uid!==uid)||{},mine=state.blackjack.private||{};if($('blackjackTitle'))$('blackjackTitle').textContent=`${mePub.name||'Você'} × ${otherPub.name||'Amigo'}${Number(g.wager?.amount||0)>0?` • ₹${formatNumber(g.wager.amount)} cada`:''}`;if($('blackjackTurnText'))$('blackjackTurnText').textContent=g.turnUid===uid?'Sua vez de jogar':`Vez de ${otherPub.name||'seu amigo'}`;if($('blackjackOpponentName'))$('blackjackOpponentName').textContent=otherPub.name||'Adversário';if($('blackjackPlayer'))$('blackjackPlayer').innerHTML=(mine.cards||[]).map(cardHtml).join('');if($('blackjackDealer'))$('blackjackDealer').innerHTML=Array.from({length:Number(otherPub.cardCount||0)},()=>'<span class="playing-card hidden-card">🂠</span>').join('');if($('blackjackPlayerScore'))$('blackjackPlayerScore').textContent=String(mine.score??'—');if($('blackjackDealerScore'))$('blackjackDealerScore').textContent='?';if($('blackjackMyState'))$('blackjackMyState').textContent=mine.busted?'Estourou':mine.stood?'Parou':'Jogando';if($('blackjackOpponentState'))$('blackjackOpponentState').textContent=otherPub.busted?'Estourou':otherPub.stood?'Parou':'Jogando';const myTurn=g.turnUid===uid&&g.status==='active'&&!mine.stood&&!mine.busted;if($('blackjackHitBtn'))$('blackjackHitBtn').disabled=!myTurn;if($('blackjackStandBtn'))$('blackjackStandBtn').disabled=!myTurn||!!mine.lockStand;
+  const specials=$('blackjackNightmareCards');if(specials){specials.hidden=g.mode!=='nightmare';specials.querySelectorAll('[data-nightmare-card]').forEach(button=>{const card=button.dataset.nightmareCard;button.disabled=!myTurn||!!mine.specialsUsed?.[card]||(card==='swap'&&(mine.cards||[]).length<3);button.classList.toggle('used',!!mine.specialsUsed?.[card]);});}
+  if($('blackjackOmen'))$('blackjackOmen').textContent=mine.omen?`Seu Presságio: ${mine.omen}`:mine.shield?'Escudo preparado para proteger de um estouro.':mine.lockStand?'Você está sob efeito de Trava: compre uma carta.':'';
+  const log=$('blackjackLog');if(log)log.innerHTML=Object.values(g.log||{}).slice(-10).reverse().map(x=>`<div>${escText(x.text||'')}</div>`).join('')||'<div>Partida iniciada.</div>'
 }
 function blackjackWinner(g){const rows=Object.values(g.players||{}),alive=rows.filter(p=>!p.busted),best=alive.length?Math.max(...alive.map(p=>Number(p.score||0))):-1,winners=alive.filter(p=>Number(p.score||0)===best);return winners.length===1?winners[0].uid:null}
 async function directBlackjackMove(gameId,action){const uid=state.user?.uid;if(!uid)return;let reason='';const tx=await runTransaction(ref(db,`blackjackGames/${gameId}`),g=>{if(!g||g.status!=='active'){reason='Partida encerrada.';return}if(g.turnUid!==uid){reason='Aguarde sua vez.';return}const me=g.players?.[uid],otherUid=Object.keys(g.players||{}).find(x=>x!==uid),other=g.players?.[otherUid];if(!me||!other){reason='Partida inválida.';return}g.deck=Array.isArray(g.deck)?g.deck:[];if(action==='hit'){const card=g.deck.pop();if(!card){reason='O baralho acabou.';return}me.cards=[...(me.cards||[]),card];me.score=blackjackScore(me.cards);if(me.score>21)me.busted=true;if(me.score===21)me.stood=true;appendGameLog(g,`${me.name||'Jogador'} pediu uma carta.`)}else if(action==='stand'){me.stood=true;appendGameLog(g,`${me.name||'Jogador'} parou com ${me.score||0}.`)}else{reason='Jogada inválida.';return}g.updatedAt=Date.now();const meDone=me.stood||me.busted,otherDone=other.stood||other.busted;if(me.busted||(meDone&&otherDone)){g.status='finished';g.winnerUid=blackjackWinner(g);g.finishedAt=Date.now()}else if(!otherDone)g.turnUid=otherUid;else g.turnUid=uid;return g});if(!tx.committed){if(reason)throw new Error(reason);return}const final={id:gameId,...tx.snapshot.val()};if(final.status==='finished')await finishIndexes('blackjack',final)}
 $('blackjackHitBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;playGameSfx('select');try{await bridgeRequest('blackjack_move',{gameId:g.id,action:'hit'},20000,false)}catch(e){toast(permissionMessage(e,e.message))}});
 $('blackjackStandBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;playGameSfx('select');try{await bridgeRequest('blackjack_move',{gameId:g.id,action:'stand'},20000,false)}catch(e){toast(permissionMessage(e,e.message))}});
+$('blackjackNightmareCards')?.addEventListener('click',async ev=>{const btn=ev.target.closest('[data-nightmare-card]'),g=state.blackjack.game;if(!btn||!g||btn.disabled)return;btn.disabled=true;try{await bridgeRequest('blackjack_move',{gameId:g.id,action:'special',special:btn.dataset.nightmareCard},20000,false)}catch(e){toast(permissionMessage(e,e.message))}finally{renderBlackjackGame(state.blackjack.game||g)}});
 $('blackjackExitBtn')?.addEventListener('click',async()=>{const g=state.blackjack.game;if(!g)return;playGameSfx('reject');try{await bridgeRequest('blackjack_exit',{gameId:g.id},20000,false)}catch(e){toast(permissionMessage(e,e.message))}});
 
 // Forca PvP

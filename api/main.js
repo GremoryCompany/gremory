@@ -1282,31 +1282,12 @@ module.exports = async (req, res) => {
   if (action === 'slots_spin_site') {
     return require('./slots').handleSlotsSpin(req,res,{readJsonBody,sendJson});
   }
+  if (action === 'slots_status_site') {
+    return require('./slots').handleSlotsStatus(req,res,{readJsonBody,sendJson});
+  }
 
   if (action === 'pokemon_explore_site') {
     return require('./explore').handlePokemonExplore(req,res,{readJsonBody,sendJson});
-  }
-
-  if (action === 'pokemon_wild_move_site') {
-    return require('./pokemon-actions').handleWildMove(req,res,{readJsonBody,sendJson});
-  }
-  if (action === 'pokemon_capture_site') {
-    return require('./pokemon-actions').handleWildCapture(req,res,{readJsonBody,sendJson});
-  }
-  if (action === 'pokemon_wild_exit_site') {
-    return require('./pokemon-actions').handleWildExit(req,res,{readJsonBody,sendJson});
-  }
-  if (action === 'site_raid_enter_site') {
-    return require('./pokemon-actions').handleRaidEnter(req,res,{readJsonBody,sendJson});
-  }
-  if (action === 'site_raid_switch_site') {
-    return require('./pokemon-actions').handleRaidSwitch(req,res,{readJsonBody,sendJson});
-  }
-  if (action === 'site_raid_attack_site') {
-    return require('./pokemon-actions').handleRaidAttack(req,res,{readJsonBody,sendJson});
-  }
-  if (action === 'site_raid_exit_site') {
-    return require('./pokemon-actions').handleRaidExit(req,res,{readJsonBody,sendJson});
   }
 
   if(action === 'youtube_search'){
