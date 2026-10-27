@@ -39,6 +39,7 @@
   function authMessage(err){
     const code=String(err?.code||err?.message||'');
     const map={
+      'PANEL_UNAVAILABLE':'O painel n�o carregou. Recarregue a p�gina e verifique sua conex�o.',
       'AUTH_TIMEOUT':'A conexão demorou mais que o esperado. Tente novamente.',
       'DB_TIMEOUT':'O cadastro foi criado, mas o perfil demorou para sincronizar.',
       'auth/email-already-in-use':'Esse e-mail já está em uso.',
@@ -55,6 +56,16 @@
     return map[code]||((code&&code.startsWith('auth/'))?`Não foi possível concluir agora. (${code})`:'Não foi possível concluir agora.');
   }
 
+  // Authentication must wait until the panel can consume the resulting session.
+  let panelResolve, panelReject;
+  const panelReady=new Promise((resolve,reject)=>{panelResolve=resolve;panelReject=reject});
+  panelReady.catch(()=>{});
+  window.gremoryPanelReady=()=>panelResolve();
+  window.gremoryPanelFailed=err=>{panelReject(err);status('O painel n�o carregou. Recarregue a p�gina e verifique sua conex�o.');};
+  async function requirePanel(){
+    try{await timeout(panelReady,20000,'PANEL_TIMEOUT')}
+    catch{const err=new Error('PANEL_UNAVAILABLE');err.code='PANEL_UNAVAILABLE';throw err}
+  }
   let firebasePromise=null;
   function loadFirebase(){
     if(firebasePromise)return firebasePromise;
@@ -74,7 +85,7 @@
       await timeout(authMod.setPersistence(auth,remember?authMod.browserLocalPersistence:authMod.inMemoryPersistence),8000,'AUTH_TIMEOUT');
       if(remember)safeSet('gremory:remember','1');else safeRemove('gremory:remember');
     }catch(err){
-      try{await authMod.setPersistence(auth,authMod.inMemoryPersistence)}catch{}
+      try{await timeout(authMod.setPersistence(auth,authMod.inMemoryPersistence),8000,'AUTH_TIMEOUT')}catch{}
       safeRemove('gremory:remember');
       console.warn('[GREMORY AUTH SHELL] Persistência indisponível.',err);
     }
@@ -86,6 +97,7 @@
     if(button)button.disabled=true;
     status('Entrando...');
     try{
+      await requirePanel();
       const {auth,authMod}=await loadFirebase();
       await configurePersistence(auth,authMod,Boolean($('loginRemember')?.checked));
       await timeout(authMod.signInWithEmailAndPassword(auth,$('loginEmail')?.value.trim()||'',$('loginPassword')?.value||''),20000,'AUTH_TIMEOUT');
@@ -109,6 +121,7 @@
     if(button)button.disabled=true;
     status('Criando conta...');
     try{
+      await requirePanel();
       const {auth,authMod,db,dbMod}=await loadFirebase();
       await configurePersistence(auth,authMod,Boolean($('registerRemember')?.checked));
       const cred=await timeout(authMod.createUserWithEmailAndPassword(auth,email,pass),20000,'AUTH_TIMEOUT');
@@ -137,6 +150,7 @@
     if(!email)return status('Digite seu e-mail primeiro.');
     status('Enviando recuperação...');
     try{
+      await requirePanel();
       const {auth,authMod}=await loadFirebase();
       await timeout(authMod.sendPasswordResetEmail(auth,email),20000,'AUTH_TIMEOUT');
       status('E-mail de recuperação enviado.');

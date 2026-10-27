@@ -1,0 +1,15 @@
+CORREÇÃO DO LOGIN — 27/10/2026
+
+Causa encontrada: uma aspa não escapada em "Poker Texas Hold'em Beta" impedia o navegador de interpretar app.js inteiro. O formulário auxiliar podia autenticar, mas o painel não iniciava.
+
+Corrigido também:
+- A inicialização não encerra uma sessão que acabou de entrar.
+- O observador de autenticação inicia após as constantes do painel.
+- O formulário aguarda o painel e informa falhas de carregamento.
+- Atualizadas as versões dos arquivos e do cache.
+
+Publicação: substitua o projeto inteiro por esta pasta e faça novo deploy na sua hospedagem. Depois recarregue o site. Este ZIP não publica automaticamente as alterações.
+
+Validação: todos os arquivos JavaScript do navegador passaram na análise de sintaxe; inicialização simulada concluída; 3 testes de autenticação passaram.
+A suíte anterior mantém 9 testes aprovados e 5 falhas preexistentes em jogos/regras do banco, também presentes no ZIP original. Não foram alteradas regras de acesso para tentar contornar essas falhas.
+Login com conta real e configuração da hospedagem/Firebase ainda precisam de validação no site publicado.

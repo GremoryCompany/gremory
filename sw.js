@@ -1,9 +1,11 @@
-const CACHE='gremory-v19-stable-20261027';
+const CACHE='gremory-login-fix-20261027';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261027-v19-stable',
-  '/assets/js/app.js?v=20261027-v19-stable',
+  '/assets/css/app.css?v=20261027-login-fix',
+  '/assets/js/bootstrap.js?v=20261027-login-fix',
+  '/assets/js/app.js?v=20261027-login-fix',
+  '/assets/js/auth-shell.js?v=20261027-login-fix',
   '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
