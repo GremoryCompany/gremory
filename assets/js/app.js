@@ -1,4 +1,4 @@
-import { initCommunity } from './community.js?v=20261026-v16-fast-site';
+import { initCommunity } from './community.js?v=20261026-v17-direct-fix';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js';
 import {
   getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence, inMemoryPersistence,
@@ -9,7 +9,7 @@ import {
   getDatabase, ref, get, set, update, push, onValue, remove, onDisconnect, query, orderByChild, limitToLast, runTransaction
 } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js';
 import {
-  getStorage, ref as storageRef, uploadBytes, getDownloadURL
+  getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL
 } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-storage.js';
 
 const firebaseConfig = {
@@ -58,7 +58,7 @@ const state = {
   watchCode:null,watchRoom:null,watchUnsubs:[],watchApplying:false,
   watchRtc:{joined:false,audioJoined:false,localStream:null,screenStream:null,screenSource:'',localFileVideo:null,localFileUrl:'',localFileName:'',localFileAudioCtx:null,localFileAudioSource:null,localFileAudioDest:null,localFileAudioGain:null,localFileAudioLimiter:null,screenVolume:Number(localStorage.getItem('gremory:watchScreenVolume')||150),localFileTransmitGainPct:Number(localStorage.getItem('gremory:watchTransmitGain')||150),fullscreenUiTimer:null,peers:new Map(),remoteStreams:new Map(),remoteVoiceStreams:new Map(),remoteScreenStreams:new Map(),screenOutPeers:new Map(),screenInPeers:new Map(),screenOutCandidates:new Map(),screenInCandidates:new Map(),screenOfferAt:new Map(),screenOfferLocks:new Set(),processed:new Set(),pendingCandidates:new Map(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true,activeScreenUid:null,screenSharers:new Set(),presence:{},screenRetry:new Map(),makingOffer:new Set(),screenSoundMuted:false,mutedPeers:new Set(),peerVolumes:new Map(),autoVoiceCode:'',autoVoicePending:false},
   watchYoutube:{lastTime:0,lastState:-1,lastPublishAt:0},
-  watchMusic:{currentId:'',volume:Number(localStorage.getItem('gremory:watchMusicVolume')||65),muted:localStorage.getItem('gremory:watchMusicMuted')==='1',engineReady:false,lastAdvanceId:'',adding:false,currentTime:0,lastClockSync:0,endedId:''},
+  watchMusic:{currentId:'',volume:Number(localStorage.getItem('gremory:watchMusicVolume')||65),muted:localStorage.getItem('gremory:watchMusicMuted')==='1',engineReady:false,lastAdvanceId:'',adding:false,activating:false,currentTime:0,lastClockSync:0,endedId:''},
   rtc:{joined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true},premiumPoll:null,
   gameRealtimePoll:null,gameRealtimeSyncing:false
 };
@@ -432,7 +432,8 @@ function startUserSubscriptions(){
   // baixar novamente todo o histórico temporário de resultados a cada ação.
   state.userUnsubs.push(onValue(ref(db,`siteInventory/${uid}`),s=>{state.siteInventory=s.exists()?s.val():{};renderStore()}));
   state.userUnsubs.push(onValue(ref(db,`siteCustomization/${uid}`),s=>{state.siteCustomization=s.exists()?s.val():{};applyCustomization();renderStore();syncPublicCustomization().catch(()=>{})}));
-  state.userUnsubs.push(onValue(ref(db,'siteStoreCatalog'),sn=>{state.storeCatalog=sn.exists()?sn.val():{};mergeRemoteStoreCatalog(state.storeCatalog);renderStore();applyCustomization();}));
+  try{const cached=JSON.parse(localStorage.getItem('gremory:storeCatalog:v1')||'null');if(cached&&typeof cached==='object'&&!Array.isArray(cached)){state.storeCatalog=cached;mergeRemoteStoreCatalog(cached);renderStore();applyCustomization()}}catch{}
+  state.userUnsubs.push(onValue(ref(db,'siteStoreCatalog'),sn=>{state.storeCatalog=sn.exists()?sn.val():{};try{localStorage.setItem('gremory:storeCatalog:v1',JSON.stringify(state.storeCatalog))}catch{}mergeRemoteStoreCatalog(state.storeCatalog);renderStore();applyCustomization()},e=>{console.warn('[STORE CATALOG]',e?.code||e?.message||e);if(Object.keys(state.storeCatalog||{}).length){mergeRemoteStoreCatalog(state.storeCatalog);renderStore();applyCustomization()}}));
   state.userUnsubs.push(onValue(query(ref(db,`supportChats/${uid}/messages`),orderByChild('createdAt'),limitToLast(120)),sn=>{state.supportChat.messages=sn.exists()?sn.val():{};renderSupportChat()}));
   state.userUnsubs.push(onValue(ref(db,`pokemonSiteChallenges/${uid}`),s=>renderDuelInbox(s.exists()?s.val():{})));
   state.userUnsubs.push(onValue(ref(db,`pokemonSiteDuelIndex/${uid}`),s=>handleDuelIndex(s.exists()?s.val():{})));
@@ -1168,7 +1169,7 @@ $('adminSupportReplyForm')?.addEventListener('submit',async ev=>{ev.preventDefau
 
 
 // Tinder — o site responde primeiro; a Charlotte sincroniza depois.
-let tinderUploadFile=null;
+let tinderUploadFile=null,tinderUploadToken=0;
 function tinderPreview(url=''){if($('tinderProfilePreview'))$('tinderProfilePreview').src=url||state.profile?.avatar||avatarFor()||DEFAULT_AVATAR}
 function fillOwnTinderProfile(profile={}){
   const photo=profile.foto||profile.photo||state.profile?.avatar||'';
@@ -1203,55 +1204,67 @@ async function optimizeTinderPhoto(file){
   }catch(e){console.warn('[TINDER IMAGE]',e)}
   return file;
 }
-async function uploadTinderPhoto(file){
-  if(!state.user||!file)return'';
-  const optimized=await optimizeTinderPhoto(file),path=`tinder/${state.user.uid}/profile`,target=storageRef(storage,path);
-  if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent=optimized!==file?'Otimizando e enviando foto...':'Enviando sua foto...';
-  await uploadBytes(target,optimized,{contentType:optimized.type||'image/jpeg',cacheControl:'public,max-age=86400'});
-  return getDownloadURL(target);
+async function syncTinderProfileToCharlotte(data,statusText=true){
+  if(!linkedCharlotte())return;
+  bridgeBackground('tinder_profile_save',data,{onSuccess:()=>{if(statusText&&$('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent='Salvo no site e sincronizado com a Charlotte.'},onError:e=>{if(statusText&&$('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent='Salvo no site • sincronização pendente';console.warn('[TINDER SYNC]',e?.message||e)}}).catch(e=>console.warn('[TINDER QUEUE]',e));
+}
+async function uploadTinderPhotoInBackground(file,baseData,token){
+  try{
+    const optimized=await optimizeTinderPhoto(file);if(token!==tinderUploadToken)return;
+    const target=storageRef(storage,`tinder/${state.user.uid}/profile`),task=uploadBytesResumable(target,optimized,{contentType:optimized.type||'image/jpeg',cacheControl:'public,max-age=86400'});
+    await new Promise((resolve,reject)=>task.on('state_changed',snap=>{if(token!==tinderUploadToken){try{task.cancel()}catch{}return}const pct=Math.max(1,Math.min(99,Math.round((snap.bytesTransferred/Math.max(1,snap.totalBytes))*100)));if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent=`Perfil salvo • enviando foto ${pct}%`},reject,resolve));
+    if(token!==tinderUploadToken)return;
+    const foto=await getDownloadURL(task.snapshot.ref),profileRef=ref(db,`siteTinderProfiles/${state.user.uid}`);
+    const tx=await runTransaction(profileRef,current=>current?{...current,foto,updatedAt:Date.now()}:null);
+    if(!tx.committed)return;
+    if($('tinderProfilePhoto'))$('tinderProfilePhoto').value=foto;tinderPreview(foto);
+    if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent=linkedCharlotte()?'Foto enviada • sincronizando com a Charlotte...':'Foto enviada.';
+    const finalData={...baseData,foto};syncTinderProfileToCharlotte(finalData,true);state.tinder.poolAt=0;
+  }catch(e){if(token!==tinderUploadToken)return;console.warn('[TINDER UPLOAD]',e);if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent='Perfil salvo • não foi possível enviar a foto';toast('O perfil foi salvo, mas a foto não terminou de enviar.',5000)}
 }
 $('tinderProfileForm')?.addEventListener('submit',async ev=>{
   ev.preventDefault();if(!state.user)return;
   const idade=Number($('tinderProfileAge').value||0);if(idade<18||idade>99)return toast('O Tinder do site é somente para maiores de 18 anos.');
-  const submit=ev.submitter;try{
+  const submit=ev.submitter,file=tinderUploadFile,previewSrc=$('tinderProfilePreview')?.src||'';try{
     if(submit)submit.disabled=true;
-    let foto=String($('tinderProfilePhoto')?.value||'').trim().slice(0,1000);
-    if(tinderUploadFile){foto=await uploadTinderPhoto(tinderUploadFile);if($('tinderProfilePhoto'))$('tinderProfilePhoto').value=foto;}
+    const foto=String($('tinderProfilePhoto')?.value||'').trim().slice(0,1000);
     const data={uid:state.user.uid,nome:$('tinderProfileName').value.trim().slice(0,60)||displayName(),idade,bio:$('tinderProfileBio').value.trim().slice(0,300),foto,ativo:$('tinderProfileActive').checked,updatedAt:Date.now()};
-    const profileRef=ref(db,`siteTinderProfiles/${state.user.uid}`);
-    const tx=await runTransaction(profileRef,current=>({...data,likes:Number(current?.likes||0),matches:Number(current?.matches||0)}));
+    const profileRef=ref(db,`siteTinderProfiles/${state.user.uid}`),tx=await runTransaction(profileRef,current=>({...data,likes:Number(current?.likes||0),matches:Number(current?.matches||0)}));
     if(!tx.committed)throw new Error('Não foi possível salvar o perfil.');
-    const saved=tx.snapshot.val()||data;tinderUploadFile=null;if($('tinderProfileFile'))$('tinderProfileFile').value='';fillOwnTinderProfile({...saved,exists:true});
-    if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent=linkedCharlotte()?'Salvo. Sincronizando com a Charlotte...':'Perfil salvo no site.';
-    toast(linkedCharlotte()?'Perfil salvo. A Charlotte está sincronizando em segundo plano.':'Perfil salvo no site.');
-    if(linkedCharlotte())bridgeBackground('tinder_profile_save',data,{onSuccess:()=>{if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent='Salvo no site e sincronizado com a Charlotte.'},onError:e=>{if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent='Salvo no site • sincronização pendente';console.warn('[TINDER SYNC]',e?.message||e)}}).catch(e=>console.warn('[TINDER QUEUE]',e));
-    loadTinderProfile().catch(()=>{});
+    const saved=tx.snapshot.val()||data;fillOwnTinderProfile({...saved,exists:true});if(file&&previewSrc)tinderPreview(previewSrc);state.tinder.poolAt=0;
+    toast(file?'Perfil salvo. A foto está enviando em segundo plano.':linkedCharlotte()?'Perfil salvo. A Charlotte sincroniza em segundo plano.':'Perfil salvo no site.');
+    if(file){const token=++tinderUploadToken;tinderUploadFile=null;if($('tinderProfileFile'))$('tinderProfileFile').value='';if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent='Perfil salvo • preparando foto...';uploadTinderPhotoInBackground(file,data,token)}
+    else{if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent=linkedCharlotte()?'Perfil salvo • sincronizando...':'Perfil salvo no site.';syncTinderProfileToCharlotte(data,true)}
+    nextTinderProfile({forceReload:true}).catch(()=>{});
   }catch(e){if($('tinderProfileUploadStatus'))$('tinderProfileUploadStatus').textContent=e.message;toast(e.message)}finally{if(submit)submit.disabled=false}
 });
 function renderTinderCard(profile){
   const box=$('tinderSiteCard'),actions=$('tinderSiteActions');if(!box||!actions)return;box.innerHTML='';
-  if(!profile){box.innerHTML='<div class="empty-state">Não encontrei outro perfil disponível agora.</div>';actions.hidden=true;return}
+  if(!profile){box.innerHTML='<div class="empty-state">Não há outro perfil novo agora. Use Atualizar para procurar novamente.</div>';actions.hidden=true;return}
   const card=document.createElement('article');card.className='tinder-profile-card';const img=document.createElement('img');img.className='tinder-profile-photo';img.src=profile.photo||profile.foto||DEFAULT_AVATAR;img.alt='';img.loading='lazy';const copy=document.createElement('div');copy.className='tinder-profile-copy';const h=document.createElement('h3');h.textContent=`${profile.nome||'Usuário'}${profile.idade?`, ${profile.idade}`:''}`;const bio=document.createElement('p');bio.textContent=profile.bio||'Sem bio.';const stats=document.createElement('small');stats.textContent=`${profile.likes||0} curtidas • ${profile.matches||0} matches`;copy.append(h,bio,stats);card.append(img,copy);box.appendChild(card);actions.hidden=false
 }
-async function loadTinderProfile(){
-  if(!state.user)return;const box=$('tinderSiteCard');if(box)box.innerHTML='<div class="loading-line">Procurando perfil...</div>';
+function pickTinderCandidate(all={}){
+  const seen=new Set((state.tinder.seen||[]).map(String));
+  const candidates=Object.entries(all).map(([uid,p])=>({uid,...p,photo:p?.foto||p?.photo||''})).filter(p=>p.uid!==state.user?.uid&&p.ativo!==false&&!seen.has(String(p.uid))&&Number(p.idade||0)>=18);
+  if(!candidates.length)return null;const a=new Uint32Array(1);crypto.getRandomValues(a);return candidates[a[0]%candidates.length]
+}
+async function nextTinderProfile({forceReload=false,resetSeen=false}={}){
+  if(!state.user)return;const box=$('tinderSiteCard');
   try{
+    if(resetSeen)state.tinder.seen=[];
     let all=state.tinder.pool||{};
-    if(!state.tinder.poolAt||Date.now()-state.tinder.poolAt>60000){const sn=await get(ref(db,'siteTinderProfiles'));all=sn.exists()?sn.val():{};state.tinder.pool=all;state.tinder.poolAt=Date.now()}
-    const seen=new Set((state.tinder.seen||[]).map(String));
-    const candidates=Object.entries(all).map(([uid,p])=>({uid,...p,photo:p?.foto||p?.photo||''})).filter(p=>p.uid!==state.user.uid&&p.ativo!==false&&!seen.has(String(p.uid))&&Number(p.idade||0)>=18);
-    let profile=null;if(candidates.length){const a=new Uint32Array(1);crypto.getRandomValues(a);profile=candidates[a[0]%candidates.length];state.tinder.seen.push(profile.uid)}
-    else if(seen.size){state.tinder.seen=[];const fallback=Object.entries(all).map(([uid,p])=>({uid,...p,photo:p?.foto||''})).filter(p=>p.uid!==state.user.uid&&p.ativo!==false&&Number(p.idade||0)>=18);if(fallback.length){const a=new Uint32Array(1);crypto.getRandomValues(a);profile=fallback[a[0]%fallback.length];state.tinder.seen.push(profile.uid)}}
-    state.tinder.current=profile;renderTinderCard(profile);
+    if(forceReload||!state.tinder.poolAt||Date.now()-state.tinder.poolAt>60000){if(box&&!Object.keys(all).length)box.innerHTML='<div class="loading-line">Procurando perfil...</div>';const sn=await get(ref(db,'siteTinderProfiles'));all=sn.exists()?sn.val():{};state.tinder.pool=all;state.tinder.poolAt=Date.now()}
+    const profile=pickTinderCandidate(all);if(profile)state.tinder.seen.push(profile.uid);state.tinder.current=profile;renderTinderCard(profile)
   }catch(e){if(box)box.innerHTML=`<div class="empty-state">${escText(permissionMessage(e,e.message))}</div>`}
 }
-$('tinderRefreshBtn')?.addEventListener('click',loadTinderProfile);
-$('tinderSkipBtn')?.addEventListener('click',loadTinderProfile);
+async function loadTinderProfile(){return nextTinderProfile()}
+$('tinderRefreshBtn')?.addEventListener('click',()=>nextTinderProfile({forceReload:true,resetSeen:true}));
+$('tinderSkipBtn')?.addEventListener('click',()=>{const profile=pickTinderCandidate(state.tinder.pool||{});if(profile){state.tinder.seen.push(profile.uid);state.tinder.current=profile;renderTinderCard(profile)}else{state.tinder.current=null;renderTinderCard(null)}});
 $('tinderLikeBtn')?.addEventListener('click',async()=>{
   const p=state.tinder.current;if(!p)return;
   if(!linkedCharlotte())return toast('Vincule a Charlotte para enviar curtidas e receber matches.');
   try{
-    const targetUid=p.uid;toast('Curtida enviada.');loadTinderProfile().catch(()=>{});
+    const targetUid=p.uid,profile=pickTinderCandidate(state.tinder.pool||{});if(profile){state.tinder.seen.push(profile.uid);state.tinder.current=profile;renderTinderCard(profile)}else{state.tinder.current=null;renderTinderCard(null)}toast('Curtida enviada.');
     await bridgeBackground('tinder_like',{targetUid},{onSuccess:r=>{if(r.match){toast(r.contact?`Deu match! Contato: ${r.contact}`:'Deu match! Confira suas notificações.',5500);playNotificationTone()}},onError:e=>toast(`A curtida não foi sincronizada: ${e.message}`,5000)});
   }catch(e){toast(e.message)}
 });
@@ -1882,14 +1895,17 @@ async function createWatchRoom(ev){
   const form=$('watchCreateForm'),submit=form?.querySelector('button[type="submit"]'),oldText=submit?.textContent||'Criar sala';
   watchCreatePending=true;if(submit){submit.disabled=true;submit.textContent='Criando...'}
   try{
-    const code=await uniqueWatchCode(),createdAt=nowIso(),createdAtMs=Date.now(),name=$('watchNameInput').value.trim()||'Watch Party',visibility=String($('watchVisibilityInput')?.value||'public');
-    const room={meta:{code,name,ownerUid:state.user.uid,visibility,createdAt,updatedAt:createdAtMs},members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Host',joinedAt:createdAt}},invited:{[state.user.uid]:true},media:{url:'',type:'',playing:false,position:0,updatedAt:createdAtMs}};
-    const updates={};
-    updates[`watchRooms/${code}`]=room;
-    updates[`watchUserRooms/${state.user.uid}/${code}`]={code,name,role:'Host',visibility,joinedAt:createdAt};
-    if(visibility==='public'||visibility==='invite')updates[`watchPublicRooms/${code}`]={code,name,ownerUid:state.user.uid,ownerName:displayName(),memberCount:1,visibility,updatedAt:createdAtMs};
-    await update(ref(db),updates);
-    closeModal('watchCreateModal');form?.reset();await openWatchRoom(code);joinWatchVoice({automatic:true}).catch(()=>false)
+    const createdAt=nowIso(),createdAtMs=Date.now(),name=$('watchNameInput').value.trim()||'Watch Party',visibility=String($('watchVisibilityInput')?.value||'public');
+    let code='',room=null,committed=false;
+    for(let i=0;i<8&&!committed;i++){
+      code=randomCode();room={meta:{code,name,ownerUid:state.user.uid,visibility,createdAt,updatedAt:createdAtMs},members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Host',joinedAt:createdAt}},invited:{[state.user.uid]:true},media:{url:'',type:'',playing:false,position:0,updatedAt:createdAtMs}};
+      const tx=await runTransaction(ref(db,`watchRooms/${code}`),current=>current?undefined:room,{applyLocally:false});committed=tx.committed
+    }
+    if(!committed||!code)throw new Error('Não foi possível criar a sala.');
+    closeModal('watchCreateModal');form?.reset();openWatchRoom(code);joinWatchVoice({automatic:true}).catch(()=>false);
+    const tasks=[set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name,role:'Host',visibility,joinedAt:createdAt})];
+    if(visibility==='public'||visibility==='invite')tasks.push(set(ref(db,`watchPublicRooms/${code}`),{code,name,ownerUid:state.user.uid,ownerName:displayName(),memberCount:1,visibility,updatedAt:createdAtMs}));
+    Promise.allSettled(tasks).then(results=>{if(results.some(x=>x.status==='rejected'))console.warn('[WATCH INDEX]',results)});
   }catch(e){toast(permissionMessage(e,e.message||'Não foi possível criar a sala.'),6000)}
   finally{watchCreatePending=false;if(submit){submit.disabled=false;submit.textContent=oldText}}
 }
@@ -2216,7 +2232,7 @@ function renderWatchMusic(queueObj={},accessObj={},planObj={},playback={}){
     if(title)title.textContent=audioJoined?'Ativar Charlotte Music por ₹50':'Entre na voz e ative por ₹50';
     if(txt)txt.textContent=myPremium?'Premium: ao ativar, a playlist da sala fica ilimitada.':'Free: a sala ganha 10 músicas inclusas e depois cada nova custa ₹5.';
   }
-  if(activate){activate.hidden=!!plan?.active;activate.disabled=false;activate.textContent=audioJoined?'Ativar sala por ₹50':'Entrar na voz e ativar ₹50'}
+  if(activate){activate.hidden=!!plan?.active;activate.disabled=state.watchMusic.activating;activate.textContent=state.watchMusic.activating?'Ativando...':audioJoined?'Ativar sala por ₹50':'Entrar na voz e ativar ₹50'}
 
   const input=$('watchMusicInput'),submit=form.querySelector('button[type="submit"]');
   if(input)input.disabled=!audioJoined||!plan?.active||state.watchMusic.adding;
@@ -2242,11 +2258,12 @@ function renderWatchMusic(queueObj={},accessObj={},planObj={},playback={}){
   })
 }
 $('watchMusicActivateBtn')?.addEventListener('click',async()=>{
+  if(state.watchMusic.activating)return;
+  state.watchMusic.activating=true;renderWatchMusic(state.watchRoom?.musicQueue||{},state.watchRoom?.musicAccess||{},state.watchRoom?.musicPlan||{},state.watchRoom?.musicPlayback||{});
   try{
-    if(!watchMusicCanHear()){toast('Entrando na chamada de voz...');await joinWatchVoice();if(!watchMusicCanHear())return}
-    const r=await bridgeRequest('watch_music_activate',{roomCode:state.watchCode},20000);
-    toast(r.alreadyActive?'A Charlotte Music já está ativa nesta sala.':`Charlotte Music ativada por ₹${r.cost||50}.`);await refreshWatchRoomSnapshot()
-  }catch(e){toast(e.message)}
+    if(!watchMusicCanHear()){toast('Entrando na chamada de voz...');await joinWatchVoice();if(!watchMusicCanHear()){state.watchMusic.activating=false;renderWatchMusic(state.watchRoom?.musicQueue||{},state.watchRoom?.musicAccess||{},state.watchRoom?.musicPlan||{},state.watchRoom?.musicPlayback||{});return}}
+    await bridgeBackground('watch_music_activate',{roomCode:state.watchCode},{timeoutMs:30000,onSuccess:r=>{state.watchMusic.activating=false;if(r.plan&&state.watchRoom)state.watchRoom.musicPlan=r.plan;applyBridgeBalance(r.balance);toast(r.alreadyActive?'A música já está ativa nesta sala.':`Música ativada por ₹${r.cost||50}.`);renderWatchMusic(state.watchRoom?.musicQueue||{},state.watchRoom?.musicAccess||{},state.watchRoom?.musicPlan||{},state.watchRoom?.musicPlayback||{})},onError:e=>{state.watchMusic.activating=false;toast(e.message);renderWatchMusic(state.watchRoom?.musicQueue||{},state.watchRoom?.musicAccess||{},state.watchRoom?.musicPlan||{},state.watchRoom?.musicPlayback||{})}})
+  }catch(e){state.watchMusic.activating=false;toast(e.message);renderWatchMusic(state.watchRoom?.musicQueue||{},state.watchRoom?.musicAccess||{},state.watchRoom?.musicPlan||{},state.watchRoom?.musicPlayback||{})}
 });
 $('watchMusicForm')?.addEventListener('submit',async ev=>{
   ev.preventDefault();if(state.watchMusic.adding)return;if(!watchMusicCanHear())return toast('Entre na chamada de voz primeiro.');
@@ -2255,7 +2272,7 @@ $('watchMusicForm')?.addEventListener('submit',async ev=>{
   try{
     const r=await bridgeRequest('watch_music_add',{roomCode:state.watchCode,query},30000);
     $('watchMusicInput').value='';
-    toast(r.started?'Música iniciada.':r.cost>0?`Adicionada à fila por ₹${r.cost}.`:'Adicionada à fila.');await refreshWatchRoomSnapshot()
+    toast(r.started?'Música iniciada.':r.cost>0?`Adicionada à fila por ₹${r.cost}.`:'Adicionada à fila.')
   }catch(e){toast(e.message)}
   finally{state.watchMusic.adding=false;renderWatchMusic(state.watchRoom?.musicQueue||{},state.watchRoom?.musicAccess||{},state.watchRoom?.musicPlan||{},state.watchRoom?.musicPlayback||{})}
 });

@@ -361,8 +361,9 @@ body.fx-badge-demon #profileNameView::after,body.fx-badge-demon #sideName::after
 
 /* Lobby compacto: as salas não esticam o painel e salas por convite ficam claras. */
 .watch-sessions-card,.watch-public-card{min-width:0;padding:17px}
-.watch-public-card{grid-column:1/-1}
-.watch-sessions-card .watch-room-list,.watch-public-card .watch-room-list{grid-template-columns:repeat(auto-fit,minmax(250px,1fr));align-items:start}
+.watch-public-card{grid-column:2;min-width:0}
+.watch-sessions-card .watch-room-list,.watch-public-card .watch-room-list{grid-template-columns:repeat(auto-fill,minmax(220px,280px));justify-content:start;align-items:start}
+.watch-public-card .watch-room-card,.watch-sessions-card .watch-room-card{width:100%;max-width:280px}
 .watch-room-card{display:flex!important;align-items:center;justify-content:space-between;gap:10px;min-width:0;min-height:66px;padding:10px 11px!important}
 .watch-room-card-copy{display:grid;gap:4px;min-width:0;flex:1}
 .watch-room-card-title{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
