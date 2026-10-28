@@ -3191,21 +3191,70 @@ function renderSiteProgress(){
   if($('siteProgressBar'))$('siteProgressBar').style.width=`${Math.min(100,Math.round(100*(xp-base)/Math.max(1,next-base)))}%`;
   if($('profileSiteXp'))$('profileSiteXp').textContent=`${formatNumber(xp)} XP • Nível ${level}`;
   const badges=$('profileSiteBadges');if(badges){badges.replaceChildren();Object.values(row.achievements||{}).forEach(a=>{const badge=document.createElement('span');badge.className='pill';badge.textContent=`${a.icon||'✦'} ${a.title||'Conquista'}`;badge.title=a.description||'';badges.appendChild(badge)})}
-  const result=$('siteProgressCollection');if(result){result.replaceChildren();for(const kind of ['fish','ore'])for(const [item,amount] of Object.entries(row.inventory?.[kind]||{})){const chip=document.createElement('span');chip.className='pill';chip.textContent=`${item} × ${Number(amount)||0}`;result.appendChild(chip)}if(!result.children.length)result.textContent='Nenhum item ainda.'}
+  const result=$('siteProgressCollection');
+  if(result){
+    result.replaceChildren();
+    const prices={fish:{'Lambari':2,'Tilápia':4,'Traíra':7,'Peixe-dourado':13,'Carpa-lendária':30},ore:{'Pedra':1,'Cobre':3,'Ferro':5,'Prata':9,'Cristal raro':24}};
+    for(const kind of ['fish','ore'])for(const [item,amount] of Object.entries(row.inventory?.[kind]||{})){
+      if(Number(amount)<=0)continue;
+      const wrap=document.createElement('span');wrap.className='sell-item';
+      const name=document.createElement('span');name.className='pill';name.textContent=`${kind==='fish'?'🐟':'◆'} ${item} × ${Number(amount)||0}`;wrap.appendChild(name);
+      if(prices[kind][item]){const btn=document.createElement('button');btn.className='btn';btn.type='button';btn.textContent=`Vender 1 · ₹${prices[kind][item]}`;
+        btn.onclick=async()=>{if(!state.charlottePublic||state.charlottePublic.status!=='linked')return toast('Vincule sua Charlotte para receber Rúpias.');if(btn.disabled)return;btn.disabled=true;btn.textContent='Vendendo…';try{const sale=await bridgeRequest('site_progress',{action:'sell',kind,itemId:item},25000,false);$('siteActivityResult').textContent=`${sale.sold||item} vendido por ₹${sale.rupias||0}. Crédito registrado pela Charlotte.`;playGameSfx('purchase')}catch(e){toast(e.message,5000);btn.disabled=false;btn.textContent=`Vender 1 · ₹${prices[kind][item]}`}};
+        wrap.appendChild(btn);
+      }result.appendChild(wrap);
+    }
+    if(!result.children.length)result.textContent='Sua coleção está vazia. Comece pescando ou minerando.';
+  }
   for(const kind of ['fish','mine']){const target=$(kind==='fish'?'siteFishEnergy':'siteMineEnergy');if(!target)continue;const e=row.energy?.[kind]||{},refill=Number(e.startedAt||0)+86400000,used=Date.now()>=refill?0:Number(e.used||0),max=accountSnapshot().premium?8:6;target.textContent=`Energia: ${Math.max(0,max-used)}/${max}${used>0?' • renova em '+new Date(refill).toLocaleString('pt-BR'):''}`}
 }
+const SITE_RACERS={horse:['Pernas Velozes','Trovão','Cometa','Ventania','Faísca','Estrela'],car:['Azul','Amarelo','Rosa','Verde','Vermelho','Roxo']};
+function activityStage(kind){
+  const stage=$('siteActivityStage');if(!stage)return null;stage.hidden=false;stage.replaceChildren();
+  if(kind==='fish'||kind==='mine'){
+    const scene=document.createElement('div');scene.className=kind==='fish'?'fishing-animation':'mining-animation';
+    const figure=document.createElement('span');figure.className=kind==='fish'?'fisher':'miner';figure.textContent=kind==='fish'?'🧑‍🌾🎣':'🧑‍🏭⛏️';
+    scene.appendChild(figure);if(kind==='fish'){const lake=document.createElement('span');lake.className='lake';lake.textContent='🌊🐟';scene.append(lake)}else{const rock=document.createElement('span');rock.textContent='🪨';scene.appendChild(rock)}stage.appendChild(scene);return stage;
+  }
+  const lanes=[];
+  SITE_RACERS[kind].forEach((name,i)=>{
+    const lane=document.createElement('div');lane.className='race-lane';const label=document.createElement('span');label.className='runner-name';label.textContent=`${i+1} · ${name}`;
+    const track=document.createElement('div');track.className='race-track';const runner=document.createElement('span');runner.className='runner';runner.textContent=kind==='horse'?'🐎':['🚙','🏎️','🚗','🚕','🚘','🚖'][i];track.append(runner);lane.append(label,track);stage.append(lane);lanes.push({lane,track,runner});
+  });return lanes;
+}
+async function animateRace(lanes,winner){
+  if(!Array.isArray(lanes))return;
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  for(const [i,entry] of lanes.entries()){
+    // A posição final é apenas visual. O vencedor já foi decidido no servidor.
+    const width=Math.max(0,entry.track.clientWidth-entry.runner.clientWidth-5);
+    const ratio=i+1===winner?1:0.55+((i*7+winner*3)%32)/100;
+    entry.runner.style.transform=`translateX(${Math.round(width*ratio)}px)`;
+    if(i+1===winner)entry.lane.classList.add('winner');
+  }
+  if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches)await new Promise(r=>setTimeout(r,2150));
+}
 async function runSiteActivity(kind,button){
-  if(!state.user)return toast('Entre na conta primeiro.');
-  if(button?.disabled)return;
+  if(!state.user)return toast('Entre na conta primeiro.');if(button?.disabled)return;
+  const message=$('siteActivityResult'),label=button?.textContent||'';
+  const choice=['horse','car'].includes(kind)?Number($(kind==='horse'?'siteHorseChoice':'siteCarChoice')?.value||1):undefined;
   if(button)button.disabled=true;
-  const label=button?.textContent||'',message=$('siteActivityResult');
-  if(message)message.textContent='Registrando atividade com segurança...';
+  const visual=activityStage(kind);
+  if(message)message.textContent=kind==='fish'?'Lançando a isca…':kind==='mine'?'Procurando minério…':'Preparando a corrida…';
   try{
-    const r=await bridgeRequest('site_progress',{action:kind},18000,false);
-    const value=r.loot?`${r.loot.label} encontrado!`:`Seu participante chegou na posição ${r.raceWinner} da corrida.`;
-    if(message)message.textContent=`${value} +${r.xp||0} XP • Nível ${r.level||1}.`;
-    playGameSfx('correct');
-  }catch(e){if(message)message.textContent=e.message;toast(e.message,5000)}finally{if(button){button.disabled=false;button.textContent=label}}
+    const r=await bridgeRequest('site_progress',{action:kind,...(choice?{choice}:{})},22000,false);
+    if(['horse','car'].includes(kind)){
+      if(message)message.textContent='A corrida começou!';await animateRace(visual,Number(r.raceWinner));
+      const name=SITE_RACERS[kind][Number(r.raceWinner)-1]||`Nº ${r.raceWinner}`;
+      if(message)message.textContent=`🏁 ${name} venceu! ${Number(r.choice)===Number(r.raceWinner)?`Seu palpite acertou! ${r.prize?`+₹${r.prize} pela Charlotte.`:'Vincule Charlotte para receber prêmios.'}`:'Seu palpite não venceu desta vez.'} +${r.xp||0} XP.`;
+      if(r.prize)playGameSfx('purchase');
+      else if(Number(r.choice)===Number(r.raceWinner))playGameSfx('correct');
+    }else{
+      if(message)message.textContent=`${r.loot?`${r.loot.label} encontrado!`:(kind==='fish'?'A isca voltou vazia. Nenhum peixe desta vez.':'Nada encontrado desta vez.')} +${r.xp||0} XP • Nível ${r.level||1}.`;
+      if(r.loot)playGameSfx('correct');
+    }
+  }catch(e){if(message)message.textContent=e.message;toast(e.message,5000)}
+  finally{if(button){button.disabled=false;button.textContent=label}}
 }
 for(const [id,kind] of [['siteFishBtn','fish'],['siteMineBtn','mine'],['siteHorseBtn','horse'],['siteCarBtn','car']])$(id)?.addEventListener('click',()=>runSiteActivity(kind,$(id)));
 let siteXpHeartbeatBusy=false;

@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261027-v14-recovery-v3">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261028-social-games-v1">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -641,13 +641,14 @@
             <div class="panel-head"><div><span class="tag">JORNADA GREMORY</span><h3 id="progressionTitle">Suas atividades</h3><small class="muted">Recompensas de XP, calculadas no servidor. Sem apostas ou alterações de Rúpias.</small></div><span class="pill" id="siteProgressLevel">Nível 1</span></div>
             <div class="site-progress-track"><span id="siteProgressXp">0 XP</span><div class="site-progress-bar"><i id="siteProgressBar" style="width:0%"></i></div></div>
             <div class="site-activity-grid">
-              <div class="site-activity"><span class="activity-icon" aria-hidden="true">🐟</span><strong>Pesca</strong><small id="siteFishEnergy">Energia: —</small><button id="siteFishBtn" class="btn primary" type="button">Lançar isca</button></div>
-              <div class="site-activity"><span class="activity-icon" aria-hidden="true">◆</span><strong>Mineração</strong><small id="siteMineEnergy">Energia: —</small><button id="siteMineBtn" class="btn primary" type="button">Minerar</button></div>
-              <div class="site-activity"><span class="activity-icon" aria-hidden="true">♞</span><strong>Corrida de cavalos</strong><small>Corrida gratuita • +XP</small><button id="siteHorseBtn" class="btn" type="button">Correr</button></div>
-              <div class="site-activity"><span class="activity-icon" aria-hidden="true">🏎</span><strong>Corrida de carrinhos</strong><small>Corrida gratuita • +XP</small><button id="siteCarBtn" class="btn" type="button">Correr</button></div>
+              <div class="site-activity"><span class="activity-icon" aria-hidden="true">🎣</span><strong>Pesca</strong><small id="siteFishEnergy">Energia: —</small><small>Pode não fisgar nada. Venda os peixes por Rúpias.</small><button id="siteFishBtn" class="btn primary" type="button">Lançar isca</button></div>
+              <div class="site-activity"><span class="activity-icon" aria-hidden="true">⛏️</span><strong>Mineração</strong><small id="siteMineEnergy">Energia: —</small><small>Guarde minérios ou venda à Charlotte.</small><button id="siteMineBtn" class="btn primary" type="button">Minerar</button></div>
+              <div class="site-activity"><span class="activity-icon" aria-hidden="true">🐎</span><strong>Corrida de cavalos</strong><small>Grátis • escolha o vencedor • +XP</small><label class="race-choice-label">Seu cavalo<select id="siteHorseChoice" aria-label="Escolha o cavalo"><option value="1">1 · Pernas Velozes</option><option value="2">2 · Trovão</option><option value="3">3 · Cometa</option><option value="4">4 · Ventania</option><option value="5">5 · Faísca</option><option value="6">6 · Estrela</option></select></label><button id="siteHorseBtn" class="btn" type="button">Iniciar corrida</button></div>
+              <div class="site-activity"><span class="activity-icon" aria-hidden="true">🏎️</span><strong>Corrida de carrinhos</strong><small>Grátis • escolha o vencedor • +XP</small><label class="race-choice-label">Seu carrinho<select id="siteCarChoice" aria-label="Escolha o carrinho"><option value="1">1 · Azul</option><option value="2">2 · Amarelo</option><option value="3">3 · Rosa</option><option value="4">4 · Verde</option><option value="5">5 · Vermelho</option><option value="6">6 · Roxo</option></select></label><button id="siteCarBtn" class="btn" type="button">Iniciar corrida</button></div>
             </div>
-            <p class="muted" id="siteActivityResult" role="status" aria-live="polite">A energia diária é restaurada 24 horas após sua primeira atividade. Premium recebe 2 energias adicionais e XP em dobro.</p>
-            <details class="site-inventory"><summary>Minha coleção e conquistas</summary><div id="siteProgressCollection" class="site-progress-collection">Nenhum item ainda.</div></details>
+            <div id="siteActivityStage" class="site-activity-stage" aria-label="Animação da atividade" hidden></div>
+            <p class="muted" id="siteActivityResult" role="status" aria-live="polite">A energia retorna 24 horas após começar o ciclo. Em corridas, cada vencedor tem 1 chance em 6; se você acertar e tiver Charlotte vinculada, recebe ₹18. As vendas também exigem vínculo.</p>
+            <details class="site-inventory" open><summary>Minha coleção • vender por Rúpias</summary><div id="siteProgressCollection" class="site-progress-collection">Nenhum item ainda.</div><small class="muted">Preços pequenos definidos no servidor. Cada item vendido é removido da coleção; a Charlotte recebe um crédito único.</small></details>
           </article>
         </section>
 
@@ -918,9 +919,10 @@
 
 <section class="view community-view" data-view="feed">
  <div class="section-head"><div><span class="tag">COMUNIDADE</span><h2>Seu espaço na Gremory</h2><p class="muted">Momentos, amigos e suas conquistas.</p></div><button id="feedRefresh" class="btn" type="button">Atualizar</button></div>
+ <article class="panel feed-stories-panel"><div class="feed-stories-head"><strong>Stories · 24 horas</strong><label class="btn mini-btn">+ Meu story <input id="feedStoryFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden></label></div><div id="feedStories" class="feed-stories-strip" aria-live="polite"><small class="muted">Carregando stories…</small></div><p id="feedStoryStatus" class="muted small" role="status"></p></article>
  <article class="panel"><form id="feedForm" class="stack-form"><label>Nova publicação<textarea id="feedText" maxlength="1800" rows="3" placeholder="O que você quer compartilhar?"></textarea></label><label>Foto ou vídeo<input id="feedFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"></label><p class="muted">Fotos até 10 MB • Vídeos até 50 MB. Publique apenas conteúdo que você pode compartilhar.</p><label>Ou link HTTPS da mídia<input id="feedUrl" type="url" placeholder="https://..."></label><label>Tipo da mídia por link<select id="feedKind"><option value="image">Foto / GIF</option><option value="video">Vídeo MP4 / WebM</option></select></label><button class="btn primary" type="submit">Publicar</button><p id="feedProgress" role="status"></p></form></article>
  <div class="feed-filters"><button class="btn active" id="feedAll" type="button">Todos</button><button class="btn" id="feedFollowing" type="button">Seguindo</button><button class="btn" id="feedMyProfile" type="button">Meu perfil e emblemas</button></div>
- <div id="feedProfile" class="panel" hidden></div><div id="feedList" class="feed-list" aria-live="polite"></div><button id="feedMore" class="btn" type="button">Carregar mais</button>
+ <div id="feedProfile" class="panel" hidden></div><div id="feedStoryViewer" class="feed-story-viewer" hidden role="dialog" aria-modal="true" aria-label="Visualizar story"><button class="btn" id="feedStoryClose" type="button" aria-label="Fechar story">✕ Fechar</button><div id="feedStoryViewerContent"></div></div><div id="feedList" class="feed-list" aria-live="polite"></div><button id="feedMore" class="btn" type="button">Carregar mais</button>
 </section>
         <section class="view" data-view="updates">
           <div class="section-head"><div><span class="tag">ATUALIZAÇÕES</span><h2>Novidades</h2></div></div>
@@ -1139,6 +1141,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261027-v14-recovery-v3"></script>
+  <script type="module" src="/assets/js/app.js?v=20261028-social-games-v1"></script>
 </body>
 </html>

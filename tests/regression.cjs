@@ -71,3 +71,11 @@ test('Game invite validates wager from real bet property, not obsolete wager key
   assert.doesNotMatch(expr,/newData.child\('wager'\)/);
   assert.match(expr,/newData.child\('mode'\)/);
 });
+test('Venda e corridas têm permissões específicas sem permitir premiar-se pelo cliente',()=>{
+ assert.equal(validJob('site_progress',false,{action:'sell',kind:'fish',itemId:'Tilápia'}),true);
+ assert.equal(validJob('site_progress',false,{action:'sell',kind:'fish',itemId:'Tilápia',reward:999}),false);
+ assert.equal(validJob('site_progress',false,{action:'sell',kind:'wrong',itemId:'Tilápia'}),false);
+ assert.equal(validJob('site_progress',false,{action:'car',choice:1}),true);
+ assert.equal(validJob('site_progress',false,{action:'horse',choice:7}),false);
+ assert.equal(validJob('site_progress',false,{action:'horse',choice:2,payout:100000}),false);
+});

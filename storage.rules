@@ -10,6 +10,16 @@ service firebase.storage {
    allow update: if false;
   }
 
+  // Stories de imagem publicados pelo dono da conta; remova arquivos expirados periodicamente.
+  match /stories/{uid}/{file} {
+   allow read: if request.auth != null;
+   allow create: if request.auth != null && request.auth.uid == uid
+     && request.resource.contentType.matches('image/(jpeg|png|webp|gif)')
+     && request.resource.size <= 5 * 1024 * 1024;
+   allow delete: if request.auth != null && (request.auth.uid == uid || (request.auth.token.email == 'losermodder@gmail.com' && request.auth.token.email_verified == true));
+   allow update: if false;
+  }
+
   // Avatar do próprio usuário. O URL de download é salvo no perfil após upload.
   match /avatars/{uid}/{file} {
    allow read: if request.auth != null;

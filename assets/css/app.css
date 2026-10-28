@@ -1313,3 +1313,28 @@ body.watch-pseudo-fullscreen #watchScreenStage.watch-fullscreen-ui-hidden{cursor
 .plan-card strong{font-size:31px}.plan-card>span{font-size:12px;color:var(--muted);min-height:2.8em}
 @media(max-width:1020px){.premium-benefits-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.premium-benefits-grid{grid-template-columns:1fr}.premium-rupias-card{padding:17px}.premium-rupias-card .admin-row-actions{display:grid;grid-template-columns:1fr}.plan-card{padding:17px}.watch-voice-label{font-size:11px}}
+
+/* V14: minijogos e stories - animações leves, sem canvas ou loops pesados */
+.site-activity-stage{margin:12px 0;padding:12px;border:1px solid var(--border,rgba(150,160,200,.25));border-radius:16px;background:rgba(75,85,120,.09);overflow:hidden;min-height:88px}
+.site-activity-stage[hidden]{display:none}
+.race-choice-label{display:flex;flex-direction:column;gap:4px;margin:8px 0;font-size:.84rem}
+.race-choice-label select{max-width:100%;padding:9px;border-radius:10px;color:inherit;background:var(--panel,#1e2030);border:1px solid rgba(150,160,200,.3)}
+.site-activity-stage .race-lane{display:flex;align-items:center;gap:9px;margin:4px 0;min-height:31px}
+.race-lane .runner-name{font-size:.7rem;width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.race-lane .race-track{position:relative;flex:1;border-bottom:1px dashed rgba(160,160,180,.45);height:29px}
+.race-lane .runner{position:absolute;left:0;top:0;font-size:1.3rem;transform:translateX(0);transition:transform 2s cubic-bezier(.16,.65,.45,1)}
+.race-lane.winner .runner-name{font-weight:700;color:var(--accent,#b3a3fb)}
+.fishing-animation{display:flex;align-items:center;justify-content:center;min-height:102px;gap:16px}
+.fishing-animation .fisher{font-size:2.6rem;display:inline-block;transform-origin:80% 60%;animation:rodCast 1s ease-in-out}
+.fishing-animation .lake{font-size:2.5rem;animation:bobWater 1.3s ease-in-out infinite alternate}
+.mining-animation{font-size:2.3rem;text-align:center;min-height:102px;display:grid;place-items:center;animation:mineStrike .65s ease-in-out 3}
+@keyframes rodCast{0%{transform:rotate(-25deg)}60%{transform:rotate(20deg)}100%{transform:rotate(0)}}
+@keyframes bobWater{to{transform:translateY(7px)}}
+@keyframes mineStrike{50%{transform:rotate(-16deg) scale(1.08)}}
+.site-progress-collection .sell-item{display:inline-flex;align-items:center;gap:6px;margin:4px;flex-wrap:wrap}
+.sell-item button{font-size:.75rem;padding:5px 9px;border-radius:8px}
+.feed-stories-panel{padding:12px!important}.feed-stories-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.feed-stories-strip{display:flex;gap:14px;overflow-x:auto;padding:10px 2px;scroll-snap-type:x proximity}.feed-story-person{min-width:68px;max-width:78px;border:0;background:transparent;color:inherit;cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:.75rem;scroll-snap-align:start}.feed-story-person img{height:60px;width:60px;border-radius:50%;object-fit:cover;border:3px solid #a785fb;padding:2px}.feed-story-viewer{position:fixed;inset:0;background:rgba(9,10,15,.95);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px}.feed-story-viewer[hidden]{display:none}.feed-story-viewer img{display:block;max-height:78dvh;max-width:min(90vw,450px);object-fit:contain;border-radius:14px}.feed-story-viewer .story-author{font-weight:700;color:white}
+@media(max-width:600px){.site-activity-stage .race-lane .runner-name{width:60px}.feed-stories-strip{gap:8px}.feed-story-person img{width:54px;height:54px}}
+@media(prefers-reduced-motion:reduce){.site-activity-stage *, .feed-story-viewer *{animation:none!important;transition-duration:.01ms!important}}
+
+.feed-profile-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}.feed-profile-header .feed-post-avatar{width:74px;height:74px;border-radius:50%;object-fit:cover}.feed-profile-header h3,.feed-profile-header p{margin:3px 0}.feed-profile-gallery{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:8px 0 16px}.feed-profile-gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;background:rgba(120,120,150,.15)}

@@ -22,7 +22,7 @@ test('progress level and daily 24h energy renewal',()=>{
 });
 test('site fishing/mining server-only energy and no wallet mutations',async()=>{
  const db=fakeDb();const a=await request(db,{action:'fish'});assert.equal(a.body.ok,true);
- assert.equal(db.store.siteProgress.a.inventory.fish[a.body.loot.label],1);
+ if(a.body.loot)assert.equal(db.store.siteProgress.a.inventory.fish[a.body.loot.label],1);else assert.equal(Object.keys(db.store.siteProgress.a.inventory.fish).length,0);
  const b=await request(db,{action:'mine'});assert.equal(b.body.ok,true);
  assert.equal(db.store.siteProgress.a.inventory.ore[b.body.loot.label],1);
  for(let i=0;i<5;i++)assert.equal((await request(db,{action:'fish'})).body.ok,true);
@@ -38,9 +38,39 @@ test('social XP requires existing owned post and cannot repeat same receipt',asy
 });
 test('premium account doubles site XP and suspended accounts are blocked',async()=>{
  const db=fakeDb({charlotteSync:{a:{account:{premium:true}}}});
- const xp=await request(db,{action:'horse'});assert.equal(xp.body.xp,16);
+ const xp=await request(db,{action:'horse'});assert.equal(xp.body.xp,10);
  db.store.siteBans={a:{active:true,expiresAt:Date.now()+100000}};
  const blocked=await request(db,{action:'mine'});assert.equal(blocked.statusCode,403);
  db.store.siteBans.a.expiresAt=Date.now()-100;
- const unblocked=await request(db,{action:'mine'});assert.equal(unblocked.body.xp,24);
+ const unblocked=await request(db,{action:'mine'});assert.equal(unblocked.body.xp,20);
+});
+
+test('fish can be empty but still consumes one energy and cannot mint Rúpias directly',async()=>{
+ const original=require('node:crypto').randomInt;
+ // Secure random rolls are independently randomized; verify the server-only contract instead of forcing chance.
+ const engine=require('../database/gremory_site_progress.js');
+ assert.equal(engine.saleValue('fish','Lambari'),2);
+ assert.equal(engine.saleValue('ore','Cristal raro'),24);
+ assert.equal(engine.saleValue('ore','Item inventado'),0);
+ assert.equal(engine.saleValue('fish','../../siteWallets'),0);
+ const db=fakeDb();const entry=await engine.executeSiteProgress(db,'a',{action:'fish',requestId:'unique_job_1234'});
+ assert.equal(entry.ok,true);assert.equal(db.store.siteProgress.a.energy.fish.used,1);
+ assert.equal(db.store.siteWallets,undefined);
+});
+test('race winner, selected runner and payout are resolved only on server; duplicate job is idempotent',async()=>{
+ const engine=require('../database/gremory_site_progress.js'),db=fakeDb();
+ await assert.rejects(engine.executeSiteProgress(db,'a',{action:'car',choice:99}),/Escolha/);
+ const p={action:'car',choice:2,walletLinked:true,requestId:'same_race_abc1234'};
+ const first=await engine.executeSiteProgress(db,'a',p);assert.ok(first.raceWinner>=1&&first.raceWinner<=6);
+ assert.equal(first.prize,first.raceWinner===2?18:0);
+ const repeated=await engine.executeSiteProgress(db,'a',p);assert.deepEqual(repeated,first);
+ assert.equal(db.store.siteProgress.a.totals.car,1);
+});
+test('inventory sale reservation happens once and rejects fabricated items',async()=>{
+ const engine=require('../database/gremory_site_progress.js'),db=fakeDb({siteProgress:{a:{inventory:{fish:{'Lambari':2},ore:{}},sales:{}}}});
+ const x=await engine.reserveSiteSale(db,'a',{kind:'fish',label:'Lambari',operationId:'sale_op_unique_abcdef'});
+ assert.equal(x.amount,2);assert.equal(db.store.siteProgress.a.inventory.fish.Lambari,1);
+ const replay=await engine.reserveSiteSale(db,'a',{kind:'fish',label:'Lambari',operationId:'sale_op_unique_abcdef'});assert.deepEqual(replay,x);
+ assert.equal(db.store.siteProgress.a.inventory.fish.Lambari,1);
+ await assert.rejects(engine.reserveSiteSale(db,'a',{kind:'fish',label:'Lambari900',operationId:'sale_op_unique_another'}),/inválida/);
 });

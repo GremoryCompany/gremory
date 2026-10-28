@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 const {authenticate, publicError, SiteError} = require('./site-wallet');
 const DAY = 86400000;
 const LIMITS = Object.freeze({post:5, comment:12, like:20, heartbeat:12, fish:8, mine:8, horse:10, car:10});
-const XP = Object.freeze({post:20, comment:8, like:2, heartbeat:15, fish:12, mine:12, horse:8, car:8});
+const XP = Object.freeze({post:20, comment:8, like:2, heartbeat:15, fish:8, mine:10, horse:5, car:5});
 const FISH = ['Lambari','Tilápia','Traíra','Peixe-dourado','Carpa-lendária'];
 const ORES = ['Pedra','Cobre','Ferro','Prata','Cristal raro'];
 function integer(v,d=0){return Number.isSafeInteger(Number(v))?Number(v):d}
@@ -22,7 +22,7 @@ function awards(row){
  return {...(row.achievements||{}),...a};
 }
 function energyState(row,kind,now,premium){const total=premium?8:6;let e={...(row.energy?.[kind]||{})};if(!e.startedAt||now-e.startedAt>=DAY)e={startedAt:now,used:0};return{...e,remaining:Math.max(0,total-integer(e.used)),max:total,refillAt:e.startedAt+DAY}}
-function rollLoot(kind){const n=crypto.randomInt(100);if(kind==='fish')return{label:FISH[n<50?0:n<77?1:n<92?2:n<99?3:4],rarity:n<77?'common':n<99?'rare':'legendary'};return{label:ORES[n<50?0:n<77?1:n<92?2:n<99?3:4],rarity:n<77?'common':n<99?'rare':'legendary'}}
+function rollLoot(kind){const n=crypto.randomInt(100);if(kind==='fish'&&n<22)return null;if(kind==='fish')return{label:FISH[n<50?0:n<77?1:n<92?2:n<99?3:4],rarity:n<77?'common':n<99?'rare':'legendary'};return{label:ORES[n<50?0:n<77?1:n<92?2:n<99?3:4],rarity:n<77?'common':n<99?'rare':'legendary'}}
 async function verifySocial(db,uid,kind,id){
  if(!safeId(id))throw new SiteError(400,'ITEM_INVALID','Publicação inválida.');
  let path;
@@ -58,10 +58,10 @@ async function handleProgress(req,res,{readJsonBody,sendJson}){
    if(['post','comment','like'].includes(kind)&&row.receipts[`${kind}:${id}`]){error='Você já recebeu XP por esta atividade.';return;}
    if(kind==='heartbeat'&&now-integer(row.lastAction.heartbeat)<300000){error='XP de presença disponível a cada 5 minutos.';return;}
    if(['horse','car'].includes(kind)&&now-integer(row.lastAction[kind])<60000){error='Aguarde um minuto antes da próxima corrida.';return;}
-   if(loot){const en=energyState(row,kind,now,premium);if(en.remaining<1){error='Energia esgotada. Sua energia volta 24 horas após o início da rodada.';return;}row.energy[kind]={startedAt:en.startedAt,used:en.used+1};const bucket=kind==='mine'?'ore':'fish';row.inventory[bucket]=row.inventory[bucket]||{};row.inventory[bucket][loot.label]=integer(row.inventory[bucket][loot.label])+1;}
+   if(kind==='fish'||kind==='mine'){const en=energyState(row,kind,now,premium);if(en.remaining<1){error='Energia esgotada. Sua energia volta 24 horas após o início da rodada.';return;}row.energy[kind]={startedAt:en.startedAt,used:en.used+1};const bucket=kind==='mine'?'ore':'fish';row.inventory[bucket]=row.inventory[bucket]||{};if(loot)row.inventory[bucket][loot.label]=integer(row.inventory[bucket][loot.label])+1;}
    const gained=XP[kind]*(premium?2:1);row.xp=integer(row.xp)+gained;row.level=level(row.xp);row.updatedAt=now;row.daily[kind]=count+1;row.totals[kind]=integer(row.totals[kind])+1;row.lastAction[kind]=now;
    if(['post','comment','like'].includes(kind))row.receipts[`${kind}:${id}`]=now;
-   row.achievements=awards(row);applied=true;result={xp:gained,totalXp:row.xp,level:row.level,loot,raceWinner,energy:loot?energyState(row,kind,now,premium):null};return row;
+   row.achievements=awards(row);applied=true;result={xp:gained,totalXp:row.xp,level:row.level,loot,raceWinner,energy:['fish','mine'].includes(kind)?energyState(row,kind,now,premium):null};return row;
   },undefined,false);
   if(!tx.committed||!applied)throw new SiteError(409,'XP_LIMIT',error||'Ação não confirmada. Tente novamente.');
   return sendJson(res,200,{ok:true,...result});

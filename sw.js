@@ -1,9 +1,9 @@
-const CACHE='gremory-v14-recovery-20261027-v3';
+const CACHE='gremory-v14-20261028-social-games-v1';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261027-v14-recovery-v3',
-  '/assets/js/app.js?v=20261027-v14-recovery-v3',
+  '/assets/css/app.css?v=20261028-social-games-v1',
+  '/assets/js/app.js?v=20261028-social-games-v1',
   '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',

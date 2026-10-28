@@ -4,12 +4,33 @@ import {getStorage,ref as storageRef,uploadBytesResumable,getDownloadURL,deleteO
 
 export function initCommunity({app,db,getUser,isAdmin,toast,getSelectedUid,bridgeRequest}){
  const $=id=>document.getElementById(id),storage=getStorage(app);
- let posts={},following={},directory={},onlyFollowing=false,limit=20,subscriptions=[],postSub=null,rowSubs=[],busy=false,upload=null,epoch=0;
+ let posts={},stories={},following={},directory={},onlyFollowing=false,limit=20,subscriptions=[],postSub=null,rowSubs=[],busy=false,upload=null,epoch=0;
  const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n};
  const button=(text,action)=>{const b=node('button',text,'btn');b.type='button';b.onclick=()=>Promise.resolve().then(action).catch(e=>toast(e.message));return b};
  const name=uid=>uid==='charlotte'?'Charlotte':directory[uid]?.nome||directory[uid]?.name||'Participante';
  const safeUrl=value=>{try{const u=new URL(value);return u.protocol==='https:'?u.href:''}catch{return ''}};
  const cleanupRows=()=>{rowSubs.splice(0).forEach(fn=>fn())};
+ // Stories persistidos no Firebase, separados da Charlotte. Exibição expira em 24h.
+ function renderStories(){
+  const strip=$('feedStories');if(!strip)return;strip.replaceChildren();const now=Date.now();
+  const active=Object.entries(stories).flatMap(([owner,items])=>Object.entries(items||{}).filter(([,st])=>Number(st.expiresAt)>now&&Number(st.createdAt)<=now+60000).map(([id,st])=>({owner,id,...st}))).sort((a,b)=>b.createdAt-a.createdAt);
+  const owners=new Set();for(const story of active){if(owners.has(story.owner))continue;owners.add(story.owner);
+   const item=node('button',null,'feed-story-person');item.type='button';const img=node('img');img.alt='';img.loading='lazy';img.src=safeUrl(directory[story.owner]?.avatar)||'/assets/img/profile.jpg';item.append(img,node('span',name(story.owner)));
+   item.onclick=()=>{const view=$('feedStoryViewer'),body=$('feedStoryViewerContent');body.replaceChildren(node('p',name(story.owner),'story-author'));const photo=node('img');photo.src=safeUrl(story.mediaUrl)||'/assets/img/profile.jpg';photo.alt=`Story de ${name(story.owner)}`;body.append(photo);if(story.owner===getUser()?.uid||isAdmin())body.append(button('Excluir story',async()=>{await remove(ref(db,`communityStories/${story.owner}/${story.id}`));view.hidden=true;if(story.storagePath?.startsWith(`stories/${story.owner}/`))await deleteObject(storageRef(storage,story.storagePath)).catch(()=>{})}));view.hidden=false};strip.appendChild(item);
+  }
+  if(!owners.size)strip.append(node('small','Ninguém publicou stories nas últimas 24 horas.','muted'));
+ }
+ $('feedStoryClose')?.addEventListener('click',()=>{$('feedStoryViewer').hidden=true});
+ $('feedStoryViewer')?.addEventListener('click',event=>{if(event.target.id==='feedStoryViewer')event.target.hidden=true});
+ $('feedStoryFile')?.addEventListener('change',async event=>{
+  const user=getUser(),file=event.target.files?.[0],status=$('feedStoryStatus');if(!user||!file)return;
+  if(!/^image\/(jpeg|png|webp|gif)$/.test(file.type)||file.size>5*1024*1024){status.textContent='Story aceita JPG, PNG, GIF ou WebP até 5 MB.';event.target.value='';return}
+  const id=push(ref(db,`communityStories/${user.uid}`)).key,storagePath=`stories/${user.uid}/${id}`,key=storageRef(storage,storagePath);
+  try{
+    status.textContent='Enviando story…';await new Promise((resolve,reject)=>uploadBytesResumable(key,file,{contentType:file.type}).on('state_changed',null,reject,resolve));
+    const mediaUrl=await getDownloadURL(key);await set(ref(db,`communityStories/${user.uid}/${id}`),{uid:user.uid,mediaUrl,storagePath,createdAt:Date.now(),expiresAt:Date.now()+86400000});status.textContent='Story publicado! Visível por 24 horas.';
+  }catch(e){await deleteObject(key).catch(()=>{});status.textContent='Erro ao publicar story.';toast(e.message)}finally{event.target.value=''}
+ });
  function subscribePosts(){postSub?.();postSub=onValue(query(ref(db,'communityPosts'),orderByChild('createdAt'),limitToLast(limit)),sn=>{posts=sn.val()||{};render()},e=>{$('feedList').textContent='Não foi possível carregar o feed. Verifique as regras do Firebase.';toast(e.message)})}
  function render(){
   cleanupRows();const box=$('feedList');box.replaceChildren();
@@ -34,7 +55,16 @@ export function initCommunity({app,db,getUser,isAdmin,toast,getSelectedUid,bridg
  async function showProfile(uid){
   const box=$('feedProfile');box.hidden=false;box.textContent='Carregando perfil...';const version=epoch;
   const [badgesSn,equippedSn,followingSn]=await Promise.all([get(ref(db,`profileBadges/${uid}`)),get(ref(db,`profileEquippedBadge/${uid}`)),get(ref(db,`communityFollowing/${uid}`))]);if(version!==epoch)return;
-  const badges=badgesSn.val()||{},equipped=equippedSn.val(),mine=uid===getUser()?.uid;box.replaceChildren(node('h3',name(uid)),node('p',directory[uid]?.bio||''));box.append(node('p',`Seguindo ${Object.keys(followingSn.val()||{}).length} pessoas`));
+  const badges=badgesSn.val()||{},equipped=equippedSn.val(),mine=uid===getUser()?.uid;
+  const header=node('div',null,'feed-profile-header'),photo=node('img');photo.src=safeUrl(directory[uid]?.avatar)||'/assets/img/profile.jpg';photo.alt='';photo.className='feed-post-avatar';
+  const identity=node('div');identity.append(node('h3',name(uid)),node('p',directory[uid]?.username?'@'+directory[uid].username:'@participante','muted'));header.append(photo,identity);
+  box.replaceChildren(header,node('p',directory[uid]?.bio||'Nenhuma biografia adicionada.'));
+  box.append(node('p',`Seguindo ${Object.keys(followingSn.val()||{}).length} pessoas`));
+  const gallery=node('div',null,'feed-profile-gallery');
+  for(const [pid,post] of Object.entries(posts).filter(([,post])=>post.uid===uid&&post.mediaKind==='image'&&safeUrl(post.mediaUrl)).sort((a,b)=>b[1].createdAt-a[1].createdAt).slice(0,18)){
+    const im=node('img');im.src=safeUrl(post.mediaUrl);im.alt=post.text||'Foto publicada';im.loading='lazy';im.title='Publicação '+pid;gallery.append(im);
+  }
+  box.append(node('h4','Galeria de publicações recentes'),gallery);if(!gallery.children.length)box.append(node('small','Nenhuma foto entre as publicações recentes.','muted'));
   if(badges[equipped])box.append(node('p',`${badges[equipped].icon} ${badges[equipped].name}`,'profile-badge'));
   if(!mine&&uid!=='charlotte')box.append(button(following[uid]?'Deixar de seguir':'Seguir',async()=>{const r=ref(db,`communityFollowing/${getUser().uid}/${uid}`);await(following[uid]?remove(r):set(r,true));await showProfile(uid)}));
   if(mine){box.append(node('h4','Seus emblemas'));for(const [id,badge] of Object.entries(badges)){box.append(button(`${badge.icon} ${badge.name}${id===equipped?' • equipado':''}`,async()=>{await set(ref(db,`profileEquippedBadge/${uid}`),id);await showProfile(uid)}))}if(!Object.keys(badges).length)box.append(node('p','Você ainda não recebeu emblemas.'));box.append(button('Remover emblema equipado',async()=>{await remove(ref(db,`profileEquippedBadge/${uid}`));await showProfile(uid)}));
@@ -54,5 +84,5 @@ export function initCommunity({app,db,getUser,isAdmin,toast,getSelectedUid,bridg
  $('feedAll').onclick=()=>{onlyFollowing=false;render()};$('feedFollowing').onclick=()=>{onlyFollowing=true;render()};$('feedMyProfile').onclick=()=>showProfile(getUser().uid).catch(e=>toast(e.message));$('feedRefresh').onclick=subscribePosts;$('feedMore').onclick=()=>{limit+=20;subscribePosts()};
  $('adminBadgeForm').onsubmit=async e=>{e.preventDefault();if(!isAdmin())return;const uid=getSelectedUid(),id=$('adminBadgeId').value.trim();if(!uid)return toast('Localize o usuário primeiro.');try{await set(ref(db,`profileBadges/${uid}/${id}`),{name:$('adminBadgeName').value.trim(),icon:$('adminBadgeIcon').value.trim()});toast('Emblema concedido.')}catch(e){toast(e.message)}};
  $('adminBadgeRevoke').onclick=async()=>{if(!isAdmin()||!getSelectedUid())return;const id=$('adminBadgeId').value.trim();if(!/^[a-z0-9_-]{3,40}$/.test(id))return toast('Informe um ID válido.');try{await remove(ref(db,`profileBadges/${getSelectedUid()}/${id}`));toast('Emblema revogado.')}catch(e){toast(e.message)}};
- onAuthStateChanged(getAuth(app),user=>{epoch++;upload?.cancel();postSub?.();subscriptions.splice(0).forEach(fn=>fn());cleanupRows();posts={};directory={};following={};limit=20;$('feedProfile').hidden=true;$('feedList').replaceChildren();if(!user)return;subscriptions.push(onValue(ref(db,'directory'),sn=>{directory=sn.val()||{};render()}));subscriptions.push(onValue(ref(db,`communityFollowing/${user.uid}`),sn=>{following=sn.val()||{};render()}));subscribePosts()});
+ onAuthStateChanged(getAuth(app),user=>{epoch++;upload?.cancel();postSub?.();subscriptions.splice(0).forEach(fn=>fn());cleanupRows();posts={};stories={};directory={};following={};limit=20;$('feedProfile').hidden=true;$('feedList').replaceChildren();if(!user)return;subscriptions.push(onValue(ref(db,'directory'),sn=>{directory=sn.val()||{};render();renderStories()}));subscriptions.push(onValue(ref(db,'communityStories'),sn=>{stories=sn.val()||{};renderStories()},e=>{console.warn('[STORIES]',e?.message);$('feedStories').textContent='Stories indisponíveis. Verifique as regras Firebase.'}));subscriptions.push(onValue(ref(db,`communityFollowing/${user.uid}`),sn=>{following=sn.val()||{};render()}));subscribePosts()});
 }
