@@ -1338,3 +1338,39 @@ body.watch-pseudo-fullscreen #watchScreenStage.watch-fullscreen-ui-hidden{cursor
 @media(prefers-reduced-motion:reduce){.site-activity-stage *, .feed-story-viewer *{animation:none!important;transition-duration:.01ms!important}}
 
 .feed-profile-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}.feed-profile-header .feed-post-avatar{width:74px;height:74px;border-radius:50%;object-fit:cover}.feed-profile-header h3,.feed-profile-header p{margin:3px 0}.feed-profile-gallery{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:8px 0 16px}.feed-profile-gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;background:rgba(120,120,150,.15)}
+
+/* V14 mini racing — SVG leve, sentido esquerda → direita e cor identificada */
+.site-activity-stage .race-lane{min-height:52px;gap:10px}
+.site-activity-stage .race-lane .race-track{height:50px;overflow:hidden;border:1px solid #ffffff20;border-radius:7px;background:repeating-linear-gradient(90deg,#ffffff03 0px,#ffffff03 18px,#ffffff12 19px,#ffffff03 21px),linear-gradient(#1e2330,#111724);background-size:70px 100%,auto}
+.site-activity-stage .race-lane .race-track::after{content:"";position:absolute;right:5px;top:1px;bottom:1px;width:9px;border-left:2px solid #f5f5f5cc;background:repeating-conic-gradient(#f1f4f9 0% 25%,#10131c 0% 50%) 0 0 / 8px 8px;opacity:.8}
+.site-activity-stage .race-lane .runner{top:0;height:48px;display:grid;align-items:center;width:68px;transition:transform 2s cubic-bezier(.14,.48,.24,1);will-change:transform}
+.site-activity-stage .race-lane .runner svg{max-height:48px;display:block;filter:drop-shadow(0px 3px 2px #05060a88)}
+.site-activity-stage .race-lane .runner-name{width:122px;flex:none;font-weight:650}
+.site-activity-stage .race-lane.race-picked .runner-name{color:var(--race-color)}
+.site-activity-stage .race-lane.race-picked .race-track{box-shadow:inset 0 0 0 1px var(--race-color)}
+.site-activity-stage .race-lane.winner .runner-name::after{content:" 🏆"}
+.site-activity-stage .race-lane .race-wheel{transform-box:fill-box;transform-origin:center;animation:gremoryWheel .28s linear infinite}
+.site-activity-stage .race-horse-legs{transform-box:fill-box;transform-origin:center top;animation:gremoryGallop .26s ease-in-out infinite alternate}
+.site-activity-stage .race-horse-tail{transform-box:fill-box;transform-origin:100% 50%;animation:gremoryGallop .32s ease-in-out infinite alternate}
+@keyframes gremoryWheel{to{transform:rotate(360deg)}}
+@keyframes gremoryGallop{to{transform:rotate(-12deg) translateY(1px)}}
+@media(max-width:600px){.site-activity-stage .race-lane .runner-name{width:78px;font-size:.65rem}.site-activity-stage .race-lane .runner{width:54px}.site-activity-stage .race-lane .runner svg{width:54px}}
+@media(prefers-reduced-motion:reduce){.site-activity-stage .race-wheel,.site-activity-stage .race-horse-legs,.site-activity-stage .race-horse-tail{animation:none!important}}
+
+/* Minicenas ilustradas locais para pesca/mineração, sem efeitos na economia */
+.site-activity-stage .fishing-animation,.site-activity-stage .mining-animation{min-height:146px;display:grid;place-items:center;animation:none}
+.site-activity-stage .gremory-fish-scene,.site-activity-stage .gremory-mine-scene{width:min(100%,450px);height:auto;display:block}
+.gremory-fish-rod{transform-origin:90px 80px;animation:gremoryCast 1.5s ease-in-out both}
+.gremory-fish-line{animation:gremoryLine 1.5s ease-in-out both}
+.gremory-fish-ripple{transform-box:fill-box;transform-origin:center;animation:gremoryRipple 1.25s ease-in-out infinite}
+.gremory-fish-bob{animation:gremoryBob 1.3s ease-in-out infinite alternate}
+.gremory-pickaxe{transform-box:fill-box;transform-origin:10% 90%;animation:gremoryPick 1.1s ease-in-out infinite}
+.gremory-rock-crack{animation:gremoryCrack 1.1s ease-in-out infinite alternate}
+.gremory-mine-tap .gremory-pickaxe{animation-duration:.28s}
+@keyframes gremoryCast{from{transform:rotate(-24deg)}60%{transform:rotate(14deg)}to{transform:rotate(0)}}
+@keyframes gremoryLine{from{opacity:0}75%{opacity:.3}to{opacity:1}}
+@keyframes gremoryRipple{to{transform:scale(1.25);opacity:.2}}
+@keyframes gremoryBob{to{transform:translateY(3px)}}
+@keyframes gremoryPick{0%,100%{transform:rotate(-19deg)}55%{transform:rotate(18deg)}}
+@keyframes gremoryCrack{to{stroke-width:5;opacity:.85}}
+@media(prefers-reduced-motion:reduce){.gremory-fish-scene *, .gremory-mine-scene *{animation:none!important}}

@@ -120,7 +120,7 @@ function authFlowError(err){
 }
 
 const routeMeta={
-  feed:['COMUNIDADE','Feed'],home:['GREMORY','Início'],charlotte:['CHARLOTTE','Charlotte'],pokemon:['POKÉMON','Centro Pokémon'],friends:['AMIGOS','Pessoas'],tinder:['TINDER','Descobrir pessoas'],updates:['ATUALIZAÇÕES','Novidades'],downloads:['DOWNLOADS','Downloads'],studio:['STUDIO','PDF & Canvas'],games:['JOGOS','Jogos'],watch:['WATCH PARTY','Assistir com amigos'],rpg:['RPG','Mesas'],premium:['PREMIUM','Gremory Premium'],personalize:['PERSONALIZAR','Loja de rúpias'],support:['SUPORTE','Gremory oficial'],admin:['ADMINISTRAÇÃO','Painel do host']
+  feed:['COMUNIDADE','Feed'],home:['GREMORY','Início'],charlotte:['CHARLOTTE','Charlotte'],pokemon:['POKÉMON','Centro Pokémon'],friends:['AMIGOS','Pessoas'],tinder:['TINDER','Descobrir pessoas'],updates:['ATUALIZAÇÕES','Novidades'],downloads:['DOWNLOADS','Downloads'],studio:['STUDIO','Ferramentas'],games:['JOGOS','Jogos'],watch:['WATCH PARTY','Assistir com amigos'],rpg:['RPG','Mesas'],premium:['PREMIUM','Gremory Premium'],personalize:['PERSONALIZAR','Loja de rúpias'],support:['SUPORTE','Gremory oficial'],admin:['ADMINISTRAÇÃO','Painel do host']
 };
 function navigate(route){
   if(route==='admin'&&!isSiteAdmin()){toast('Acesso restrito ao host.');route='home'}
@@ -3209,17 +3209,35 @@ function renderSiteProgress(){
   for(const kind of ['fish','mine']){const target=$(kind==='fish'?'siteFishEnergy':'siteMineEnergy');if(!target)continue;const e=row.energy?.[kind]||{},refill=Number(e.startedAt||0)+86400000,used=Date.now()>=refill?0:Number(e.used||0),max=accountSnapshot().premium?8:6;target.textContent=`Energia: ${Math.max(0,max-used)}/${max}${used>0?' • renova em '+new Date(refill).toLocaleString('pt-BR'):''}`}
 }
 const SITE_RACERS={horse:['Pernas Velozes','Trovão','Cometa','Ventania','Faísca','Estrela'],car:['Azul','Amarelo','Rosa','Verde','Vermelho','Roxo']};
+// Sprites SVG originais recoloridos por CSS, sem imagens externas, sem cálculos de vitória no cliente.
+const SITE_RACE_COLORS=['#4295f5','#f1bf34','#ed65a1','#45bc86','#ef645f','#9a75e7'];
+const SITE_SPRITES={
+  car:`<svg viewBox="0 0 86 48" width="66" height="38" aria-hidden="true"><g class="race-car-svg"><path d="M8 30h6l10-17q2-4 7-4h25q5 0 8 5l9 16h6q4 0 4 4v7H5v-7q0-4 3-4Z" fill="var(--race-color)" stroke="#111726" stroke-width="2.6"/><path d="M30 15h25l7 15H21Z" fill="#c3e4fa" stroke="#1b2437" stroke-width="2"/><path d="M42 15v15" stroke="#1b2437" stroke-width="3"/><path d="M10 32h10m44 0h13" stroke="#fff3" stroke-width="3"/><circle class="race-wheel" cx="22" cy="40" r="8" fill="#17212f" stroke="#c1c5d3" stroke-width="3"/><circle class="race-wheel" cx="65" cy="40" r="8" fill="#17212f" stroke="#c1c5d3" stroke-width="3"/><circle cx="22" cy="40" r="2" fill="white"/><circle cx="65" cy="40" r="2" fill="white"/></g></svg>`,
+  horse:`<svg viewBox="0 0 95 65" width="68" height="48" aria-hidden="true"><path class="race-horse-tail" d="M22 24q-15-16-18-4q7 1 10 11" fill="none" stroke="#352034" stroke-width="8" stroke-linecap="round"/><g class="race-horse-body"><path d="M26 20q8-11 29-7l12-4 6-7 5 5 5-2 3 10-4 13-14 6-7 15-33-3-9-15Z" fill="var(--race-color)" stroke="#392b39" stroke-width="2.5"/><path d="M67 7l5-6 4 10m-15 1 6-8" stroke="#382030" stroke-width="4" fill="none"/><path d="M75 14h3" stroke="#111" stroke-width="3" stroke-linecap="round"/><path d="M25 27q17 6 28 1" fill="none" stroke="#fff5" stroke-width="3"/></g><g class="race-horse-legs"><path d="M29 39l-8 16-10 2m41-16 10 15 10-5" stroke="#392b39" stroke-width="8" fill="none" stroke-linecap="round"/><path d="M29 39l-8 16-10 2m41-16 10 15 10-5" stroke="var(--race-color)" stroke-width="5" fill="none" stroke-linecap="round"/></g></svg>`
+};
+
 function activityStage(kind){
   const stage=$('siteActivityStage');if(!stage)return null;stage.hidden=false;stage.replaceChildren();
   if(kind==='fish'||kind==='mine'){
     const scene=document.createElement('div');scene.className=kind==='fish'?'fishing-animation':'mining-animation';
-    const figure=document.createElement('span');figure.className=kind==='fish'?'fisher':'miner';figure.textContent=kind==='fish'?'🧑‍🌾🎣':'🧑‍🏭⛏️';
-    scene.appendChild(figure);if(kind==='fish'){const lake=document.createElement('span');lake.className='lake';lake.textContent='🌊🐟';scene.append(lake)}else{const rock=document.createElement('span');rock.textContent='🪨';scene.appendChild(rock)}stage.appendChild(scene);return stage;
+    if(kind==='fish'){
+      // Cena desenhada: pescador, vara, boia e ondulações (sem assets remotos).
+      scene.innerHTML=`<svg class="gremory-fish-scene" viewBox="0 0 420 154" role="img" aria-label="Pescador lançando a vara no lago"><defs><linearGradient id="gmLake" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#5a9dd3"/><stop offset="1" stop-color="#293c7c"/></linearGradient></defs><rect y="97" width="420" height="57" rx="10" fill="url(#gmLake)"/><path d="M0 99Q45 88 85 99T170 99T260 99T355 99T420 98" fill="none" stroke="#badcff" stroke-width="3"/><path d="M0 101h123" stroke="#c6cacc" stroke-width="7"/><circle cx="68" cy="49" r="15" fill="#f9ca9e"/><path d="M54 40Q68 21 83 39" fill="#5b4250"/><path d="M60 63l-7 37 32 0-3-33Z" fill="#a783cc"/><path d="M64 99l-17 6m28-6 17 6" stroke="#424656" stroke-width="8"/><path class="gremory-fish-rod" d="M80 78Q118 54 146 29l40-15" fill="none" stroke="#f3d9aa" stroke-width="5" stroke-linecap="round"/><path class="gremory-fish-line" d="M185 15Q235 38 253 103" fill="none" stroke="#e3f5ff" stroke-width="1.5"/><circle class="gremory-fish-bob" cx="253" cy="103" r="6" fill="#f67c92" stroke="#fff" stroke-width="2"/><ellipse class="gremory-fish-ripple" cx="253" cy="108" rx="25" ry="5" fill="none" stroke="#d9faff" stroke-width="2"/><path class="gremory-fish-shadow" d="M305 121q16-12 30 0l10-8 0 17-10-7q-14 12-30 0" fill="#a2c9e7" opacity=".65"/></svg>`;
+    }else{
+      scene.innerHTML=`<svg class="gremory-mine-scene" viewBox="0 0 420 154" role="img" aria-label="Minerador golpeando rocha de cristais"><rect y="128" width="420" height="25" rx="7" fill="#514762"/><circle cx="96" cy="45" r="16" fill="#f8caa5"/><path d="M73 36h46l-6-14H81Z" fill="#d8b56d"/><path d="M87 63l-15 63h54l-14-63Z" fill="#728bb8"/><path d="M85 88l-32 19m59-19 25 0" stroke="#f8caa5" stroke-width="9"/><path class="gremory-pickaxe" d="M135 90L171 31 M147 34q33-24 56 2" fill="none" stroke="#c4a67d" stroke-width="7" stroke-linecap="round"/><path d="M259 64l44-20 48 26 7 51-76 16-42-29Z" fill="#657292" stroke="#293a55" stroke-width="4"/><path class="gremory-rock-crack" d="M293 49l-3 38 22 7-15 30M344 71l-34 21" fill="none" stroke="#b9c7e5" stroke-width="3" stroke-linejoin="round"/><path d="M296 57l10 12-10 22-10-8Z" fill="#b493f2" opacity=".8"/></svg>`;
+      scene.title='Toque na rocha para acelerar a animação (não altera a recompensa).';
+      scene.addEventListener('click',()=>{scene.classList.remove('gremory-mine-tap');void scene.offsetWidth;scene.classList.add('gremory-mine-tap');});
+    }
+    stage.appendChild(scene);return stage;
   }
   const lanes=[];
   SITE_RACERS[kind].forEach((name,i)=>{
     const lane=document.createElement('div');lane.className='race-lane';const label=document.createElement('span');label.className='runner-name';label.textContent=`${i+1} · ${name}`;
-    const track=document.createElement('div');track.className='race-track';const runner=document.createElement('span');runner.className='runner';runner.textContent=kind==='horse'?'🐎':['🚙','🏎️','🚗','🚕','🚘','🚖'][i];track.append(runner);lane.append(label,track);stage.append(lane);lanes.push({lane,track,runner});
+    const track=document.createElement('div');track.className='race-track';const runner=document.createElement('span');runner.className='runner';
+    runner.innerHTML=SITE_SPRITES[kind];runner.style.setProperty('--race-color',SITE_RACE_COLORS[i]);
+    lane.dataset.raceKind=kind;lane.style.setProperty('--race-color',SITE_RACE_COLORS[i]);
+    if(Number($(kind==='horse'?'siteHorseChoice':'siteCarChoice')?.value||1)===i+1)lane.classList.add('race-picked');
+    track.append(runner);lane.append(label,track);stage.append(lane);lanes.push({lane,track,runner});
   });return lanes;
 }
 async function animateRace(lanes,winner){

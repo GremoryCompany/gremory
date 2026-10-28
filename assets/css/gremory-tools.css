@@ -1,0 +1,19 @@
+/* Ferramentas leves e isoladas: não altera estilo dos jogos ou Watch Party */
+.gtools-intro{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:30px 0 16px}
+.gtools-intro h3{margin:6px 0;font-size:1.35rem}
+.gtools-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0 0 30px}
+.gtools-card{display:flex;flex-direction:column;gap:12px;min-width:0;padding:20px;border:1px solid var(--line,#392b48);border-radius:17px;background:var(--surface,#171321)}
+.gtools-card h4{font-size:1.07rem;margin:0}.gtools-card p{font-size:.87rem;line-height:1.5;opacity:.72;margin:0}
+.gtools-card label{display:flex;flex-direction:column;gap:5px;font-size:.83rem}
+.gtools-card input[type=text],.gtools-card input[type=number]{width:100%;max-width:100%;border:1px solid #5e4975;border-radius:9px;padding:10px 12px;background:#170f25;color:#fff}
+.gtools-card input[type=file]{max-width:100%;font-size:.8rem}
+.gtools-upload{border:1px dashed #87669f;border-radius:10px;padding:14px;background:#8b52c310}
+.gtools-upload.gtools-over{border-color:#d3aaff;background:#8b52c333}
+.gtools-card .btn{margin-top:auto}.gtools-card .gtools-status{font-size:.78rem;min-height:1.6em;color:#aaeda8}
+.gtools-card .gtools-status.gtools-error{color:#ff9ba7}
+.gtools-privacy{margin-top:8px;font-size:.82rem;opacity:.78}
+.gtools-premium-compare{margin:16px 0 24px;padding:18px 20px;border-radius:15px;border:1px solid #624276;background:linear-gradient(130deg,#291a3f,#181426)}
+.gtools-premium-compare h3{margin:0 0 10px}.gtools-premium-compare p{opacity:.8;line-height:1.45;font-size:.9rem}
+.gtools-premium-compare summary{cursor:pointer;font-weight:650;padding:7px 0}.gtools-premium-compare ul{margin:8px 0 2px;padding-left:20px;line-height:1.8}
+@media(max-width:1000px){.gtools-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){.gtools-grid{grid-template-columns:1fr}.gtools-intro{align-items:flex-start;flex-direction:column}.gtools-card{padding:16px}}

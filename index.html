@@ -15,7 +15,8 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261028-social-games-v1">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261028-novos-comandos-01">
+  <link rel="stylesheet" href="/assets/css/gremory-tools.css?v=20261028-02">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -98,7 +99,7 @@
 
         <div class="nav-section">
           <span class="nav-section-label">Ferramentas</span>
-          <button class="nav-item" data-route="studio"><span>▤</span><b>PDF & Canvas</b></button>
+          <button class="nav-item" data-route="studio"><span>▤</span><b>Ferramentas</b></button>
           <button class="nav-item" data-route="downloads"><span>↓</span><b>Downloads</b></button>
           <button class="nav-item" data-route="feed"><span>▧</span><b>Comunidade</b></button>
           <button class="nav-item" data-route="updates"><span>◌</span><b>Atualizações</b></button>
@@ -232,7 +233,7 @@
                 <section class="command-group">
                   <span class="command-group-title">Ferramentas</span>
                   <div class="command-grid">
-                    <button data-route="studio">PDF & Canvas</button>
+                    <button data-route="studio">Ferramentas e figurinhas</button>
                     <button data-bot-command="/tinder">Tinder no bot</button>
                     <button data-bot-command="/sorteios">Sorteios no bot</button>
                   </div>
@@ -415,7 +416,7 @@
           <div class="section-head studio-page-head">
             <div>
               <span class="tag">STUDIO</span>
-              <h2>PDF & Canvas</h2>
+              <h2>Ferramentas & Studio</h2>
               <p class="muted">Edite documentos, converta arquivos e crie artes em um só lugar.</p>
             </div>
             <div class="section-actions">
@@ -430,6 +431,13 @@
             <button type="button" data-studio-scroll="canvasStudio"><span>✦</span><div><strong>Canvas</strong><small>Crie e exporte</small></div></button>
           </div>
 
+          <div class="gtools-intro" id="gtoolsSuite"><div><span class="tag">NOVIDADE</span><h3>Imagem, figurinha e thumbnail</h3><p class="muted">Ferramentas que funcionam no celular e computador, sem enviar suas fotos para servidores.</p></div></div>
+          <div class="gtools-grid">
+            <article class="gtools-card" aria-label="Comprimir imagem"><h4>🖼️ Comprimir imagem</h4><p>Reduza o tamanho de JPG, PNG ou WebP para compartilhar mais rápido.</p><label class="gtools-upload">Escolher ou arrastar imagem<input id="gtoolsCompressImage" type="file" accept="image/jpeg,image/png,image/webp"></label><label>Qualidade (45–95%)<input id="gtoolsCompressQuality" type="range" min="45" max="95" value="78"></label><label>Maior dimensão em pixels<input id="gtoolsCompressMax" type="number" min="320" max="2400" value="1600"></label><button type="button" class="btn primary" id="gtoolsCompressBtn">Comprimir e baixar</button><small id="gtoolsCompressStatus" class="gtools-status" role="status"></small></article>
+            <article class="gtools-card" aria-label="Criar figurinha"><h4>💜 Criar figurinha</h4><p>Crie um WebP quadrado, com fundo transparente e legenda opcional.</p><label class="gtools-upload">Escolher ou arrastar imagem<input id="gtoolsStickerImage" type="file" accept="image/jpeg,image/png,image/webp"></label><label>Texto opcional<input id="gtoolsStickerLabel" type="text" maxlength="90" placeholder="Ex.: Gremory 💜"></label><label>Zoom<input id="gtoolsStickerZoom" type="range" min="100" max="200" value="100"></label><button type="button" class="btn primary" id="gtoolsStickerBtn">Criar e baixar WebP</button><small id="gtoolsStickerStatus" class="gtools-status" role="status"></small></article>
+            <article class="gtools-card" aria-label="Criar thumbnail"><h4>🎨 Capa e thumbnail</h4><p>Monte capa 16:9 com texto, fundo roxo e sua foto. Exporta PNG 1280×720.</p><label class="gtools-upload">Foto opcional<input id="gtoolsThumbImage" type="file" accept="image/jpeg,image/png,image/webp"></label><label>Título<input id="gtoolsThumbTitle" type="text" maxlength="90" placeholder="Meu vídeo Gremory"></label><button type="button" class="btn primary" id="gtoolsThumbBtn">Criar thumbnail</button><small id="gtoolsThumbStatus" class="gtools-status" role="status"></small></article>
+          </div>
+          <p class="gtools-privacy muted">Seus arquivos são processados no próprio navegador (até 8 MB por imagem). A figurinha gerada pode ser enviada manualmente ao WhatsApp. O envio automático via Charlotte será integrado somente após validação segura da transferência de mídia.</p>
           <div class="studio-section-label"><span>DOCUMENTOS</span><h3>Ferramentas PDF</h3></div>
           <div class="studio-tools-grid">
             <article class="panel studio-tool-card" id="pdfMergeCard">
@@ -840,6 +848,7 @@
             <div><span class="tag">SUA CONTA</span><h3 id="premiumStatusTitle">Plano padrão</h3><p id="premiumStatusText">Vincule a Charlotte para comprar e sincronizar o Premium pelo site.</p></div>
             <span class="pill" id="premiumStatusPill">Padrão</span>
           </article>
+          <div class="gtools-premium-compare"><span class="tag">PLANOS E VANTAGENS</span><h3>O que você desbloqueia com a Charlotte?</h3><p>Os planos de 1, 7, 15 e 30 dias usam os valores oficiais que já existem no bot. Premium ativo mantém os benefícios compatíveis do Gremory e agora libera comandos exclusivos no WhatsApp.</p><details><summary>Ver benefícios e novos comandos</summary><ul><li>🎵 Charlotte Music sem cota compartilhada quando um Premium a ativa na sala</li><li>⚡ XP dobrado e mais energia onde o servidor já reconhece Premium</li><li>🎁 Daily VIP e comandos disponíveis na Charlotte</li><li>🔳 <code>/vipqr [link]</code> — gerar QR Code</li><li>🔐 <code>/vipsenha 20</code> — gerar senha forte</li><li>📝 <code>/viptexto [texto]</code> — analisar o texto</li><li>📚 <code>/menuvip extras</code> e <code>/vantagensvip</code> — consultar vantagens</li></ul><p>Benefícios de grupo e planos diferenciados dependem da integração de assinatura específica no servidor; não são ativados por esta interface.</p></details></div>
           <div class="premium-benefits-intro"><div><span class="tag">BENEFÍCIOS PREMIUM</span><h3>Mais possibilidades, sem complicação</h3><p>Estas vantagens já são reconhecidas pelo sistema quando o Premium está ativo na Charlotte.</p></div></div>
           <div class="premium-benefits-grid" aria-label="Vantagens incluídas no Premium">
             <div class="premium-benefit"><span aria-hidden="true">♫</span><div><strong>Música sem limites</strong><small>Ao ativar Charlotte Music, a cota da sala fica ilimitada.</small></div></div>
@@ -1141,6 +1150,7 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261028-social-games-v1"></script>
+  <script type="module" src="/assets/js/app.js?v=20261028-novos-comandos-01"></script>
+  <script type="module" src="/assets/js/gremory-tools.js?v=20261028-02"></script>
 </body>
 </html>

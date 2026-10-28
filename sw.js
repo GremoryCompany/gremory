@@ -1,10 +1,12 @@
-const CACHE='gremory-v14-20261028-social-games-v1';
+const CACHE='gremory-v14-20261028-new-features-v1';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261028-social-games-v1',
-  '/assets/js/app.js?v=20261028-social-games-v1',
+  '/assets/css/app.css?v=20261028-novos-comandos-01',
+  '/assets/js/app.js?v=20261028-novos-comandos-01',
   '/assets/js/community.js',
+  '/assets/css/gremory-tools.css?v=20261028-02',
+  '/assets/js/gremory-tools.js?v=20261028-02',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
   '/manifest.webmanifest'
