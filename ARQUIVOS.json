@@ -1,6 +1,6 @@
 {
-  "version": "V14 Recuperacao 2026-10-27",
-  "description": "Arquivos do pacote completo de recuperacao Gremory; veja GUIA_INSTALACAO_E_LIMITACOES.md",
+  "version": "Gremory V14 otimizacoes 27-10-2026",
+  "description": "Projeto completo com exclusão administrativa segura, progressão via Bridge e interface Premium/Watch Party; consulte GUIA_INSTALACAO_E_LIMITACOES.md",
   "files": [
     {
       "path": "CORRECAO_LOGIN.txt",
@@ -9,8 +9,8 @@
     },
     {
       "path": "GUIA_INSTALACAO_E_LIMITACOES.md",
-      "sizeBytes": 6320,
-      "sha256": "83ea4b86fc383be99c2c0413d5642cf4cdec2034f61ea12c38f63fde363a62d3"
+      "sizeBytes": 9133,
+      "sha256": "3091a23c5f66b731ad7fe56b7cd53e6b7e805110a5ea065ec31f7db5ceafdef1"
     },
     {
       "path": "LEIA-ME.txt",
@@ -34,8 +34,8 @@
     },
     {
       "path": "api/main.js",
-      "sizeBytes": 88049,
-      "sha256": "16f28baf51a35dd79c21dcc9744ed029f7fa53f0911736a0f961557b6a420d33"
+      "sizeBytes": 88109,
+      "sha256": "1ada71af7bb00c7eee8d4a68de65a549fb80f6461f156c3557be3379fcda638d"
     },
     {
       "path": "api/pokemon-actions.js",
@@ -174,8 +174,8 @@
     },
     {
       "path": "assets/css/app.css",
-      "sizeBytes": 155350,
-      "sha256": "d1026db1bcf7fc9938f158f0cc848216df82a8a732eb96c31d67febe4763fbfb"
+      "sizeBytes": 157516,
+      "sha256": "2b54bd96ecf42d7091b4e406f3a729a0e441a4af4c1f25e9654e35d8677b8d11"
     },
     {
       "path": "assets/css/gremory-core.css",
@@ -224,8 +224,8 @@
     },
     {
       "path": "assets/js/app.js",
-      "sizeBytes": 354028,
-      "sha256": "dab7427fb4e1662a1c9341b5834b7f54db6fc296ec17a4b967952e4fc52e0b4f"
+      "sizeBytes": 355771,
+      "sha256": "873616411813264a0f41ec09525f7286d5f2837b2ea2bfca8906ac8ce5d8e4cb"
     },
     {
       "path": "assets/js/auth-shell.js",
@@ -273,9 +273,19 @@
       "sha256": "a9f26f55438f40957b751d555868c4431da404941ff6a2e0dc34b23d52844afa"
     },
     {
+      "path": "database/gremory_site_admin_accounts.js",
+      "sizeBytes": 9039,
+      "sha256": "63a433371b0346ed4db503fd19c3cd5e1d16ac712e1dc6d3d45246e6b3c23148"
+    },
+    {
       "path": "database/gremory_site_bridge.js",
-      "sizeBytes": 186580,
-      "sha256": "4f9fd24769f7bf879c360b8d7cea114392c237111d4ffa687e78ee46ac59d566"
+      "sizeBytes": 187683,
+      "sha256": "f759239841225c55d6e76b459c4241cf49fe07db01e7084c0ba2ce94e87695df"
+    },
+    {
+      "path": "database/gremory_site_progress.js",
+      "sizeBytes": 6549,
+      "sha256": "3cac07eaf640532b983ed762e2cf605601547d6ffcb4c79d3d81f27eac3e9e15"
     },
     {
       "path": "firebase.rules.example.json",
@@ -284,13 +294,13 @@
     },
     {
       "path": "firebase.rules.production.json",
-      "sizeBytes": 36239,
-      "sha256": "14f3aaaa29a1d83e7d0aca7878c067eab2d02e19453d010fc42bf476770afbc2"
+      "sizeBytes": 37570,
+      "sha256": "8f0f91dbbd0f89752ad7c9eecf785033c27db5b06e42a243e160da6b897b820a"
     },
     {
       "path": "index.html",
-      "sizeBytes": 101709,
-      "sha256": "5e0c1876247335da7ae4df4c9c5c9ba4f2d3fd3be20f81478d6a2bf67ecd2120"
+      "sizeBytes": 103827,
+      "sha256": "314df8d824dae14c1d3ede0b36f45794dbfafd5f285c2631364c4eb608cb4bac"
     },
     {
       "path": "manifest.webmanifest",
@@ -310,7 +320,12 @@
     {
       "path": "sw.js",
       "sizeBytes": 1477,
-      "sha256": "46834ab388fb2836e5037b629c2541adc2a703f24cfe3abcaa179711e0520a89"
+      "sha256": "fc769283e8383f2eccb62bed6b94bf5c27c83d440a098cec094d6b1d1000f58e"
+    },
+    {
+      "path": "tests/account-deletion.cjs",
+      "sizeBytes": 6118,
+      "sha256": "a4499639b4d6b15ef97e30992806a3b5ca4ef7b4106d18a2ebca39d47f543541"
     },
     {
       "path": "tests/actions.cjs",

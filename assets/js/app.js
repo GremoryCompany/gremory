@@ -686,7 +686,7 @@ function showSpinResult(spin,balance){
   if($('slotsStatus'))$('slotsStatus').textContent=jackpot?'JACKPOT!':payout>0?'Você ganhou!':'Sem prêmio';
   if($('slotsLastWin'))$('slotsLastWin').textContent=`${syms.join(' ')} • ${payout?'prêmio ₹'+formatNumber(payout):'sem prêmio'} • saldo ₹${formatNumber(balance)}`;
   if(jackpot){playGameSfx('jackpot');showGameResult({title:'JACKPOT!',text:`Prêmio ₹${formatNumber(payout)}.`,win:true,icon:'7'});}
-  else if(payout>0)playVictoryTone();else playGameSfx('debit');
+  else if(payout>0)playGameSfx('coins');else playGameSfx('debit');
 }
 async function runSlotsSpin(){
   if(slotBusy)return;
@@ -1048,6 +1048,27 @@ $('adminResetCharlotteLinkBtn')?.addEventListener('click',async()=>{
   }catch(e){if($('adminResetCharlotteLinkBtn'))$('adminResetCharlotteLinkBtn').disabled=false;toast(e.message||'Não foi possível resetar o vínculo.',6000)}
 });
 
+$('adminDeleteAccountBtn')?.addEventListener('click',async()=>{
+  const btn=$('adminDeleteAccountBtn');
+  try{
+    if(!isSiteAdmin())throw new Error('Apenas o administrador pode excluir contas.');
+    if(!state.admin.selectedUid)await adminLookupUser();
+    const targetUid=requireAdminSelectedUid(),person=state.admin.directory?.[targetUid]?.nome||targetUid;
+    if(targetUid===state.user?.uid)throw new Error('Não é permitido excluir sua própria conta.');
+    if(!confirm(`EXCLUSÃO PERMANENTE DE CONTA\n\nUsuário: ${person}\nUID: ${targetUid}\n\nO Firebase Authentication, perfil e vínculo serão apagados. Os dados do WhatsApp na Charlotte NÃO serão apagados. Deseja continuar?`))return;
+    const typed=prompt(`Para confirmar a exclusão definitiva de ${person}, digite EXCLUIR:`);
+    if(typed!=='EXCLUIR'){if(typed!=null)toast('Exclusão cancelada: confirmação incorreta.');return}
+    btn.disabled=true;
+    const result=await bridgeRequest('admin_delete_account',{targetUid},60000,false);
+    if(!result?.authDeleted)throw new Error('O servidor não confirmou a exclusão do Firebase Authentication.');
+    toast('Conta excluída. O usuário pode se cadastrar novamente e vincular seu WhatsApp à Charlotte.',7000);
+    state.admin.selectedUid='';if($('adminUserQuery'))$('adminUserQuery').value='';
+    if($('adminUserResult'))$('adminUserResult').textContent='Conta excluída com sucesso.';
+    await loadAdminDashboard();
+  }catch(e){toast(e?.message||'Não foi possível excluir a conta. Verifique o log administrativo.',7000)}
+  finally{if(btn)btn.disabled=false}
+});
+
 $('adminCreateCharlotteLinkBtn')?.addEventListener('click',async()=>{
   try{
     if(!state.admin.selectedUid)await adminLookupUser();
@@ -1296,7 +1317,7 @@ async function bridgeRequest(type,data={},timeoutMs=22000,requireLink=true,jobId
   return new Promise((resolve,reject)=>{
     let finished=false,unsub=null;
     const finish=(error,result)=>{if(finished)return;finished=true;clearTimeout(deadline);try{unsub?.()}catch{}if(error)reject(error);else resolve(result)};
-    const deadline=setTimeout(()=>finish(Object.assign(new Error('A Charlotte ainda não confirmou. A ação pode estar pendente; consulte o estado atual antes de repetir qualquer pagamento.'),{pending:true,jobId:key,type})),timeoutMs);
+    const deadline=setTimeout(()=>finish(Object.assign(new Error(type==='site_progress'?'A atividade ainda não foi confirmada pelo servidor. Confira seu XP antes de tentar novamente.':'A Charlotte ainda não confirmou. A ação pode estar pendente; consulte o estado atual antes de repetir qualquer pagamento.'),{pending:true,jobId:key,type})),timeoutMs);
     try{
       unsub=onValue(resultRef,snapshot=>{
         if(!snapshot.exists())return;
@@ -1706,10 +1727,10 @@ $('watchLocalFileBtn')?.addEventListener('click',()=>{if(!isWatchHost())return t
 $('watchLocalFileInput')?.addEventListener('change',async ev=>{const file=ev.target.files?.[0];ev.target.value='';if(file)await startWatchLocalFile(file)});
 async function prewarmWatchMicrophone(){try{const live=state.watchRtc.localStream?.getAudioTracks?.().some(t=>t.readyState==='live');if(live)return true;const existing=state.watchRtc.localStream;const stream=existing?.getAudioTracks?.().some(t=>t.readyState==='live')?existing:await navigator.mediaDevices.getUserMedia({audio:true,video:false});state.watchRtc.localStream=stream;return true}catch{return false}}
 async function uniqueWatchCode(){for(let i=0;i<8;i++){const c=randomCode();const sn=await get(ref(db,`watchRooms/${c}`));if(!sn.exists())return c}throw new Error('Não foi possível gerar código.')}
-async function createWatchRoom(ev){ev.preventDefault();if(!state.user)return;prewarmWatchMicrophone().catch(()=>{});try{const code=await uniqueWatchCode(),createdAt=nowIso(),name=$('watchNameInput').value.trim()||'Watch Party',privacy=['public','private','invite'].includes($('watchPrivacyInput')?.value)?$('watchPrivacyInput').value:'private';const room={meta:{code,name,privacy,ownerUid:state.user.uid,createdAt},members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Host',joinedAt:createdAt}},media:{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}};await set(ref(db,`watchRooms/${code}`),room);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name,privacy,role:'Host',joinedAt:createdAt});if(privacy==='public')await set(ref(db,`watchPublicRooms/${code}`),{code,name,ownerUid:state.user.uid,createdAt}).catch(e=>{console.warn('[WATCH] Índice público indisponível:',e?.message||e);toast('Sala criada, mas ainda não aparece na listagem pública.')});closeModal('watchCreateModal');$('watchCreateForm').reset();await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível criar a sala.'),6000)}}
+async function createWatchRoom(ev){ev.preventDefault();if(!state.user)return;try{const code=await uniqueWatchCode(),createdAt=nowIso(),name=$('watchNameInput').value.trim()||'Watch Party',privacy=['public','private','invite'].includes($('watchPrivacyInput')?.value)?$('watchPrivacyInput').value:'private';const room={meta:{code,name,privacy,ownerUid:state.user.uid,createdAt},members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Host',joinedAt:createdAt}},media:{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}};await set(ref(db,`watchRooms/${code}`),room);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name,privacy,role:'Host',joinedAt:createdAt});if(privacy==='public')await set(ref(db,`watchPublicRooms/${code}`),{code,name,ownerUid:state.user.uid,createdAt}).catch(e=>{console.warn('[WATCH] Índice público indisponível:',e?.message||e);toast('Sala criada, mas ainda não aparece na listagem pública.')});closeModal('watchCreateModal');$('watchCreateForm').reset();await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível criar a sala.'),6000)}}
 async function loadWatchRooms(){if(!state.user)return;loadPublicWatchRooms().catch(()=>{});const box=$('watchRoomsList');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await get(ref(db,`watchUserRooms/${state.user.uid}`));box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];$('homeWatchRecent').textContent=rows.length?`${rows.length} sala${rows.length===1?'':'s'}`:'Assistir e conversar';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala.</div>';return}rows.forEach(r=>{const item=document.createElement('div');item.className='room-item';const c=document.createElement('div');c.innerHTML=`<strong>${escText(r.name||r.code)}</strong><small>${escText(r.code)} • ${escText(r.role||'Participante')}</small>`;const acts=document.createElement('div');acts.className='room-item-actions';const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=()=>openWatchRoom(r.code);acts.appendChild(b);if(r.role==='Host'){const del=document.createElement('button');del.className='btn danger-ghost';del.textContent='Apagar';del.onclick=()=>deleteWatchRoom(r.code,r.name);acts.appendChild(del)}item.append(c,acts);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
-async function loadPublicWatchRooms(){if(!state.user)return;const box=$('watchPublicRoomsList');if(!box)return;box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await get(ref(db,'watchPublicRooms'));box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala pública.</div>';return}rows.sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).slice(0,40).forEach(r=>{const item=document.createElement('div');item.className='room-item';item.innerHTML=`<div><strong>${escText(r.name||'Watch Party')}</strong><small>${escText(r.code||'')}</small></div>`;const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=async()=>{await prewarmWatchMicrophone();await joinWatchRoom(r.code)};item.appendChild(b);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${escText(permissionMessage(e))}</div>`}}
-async function joinWatchRoom(code){if(!state.user)return;prewarmWatchMicrophone().catch(()=>{});try{const sn=await get(ref(db,`watchRooms/${code}`));if(!sn.exists())throw new Error('Sala não encontrada.');const room=sn.val();if(room.meta?.privacy==='invite'&&room.meta?.ownerUid!==state.user.uid){const inv=await get(ref(db,`watchInvites/${code}/${state.user.uid}`));if(!inv.exists())throw new Error('Essa sala aceita somente pessoas convidadas pelo host.')}const member={uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:room.meta?.ownerUid===state.user.uid?'Host':'Participante',joinedAt:nowIso()};await set(ref(db,`watchRooms/${code}/members/${state.user.uid}`),member);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name:room.meta?.name||code,role:member.role,joinedAt:nowIso()});$('watchJoinCode').value='';await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível entrar.'))}}
+async function loadPublicWatchRooms(){if(!state.user)return;const box=$('watchPublicRoomsList');if(!box)return;box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await get(ref(db,'watchPublicRooms'));box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala pública.</div>';return}rows.sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).slice(0,40).forEach(r=>{const item=document.createElement('div');item.className='room-item';item.innerHTML=`<div><strong>${escText(r.name||'Watch Party')}</strong><small>${escText(r.code||'')}</small></div>`;const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=async()=>{await joinWatchRoom(r.code)};item.appendChild(b);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${escText(permissionMessage(e))}</div>`}}
+async function joinWatchRoom(code){if(!state.user)return;try{const sn=await get(ref(db,`watchRooms/${code}`));if(!sn.exists())throw new Error('Sala não encontrada.');const room=sn.val();if(room.meta?.privacy==='invite'&&room.meta?.ownerUid!==state.user.uid){const inv=await get(ref(db,`watchInvites/${code}/${state.user.uid}`));if(!inv.exists())throw new Error('Essa sala aceita somente pessoas convidadas pelo host.')}const member={uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:room.meta?.ownerUid===state.user.uid?'Host':'Participante',joinedAt:nowIso()};await set(ref(db,`watchRooms/${code}/members/${state.user.uid}`),member);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name:room.meta?.name||code,role:member.role,joinedAt:nowIso()});$('watchJoinCode').value='';await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível entrar.'))}}
 async function openWatchRoom(code){if(state.watchCode&&state.watchCode!==code)await leaveWatchVoice(true);if(state.watchCode!==code){state.watchRtc.autoVoiceCode='';state.watchRtc.mutedPeers.clear();state.watchRtc.peerVolumes.clear()}clearUnsubs(state.watchUnsubs);state.watchCode=code;$('watchLobby').hidden=true;$('watchRoom').hidden=false;if($('watchCreateBtn'))$('watchCreateBtn').hidden=true;state.watchUnsubs.push(onValue(ref(db,`watchRooms/${code}`),sn=>{if(!sn.exists()){toast('Essa sala não existe mais.');closeWatchRoom(false);return}state.watchRoom=sn.val();renderWatchRoom()}));navigate('watch')}
 function isWatchHost(){return !!state.user&&state.watchRoom?.meta?.ownerUid===state.user.uid}
 function ensureWatchAutoVoice(){
@@ -1721,7 +1742,7 @@ function renderWatchRoom(){
   const r=state.watchRoom||{},m=r.meta||{};$('watchRoomName').textContent=m.name||'Watch Party';if($('watchPrivacyPill'))$('watchPrivacyPill').textContent=m.privacy==='public'?'Pública':m.privacy==='invite'?'Só por convite':'Privada';$('watchCode').textContent=state.watchCode||'------';$('watchHostPill').textContent=isWatchHost()?'Host':'Participante';$('watchMemberCount').textContent=String(Object.keys(r.members||{}).length);
   const list=$('watchMemberList');list.innerHTML='';if($('watchInvitePanel'))$('watchInvitePanel').hidden=!isWatchHost();const wsel=$('watchInviteFriendSelect');if(wsel){const cur=wsel.value;wsel.innerHTML='<option value="">Escolha um amigo</option>';Object.values(state.friends||{}).forEach(f=>{const o=document.createElement('option');o.value=f.uid;o.textContent=f.nome||'Usuário';wsel.appendChild(o)});if(state.friends?.[cur])wsel.value=cur}Object.values(r.members||{}).forEach(x=>{const d=document.createElement('div');d.className='member-item watch-member-item';d.dataset.watchMemberUid=String(x.uid||'');const img=document.createElement('img');img.src=x.avatar||DEFAULT_AVATAR;const c=document.createElement('div');const vp=state.watchRtc.presence?.[x.uid]||{};const st=vp.audio?(vp.muted?'Na voz • microfone silenciado':'Na chamada de voz'):vp.screen?'Transmitindo':'Na sala';c.innerHTML=`<strong>${escText(x.name||'Usuário')}</strong><small class="watch-member-status">${escText(st)}</small>`;d.append(img,c);list.appendChild(d)});
   $('watchMediaInput').disabled=!isWatchHost();$('watchMediaForm').querySelector('button').disabled=!isWatchHost();$('watchPlayBtn').disabled=!isWatchHost();if($('watchLocalFileBtn'))$('watchLocalFileBtn').disabled=!isWatchHost();if($('watchMusicSkipBtn'))$('watchMusicSkipBtn').disabled=!isWatchHost();
-  renderWatchMedia(r.media||{});renderWatchChat(r.chat||{});renderWatchMusic(r.musicQueue||{},r.musicAccess||{},r.musicPlan||{},r.musicPlayback||{});watchVoiceUi();if(!state.watchRtc.joined)ensureWatchRtcSession().catch(()=>{});ensureWatchAutoVoice()
+  renderWatchMedia(r.media||{});renderWatchChat(r.chat||{});renderWatchMusic(r.musicQueue||{},r.musicAccess||{},r.musicPlan||{},r.musicPlayback||{});watchVoiceUi();if(!state.watchRtc.joined)ensureWatchRtcSession().catch(()=>{})
 }
 function youtubeEmbed(url,viewerLocked=false){
   try{
@@ -2074,6 +2095,7 @@ function watchVoiceUi(){
   if($('watchMicBtn')){$('watchMicBtn').hidden=!audio;$('watchMicBtn').textContent=rtc.micEnabled?'Silenciar':'Ativar microfone'}
   if($('watchShareBtn')){$('watchShareBtn').hidden=!state.watchCode;$('watchShareBtn').textContent=rtc.screenStream?(rtc.screenSource==='file'?'Parar filme local':'Parar compartilhamento'):'Compartilhar tela';$('watchShareBtn').classList.toggle('active',!!rtc.screenStream)}
   if($('watchLeaveVoiceBtn'))$('watchLeaveVoiceBtn').hidden=!audio;
+  if($('watchVoiceConnectionLabel'))$('watchVoiceConnectionLabel').textContent=audio?'Na chamada de voz':'Fora da chamada';
   if(state.watchRoom)renderWatchMusic(state.watchRoom.musicQueue||{},state.watchRoom.musicAccess||{},state.watchRoom.musicPlan||{},state.watchRoom.musicPlayback||{})
 }
 function setWatchRtcStatus(text,tone=''){
@@ -3179,7 +3201,7 @@ async function runSiteActivity(kind,button){
   const label=button?.textContent||'',message=$('siteActivityResult');
   if(message)message.textContent='Registrando atividade com segurança...';
   try{
-    const r=await siteApi('site_progress',{action:kind},12000);
+    const r=await bridgeRequest('site_progress',{action:kind},18000,false);
     const value=r.loot?`${r.loot.label} encontrado!`:`Seu participante chegou na posição ${r.raceWinner} da corrida.`;
     if(message)message.textContent=`${value} +${r.xp||0} XP • Nível ${r.level||1}.`;
     playGameSfx('correct');
@@ -3190,11 +3212,11 @@ let siteXpHeartbeatBusy=false;
 setInterval(()=>{
   if(siteXpHeartbeatBusy||!state.user||document.visibilityState!=='visible'||state.route==='auth')return;
   siteXpHeartbeatBusy=true;
-  siteApi('site_progress',{action:'heartbeat'},10000).catch(()=>{}).finally(()=>siteXpHeartbeatBusy=false);
+  bridgeRequest('site_progress',{action:'heartbeat'},18000,false).catch(()=>{}).finally(()=>siteXpHeartbeatBusy=false);
 },300000);
 
 // Atividades são comprovadas pelo servidor (postagem, comentário e curtida).
 window.addEventListener('gremory:social',event=>{
   const detail=event.detail||{};if(!state.user||!['post','comment','like'].includes(detail.action))return;
-  siteApi('site_progress',{action:detail.action,itemId:detail.itemId},12000).catch(e=>console.warn('[SITE XP] recompensa social:',e.message));
+  bridgeRequest('site_progress',{action:detail.action,itemId:detail.itemId},18000,false).catch(e=>console.warn('[SITE XP] recompensa social:',e.message));
 });

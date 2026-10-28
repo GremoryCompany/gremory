@@ -1279,11 +1279,8 @@ module.exports = async (req, res) => {
     try{const got=await blobSdk.get(`backups/accounts/${uid}/latest.json`,{access:'private'});if(!got?.stream)return sendJson(res,404,{erro:'backup não encontrado'});const txt=await new Response(got.stream).text();return sendJson(res,200,{ok:true,snapshot:JSON.parse(txt)})}catch(e){return sendJson(res,404,{erro:'backup não encontrado',detalhe:e.message})}
   }
 
-  // Progressão de atividades exclusivamente no servidor, com identidade verificada.
-  if(action==='site_progress'){
-    const {handleProgress}=require('./site-progress');
-    return handleProgress(req,res,{readJsonBody,sendJson});
-  }
+  // Atividades seguras via RTDB + worker Railway; credenciais Admin nunca exigidas na Vercel.
+  if(action==='site_progress')return sendJson(res,410,{code:'SITE_PROGRESS_BRIDGE_REQUIRED',erro:'Atualize a página. A progressão agora é confirmada pelo servidor do site via Firebase e Railway.'});
 
   // Mutating game/music/slots flows were migrated to siteBridgeJobs (Firebase RTDB)
   // processed by the Railway/Highway Charlotte bridge. No Firebase Admin at Vercel.

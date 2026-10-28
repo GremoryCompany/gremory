@@ -1297,3 +1297,19 @@ body.watch-pseudo-fullscreen #watchScreenStage.watch-fullscreen-ui-hidden{cursor
 @media(max-width:960px){.site-activity-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:480px){.site-activity-grid{gap:8px}.site-activity{padding:10px}.site-activity .btn{min-width:0;white-space:normal}.watch-call-panel .watch-voice-actions,.watch-local-source,.watch-controls{grid-template-columns:repeat(2,minmax(0,1fr))!important}.watch-member-item{min-width:0}.watch-peer-volume{max-width:76px}.watch-screen-actions>*{min-width:0}}
 @media(prefers-reduced-motion:reduce){.site-progress-bar>i{transition:none}}
+
+/* Otimização 2026-10-27: Watch Party e Premium (sem alterar fluxos de áudio). */
+.watch-voice-label{display:inline-flex;align-items:center;gap:7px;flex-basis:100%;font-size:12px;font-weight:750;color:#d7cdd2;margin-bottom:4px}
+.watch-voice-label::before{content:"";width:7px;height:7px;border-radius:100%;background:#9ba2ad;box-shadow:0 0 0 3px rgba(155,162,173,.09)}
+.premium-benefits-intro{margin:26px 0 12px}.premium-benefits-intro h3{font-size:19px;margin:5px 0}.premium-benefits-intro p{color:var(--muted);font-size:12px;margin:4px 0 0}
+.premium-benefits-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:20px}
+.premium-benefit{display:flex;align-items:flex-start;gap:12px;border:1px solid rgba(239,201,130,.13);background:linear-gradient(135deg,#14151c,#11131a);border-radius:17px;padding:17px;min-width:0}
+.premium-benefit>span{display:grid;place-items:center;flex:0 0 35px;height:35px;border-radius:11px;color:#ffdda4;background:rgba(239,201,130,.095);font-size:20px}
+.premium-benefit>div{display:grid;gap:5px;min-width:0}.premium-benefit strong{font-size:13px}.premium-benefit small{font-size:11px;color:var(--muted);line-height:1.45}
+.premium-rupias-card{padding:23px;border-color:rgba(239,201,130,.24);background:linear-gradient(120deg,rgba(239,201,130,.06),rgba(213,69,95,.04))}
+.premium-rupias-card h3{margin:8px 0}.premium-rupias-card p{max-width:70ch;color:#d6cdd0;font-size:13px;line-height:1.55}
+.premium-rupias-card input{min-width:0;width:100%;padding:12px;background:#0e1017;border:1px solid #30323a;border-radius:11px;color:var(--text)}
+.plan-card.featured{background:linear-gradient(145deg,rgba(213,69,95,.11),#11141b 70%);border-color:rgba(255,107,130,.45)}
+.plan-card strong{font-size:31px}.plan-card>span{font-size:12px;color:var(--muted);min-height:2.8em}
+@media(max-width:1020px){.premium-benefits-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.premium-benefits-grid{grid-template-columns:1fr}.premium-rupias-card{padding:17px}.premium-rupias-card .admin-row-actions{display:grid;grid-template-columns:1fr}.plan-card{padding:17px}.watch-voice-label{font-size:11px}}

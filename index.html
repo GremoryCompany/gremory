@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261027-v14-recovery-v2">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261027-v14-recovery-v3">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -748,6 +748,7 @@
                     <span class="pill" id="watchVoiceCount">0</span>
                   </div>
                   <div class="voice-actions watch-voice-actions">
+                    <span class="watch-voice-label" id="watchVoiceConnectionLabel" role="status" aria-live="polite">Fora da chamada</span>
                     <button class="btn primary" id="watchJoinVoiceBtn" type="button">Entrar na voz</button>
                     <button class="btn" id="watchMicBtn" type="button" hidden>Microfone</button>
                     <button class="btn danger-ghost" id="watchLeaveVoiceBtn" type="button" hidden>Sair da voz</button>
@@ -838,12 +839,21 @@
             <div><span class="tag">SUA CONTA</span><h3 id="premiumStatusTitle">Plano padrão</h3><p id="premiumStatusText">Vincule a Charlotte para comprar e sincronizar o Premium pelo site.</p></div>
             <span class="pill" id="premiumStatusPill">Padrão</span>
           </article>
+          <div class="premium-benefits-intro"><div><span class="tag">BENEFÍCIOS PREMIUM</span><h3>Mais possibilidades, sem complicação</h3><p>Estas vantagens já são reconhecidas pelo sistema quando o Premium está ativo na Charlotte.</p></div></div>
+          <div class="premium-benefits-grid" aria-label="Vantagens incluídas no Premium">
+            <div class="premium-benefit"><span aria-hidden="true">♫</span><div><strong>Música sem limites</strong><small>Ao ativar Charlotte Music, a cota da sala fica ilimitada.</small></div></div>
+            <div class="premium-benefit"><span aria-hidden="true">✦</span><div><strong>XP em dobro</strong><small>Nas atividades do site: pesca, mineração e eventos.</small></div></div>
+            <div class="premium-benefit"><span aria-hidden="true">₹</span><div><strong>Daily VIP</strong><small>50% a mais de Rúpias e XP ao resgatar o Daily na Charlotte.</small></div></div>
+            <div class="premium-benefit"><span aria-hidden="true">✚</span><div><strong>Hospital acelerado</strong><small>Seus Pokémon se recuperam mais rápido.</small></div></div>
+            <div class="premium-benefit"><span aria-hidden="true">♜</span><div><strong>Mais energia</strong><small>8 ações de pesca/mineração por ciclo, em vez de 6.</small></div></div>
+            <div class="premium-benefit"><span aria-hidden="true">◈</span><div><strong>Grupo com Charlotte</strong><small>Vincule um convite de grupo enquanto tiver Premium ativo.</small></div></div>
+          </div>
           <article class="panel premium-rupias-card"><div><span class="tag">RÚPIAS</span><h3>Premium por 7 dias</h3><p>Ative por <strong>₹200.000</strong>. O link de grupo é opcional; se informar, a Charlotte entra e sai quando o Premium terminar.</p></div><label>Link do grupo (opcional)<input id="premiumRupiasGroupLink" type="url" placeholder="https://chat.whatsapp.com/..."></label><div class="admin-row-actions"><button class="btn primary" id="premiumRupiasBuyBtn" type="button">Comprar por ₹200.000</button><button class="btn" id="premiumGroupSetBtn" type="button">Vincular grupo depois</button></div><small id="premiumRupiasStatus" class="muted">Sem link, o Premium é ativado normalmente.</small></article>
           <div class="plans-grid">
-            <article class="plan-card"><small>1 DIA</small><strong>R$ 2</strong><span>1 dia</span><button class="btn" data-buy-plan="1">Comprar</button></article>
-            <article class="plan-card"><small>7 DIAS</small><strong>R$ 5</strong><span>7 dias</span><button class="btn" data-buy-plan="7">Comprar</button></article>
-            <article class="plan-card featured"><small>15 DIAS</small><strong>R$ 8</strong><span>15 dias</span><button class="btn primary" data-buy-plan="15">Comprar</button></article>
-            <article class="plan-card"><small>30 DIAS</small><strong>R$ 12</strong><span>30 dias</span><button class="btn" data-buy-plan="30">Comprar</button></article>
+            <article class="plan-card"><small>1 DIA</small><strong>R$ 2</strong><span>Experimente os benefícios</span><button class="btn" data-buy-plan="1">Comprar</button></article>
+            <article class="plan-card"><small>7 DIAS</small><strong>R$ 5</strong><span>Uma semana de vantagens</span><button class="btn" data-buy-plan="7">Comprar</button></article>
+            <article class="plan-card featured"><small>15 DIAS · DESTAQUE</small><strong>R$ 8</strong><span>15 dias para aproveitar</span><button class="btn primary" data-buy-plan="15">Comprar</button></article>
+            <article class="plan-card"><small>30 DIAS</small><strong>R$ 12</strong><span>Um mês completo</span><button class="btn" data-buy-plan="30">Comprar</button></article>
           </div>
           <div class="form-status" id="premiumCheckoutStatus"></div>
         </section>
@@ -968,6 +978,8 @@
                   <button class="btn" id="adminUnbanUserBtn" type="button">Remover ban</button>
                 </div>
                 <div class="admin-row-actions"><button class="btn" id="adminCreateCharlotteLinkBtn" type="button">Gerar código de vínculo</button><button class="btn danger-ghost" id="adminResetCharlotteLinkBtn" type="button">Resetar vínculo Charlotte</button></div>
+                <div class="admin-row-actions"><button class="btn danger-ghost" id="adminDeleteAccountBtn" type="button">Excluir conta do site (irreversível)</button></div>
+                <p class="muted">Exclui o login do Firebase (e-mail/senha), perfil e vínculo com o site. Preserva a carteira, os Pokémon e o Premium do WhatsApp da Charlotte. Exige confirmação.</p>
                 <p class="muted" id="adminCharlotteLinkHelp">Você pode gerar um código para o usuário selecionado. O reset limpa somente o pareamento/sincronização; não apaga Rúpias, Pokémon, perfil, amigos, compras ou backups.</p>
               </form>
               <div id="adminUserResult" class="admin-user-result"></div>
@@ -1127,6 +1139,6 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261027-v14-recovery-v2"></script>
+  <script type="module" src="/assets/js/app.js?v=20261027-v14-recovery-v3"></script>
 </body>
 </html>

@@ -77,11 +77,12 @@ pelo usuário é uma versão **diferente** da versão do site; não misturar os 
 5. Atualizar no repositório da Charlotte na Railway o arquivo
    `database/gremory_site_bridge.js` e reiniciar bot. Confirmar que a aplicação
    realmente importa e inicia esse módulo, mantendo o `index.js` corrigido.
-6. Fazer deploy completo do site na Vercel. Para as atividades novas,
-   configurar segredos **somente** em Environment Variables do servidor:
-   `FIREBASE_DATABASE_URL` + `FIREBASE_SERVICE_ACCOUNT_JSON` (JSON de conta
-   de serviço), ou o conjunto alternativo definido em `api/site-wallet.js`.
-   Esta é uma nova exigência restrita às APIs de progressão do site.
+6. Fazer deploy do site na Vercel. As atividades de pesca, mineração,
+   corridas e XP foram movidas para jobs do Bridge na Railway, usando as
+   credenciais Firebase Admin **já presentes no bot**. A Vercel NÃO precisa
+   dessas credenciais para executar essas atividades. Outros endpoints antigos
+   que ainda dependem de Firebase Admin no servidor devem ser auditados antes
+   de reativá-los, e nunca receber segredos no frontend.
 7. Esvaziar cache antigo via reload forçado e testar em **ambiente de teste**:
    conta, recuperação de senha, foto, post, curtir/comentar, pesca/mineração,
    convite sem aposta, áudio do host e convidado, Premium e sincronização.
@@ -109,3 +110,44 @@ Vercel e múltiplos dispositivos reais.
 
 O 21 Pesadelo usa mecânicas originais. Resident Evil 7 **não é domínio público**:
 não reutilizar imagens, personagens, músicas ou textos protegidos do jogo.
+
+## Patch incremental — melhorias adicionais 27/10
+
+- **Watch Party:** começa com "Fora da chamada". Apenas o botão "Entrar na voz"
+  pede permissão de microfone; o status só muda após o Firebase confirmar `audio:true`.
+  RTC para vídeo/transmissão continua separado; nenhuma captura local é reproduzida no host.
+- **Slots:** prêmios comuns usam `assets/audio/custom/money-win.mp3` (som de moedas);
+  não altera a lógica financeira ou o RNG.
+- **Premium:** seis vantagens reais destacadas e quatro cartões mais claros.
+  Os preços/durações não mudaram. **Não inventar diferenças de permissões entre os
+  planos pagos:** novas vantagens específicas de cada plano precisam de controle
+  de acesso no servidor antes de serem anunciadas como ativadas.
+- **Progressão:** `site_progress` é job validado pelo Bridge no Railway. Atualizar
+  o Bridge e publicar as novas regras do RTDB ANTES de publicar o site; caso
+  contrário o Firebase negará a operação.
+- **Exclusão de conta pelo administrador:** botão no painel Contas, confirmações
+  explícitas e ação privilegiada `admin_delete_account` no Bridge. A conta é
+  desativada/revogada primeiro e excluída de Firebase Authentication por último.
+  Limpa o perfil, nome único, vínculo e referências sociais selecionadas do RTDB.
+  Os dados da carteira, Pokémon e Premium na Charlotte ligados ao WhatsApp NÃO
+  são apagados: na conta nova é necessário vincular pelo código do bot.
+  Bloqueia exclusão com jobs, giros ou apostas financeiras pendentes.
+  Mantém recibos financeiros de servidor (`siteWalletOps`/`gameWagers`) para auditoria
+  e segurança contra reaplicação. Backups históricos não são reescritos.
+  Grava um registro mínimo em `siteAccountDeletions` (somente leitura Admin).
+  Se falhar entre as etapas, a conta permanece desativada; o admin deve resolver
+  a causa e repetir a operação, **não** recriar o vínculo antes de concluir.
+  Não remove automaticamente avatares já enviados ao Firebase Storage nem caches
+  históricos de outros serviços; isso requer uma rotina específica de retenção/
+  exclusão e verificação em ambiente real.
+
+## Verificações finais desta revisão
+
+- Rodar `npm test`, `node --check database/gremory_site_bridge.js`,
+  `node --check database/gremory_site_admin_accounts.js`,
+  `node --check database/gremory_site_progress.js`,
+  `node --input-type=module --check < assets/js/app.js`.
+- Conferir o JSON das regras antes de publicar e fazer um teste com conta
+  descartável no Firebase Emulator, incluindo exclusão + novo cadastro + /vincular.
+- O processamento ainda depende do bot na Railway online, embora o navegador
+  não precise acessar suas APIs para executar as novas atividades.

@@ -1,9 +1,9 @@
-const CACHE='gremory-v14-recovery-20261027-v2';
+const CACHE='gremory-v14-recovery-20261027-v3';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261027-v14-recovery-v2',
-  '/assets/js/app.js?v=20261027-v14-recovery-v2',
+  '/assets/css/app.css?v=20261027-v14-recovery-v3',
+  '/assets/js/app.js?v=20261027-v14-recovery-v3',
   '/assets/js/community.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
