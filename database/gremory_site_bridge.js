@@ -303,6 +303,61 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
       throw e
     }
   }
+  // Gift cards pagos por Rupias: o código nasce no servidor, nunca no navegador.
+  // O comprovante de pagamento fica separado do código e do resgate.
+  const GIFT_PRICE=200000, GIFT_DAYS=7;
+  function giftId(code){return crypto.createHash('sha256').update(String(code).toUpperCase()).digest('hex');}
+  function newGiftCode(){const hex=crypto.randomBytes(16).toString('hex').toUpperCase();return `GREM-${hex.match(/.{1,8}/g).join('-')}`;}
+  async function processGiftCardBuy(uid,jid,jobId){
+    if(!registeredFor(jid))throw new Error('Faça seu cadastro na Charlotte antes de comprar gift cards.');
+    const operationId='giftbuy_'+crypto.createHash('sha256').update(uid+':'+jobId).digest('hex').slice(0,32);
+    const orderRef=rtdb.ref(`siteGiftOrders/${uid}/${operationId}`);
+    const code=newGiftCode(),timestamp=Date.now();
+    const claim=await orderRef.transaction(old=>old?undefined:{uid,operationId,code,hash:giftId(code),status:'pending_payment',price:GIFT_PRICE,days:GIFT_DAYS,createdAt:timestamp},undefined,false);
+    const order=claim?.snapshot?.val?.();if(!order)throw new Error('Pedido indisponível.');
+    if(order.status==='paid')return{purchaseId:operationId,days:GIFT_DAYS,price:GIFT_PRICE,balance:balanceFor(jid)};
+    if(!claim.committed)throw new Error('Compra pendente. Verifique o histórico antes de tentar novamente.');
+    if(balanceFor(jid)<GIFT_PRICE){await orderRef.update({status:'insufficient'}).catch(()=>{});throw new Error('Rúpias insuficientes para comprar o gift card.');}
+    const result=await applySiteWalletEntry(uid,jid,operationId,-GIFT_PRICE,'gift_card',{days:GIFT_DAYS});
+    await rtdb.ref(`siteGiftCards/${order.hash}`).transaction(old=>old?undefined:{purchaseId:operationId,ownerUid:uid,days:GIFT_DAYS,status:'available',createdAt:timestamp},undefined,false);
+    await rtdb.ref(`siteGiftInbox/${uid}/${operationId}`).set({id:operationId,code:order.code,days:GIFT_DAYS,price:GIFT_PRICE,status:'available',createdAt:timestamp,kind:'gift_card'});
+    await orderRef.update({status:'paid',paidAt:Date.now()});
+    await notifySite(uid,{type:'gift_card',title:'Seu gift card chegou',text:'Abra a Loja de Gift Cards para revelar e copiar o código.',link:'#giftshop'}).catch(()=>{});
+    await syncAccount(uid,jid).catch(()=>{});
+    return{purchaseId:operationId,days:GIFT_DAYS,price:GIFT_PRICE,balance:result.balance};
+  }
+  async function processGiftCardRedeem(uid,jid,data){
+    if(!registeredFor(jid))throw new Error('Registre-se na Charlotte antes do resgate.');
+    const code=String(data.code||'').trim().toUpperCase();
+    if(!/^GREM-(?:[A-F0-9]{8}-){3}[A-F0-9]{8}$/.test(code))throw new Error('Formato de gift card inválido.');
+    // A tentativa só pode consumir um gift ativo. A transação impede que dois usuários o resgatem.
+    const key=giftId(code),r=rtdb.ref(`siteGiftCards/${key}`),timestamp=Date.now();
+    const claimed=await r.transaction(old=>old?.status==='available'?{...old,status:'claiming',claimedByUid:uid,claimedAt:timestamp}:undefined,undefined,false);
+    const row=claimed?.snapshot?.val?.();
+    if(!claimed?.committed){
+      if(row?.status==='redeemed'&&row?.claimedByUid===uid)return{redeemed:true,alreadyRedeemed:true,days:row.days};
+      throw new Error(row?.status==='claiming'?'Resgate em processamento. Contate o suporte se demorar.':'Código inválido, usado ou indisponível.');
+    }
+    try{
+      const db=readJson(premiumPath,[]);if(!Array.isArray(db))throw new Error('Banco Premium indisponível.');
+      const clean=cleanJid(jid),previous=Math.max(Date.now(),...db.filter(v=>sameUser(v.id,clean)).map(v=>Number(v.expired||0)));
+      const expiration=previous+Number(row.days||GIFT_DAYS)*86400000;
+      // Atualiza o cache vivo da index para o Premium valer sem reiniciar a Charlotte.
+      const next=db.filter(v=>!sameUser(v.id,clean));next.push({id:clean,expired:expiration});
+      writeJson(premiumPath,next);
+      if(Array.isArray(global.gremoryPremiumDb))global.gremoryPremiumDb.splice(0,global.gremoryPremiumDb.length,...next);
+      await r.update({status:'redeemed',redeemedAt:Date.now(),redeemedJid:clean});
+      await rtdb.ref(`siteGiftRedeemed/${uid}/${key}`).set({days:row.days||GIFT_DAYS,redeemedAt:Date.now()});
+      await syncAccount(uid,jid).catch(()=>{});
+      await notifySite(uid,{type:'premium',title:'Gift card resgatado',text:`Premium de ${row.days||GIFT_DAYS} dias ativado.`,link:'#premium'}).catch(()=>{});
+      return{redeemed:true,days:row.days||GIFT_DAYS,expiresAt:expiration};
+    }catch(error){
+      // Não retorna o código ao estoque: é mais seguro revisar um resgate interrompido
+      // do que entregar Premium duas vezes após uma queda do processo.
+      logger.log('[GIFT CARD] Resgate requer revisão:',uid,key,error.message);
+      throw new Error('Resgate iniciado, mas falta confirmação. Contate o suporte.');
+    }
+  }
   async function processPremiumGroupSet(uid,jid,data){
     if(!readPremium(jid).active)throw new Error('Você precisa estar com Premium ativo para vincular um grupo.');
     const link=String(data.groupLink||'').trim();if(!whatsappInviteCode(link))throw new Error('Link de grupo inválido.');
@@ -1166,13 +1221,35 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
   }
   async function mirrorTinderProfile(uid,profile){
     if(!uid||!profile)return;const p=tinderNormalizeProfile(profile);
-    await rtdb.ref(`siteTinderProfiles/${uid}`).set({uid,nome:p.nome,idade:Number(p.idade||0),bio:p.bio,foto:String(p.foto||''),ativo:p.ativo!==false,likes:Number(p.likes||0),matches:Number(p.matches||0),updatedAt:now()});
+    await rtdb.ref(`siteTinderProfiles/${uid}`).set({uid,nome:p.nome,idade:Number(p.idade||0),bio:p.bio,foto:/^https:\/\//i.test(String(p.foto||''))?String(p.foto):'',ativo:p.ativo!==false,likes:Number(p.likes||0),matches:Number(p.matches||0),updatedAt:now()});
     await rtdb.ref(`tinderBackups/${uid}`).set({jid:cleanJid(p.jid||''),nome:p.nome,idade:String(p.idade||''),bio:p.bio,foto:String(p.foto||''),wa:String(p.wa||''),ativo:p.ativo!==false,likes:Number(p.likes||0),matches:Number(p.matches||0),likedBy:p.likedBy||[],matchedWith:p.matchedWith||[],updatedAt:now()})
+  }
+  // Reflete no Firebase os perfis alterados diretamente por comandos do WhatsApp.
+  // Isso NAO mexe na carteira ou nas recompensas; usa somente contas vinculadas.
+  let tinderMirrorRunning=false;
+  async function syncTinderProfiles({jids=[]}={}){
+    if(tinderMirrorRunning)return{busy:true,synced:0};
+    tinderMirrorRunning=true;
+    try{
+      const rows=readJson(tinderPath,[]);
+      if(!Array.isArray(rows))return{synced:0};
+      const links=await siteUidMapByJid();
+      const selected=new Set((Array.isArray(jids)?jids:[]).map(cleanJid).filter(Boolean));
+      let synced=0;
+      for(const raw of rows){
+        if(!raw?.jid || (selected.size && !selected.has(cleanJid(raw.jid))))continue;
+        const uid=links.get(cleanJid(raw.jid));
+        if(!uid)continue;
+        await mirrorTinderProfile(uid,raw);
+        synced++;
+      }
+      return{synced};
+    }finally{tinderMirrorRunning=false}
   }
   async function restoreTinderFromFirebase(){
     const [pubSn,privateSn,links]=await Promise.all([rtdb.ref('siteTinderProfiles').once('value').catch(()=>null),rtdb.ref('tinderBackups').once('value').catch(()=>null),rtdb.ref('charlottePrivate').once('value').catch(()=>null)]),mirrors=pubSn?.val?.()||{},privateMirrors=privateSn?.val?.()||{};if(!Object.keys(mirrors).length&&!Object.keys(privateMirrors).length)return;
     const rows=readJson(tinderPath,[]);if(!Array.isArray(rows))return;const privateRows=links?.val?.()||{};let changed=false;const uids=new Set([...Object.keys(mirrors),...Object.keys(privateMirrors)]);
-    for(const uid of uids){const p={...(mirrors[uid]||{}),...(privateMirrors[uid]||{})},jid=cleanJid(p.jid||privateRows?.[uid]?.whatsappJid||'');if(!jid)continue;let i=rows.findIndex(x=>sameUser(x?.jid,jid));if(i<0){rows.push(tinderNormalizeProfile({...p,jid}));changed=true}else{rows[i]={...rows[i],...tinderNormalizeProfile({...rows[i],...p,jid})};changed=true}}
+    for(const uid of uids){const p={...(mirrors[uid]||{}),...(privateMirrors[uid]||{})},jid=cleanJid(p.jid||privateRows?.[uid]?.whatsappJid||'');if(!jid)continue;let i=rows.findIndex(x=>sameUser(x?.jid,jid));if(i<0){rows.push(tinderNormalizeProfile({...p,jid}));changed=true}else{const localUpdated=Number(rows[i]?.atualizadoEm||rows[i]?.updatedAt||0),remoteUpdated=Number(p.updatedAt||0);if(localUpdated>remoteUpdated)continue;rows[i]={...rows[i],...tinderNormalizeProfile({...rows[i],...p,jid})};changed=true}}
     if(changed)writeJson(tinderPath,rows)
   }
   async function processTinderProfileGet(uid,jid){
@@ -1679,6 +1756,8 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
       else if(type==='equip_customization')payload=await processEquipCustomization(uid,data);
       else if(type==='premium_checkout')payload=await processPremiumCheckout(uid,jid,data);
       else if(type==='premium_rupias_buy')payload=await processPremiumRupiasBuy(uid,jid,data);
+      else if(type==='gift_card_buy')payload=await withExclusiveKeys(walletLocks,[jid],()=>processGiftCardBuy(uid,jid,jobId));
+      else if(type==='gift_card_redeem')payload=await withExclusiveKeys(walletLocks,['gift:'+giftId(String(data.code||''))],()=>processGiftCardRedeem(uid,jid,data));
       else if(type==='premium_group_set')payload=await processPremiumGroupSet(uid,jid,data);
       else if(type==='send_download_link')payload=await processSendDownload(uid,jid,data);
       else if(type==='youtube_bot_download')payload=await processYoutubeDownload(uid,jid,data);
@@ -1925,6 +2004,6 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
     }
     return false;
   }
-  return{start,stop,handleCommand,syncPokemon,syncAccount,linkAccount,publishUpdate,notifySite,notifyAllSiteUsers,deletePublishedUpdate};
+  return{start,stop,handleCommand,syncPokemon,syncAccount,syncTinderProfiles,linkAccount,publishUpdate,notifySite,notifyAllSiteUsers,deletePublishedUpdate};
 }
 module.exports={createGremorySiteBridge};

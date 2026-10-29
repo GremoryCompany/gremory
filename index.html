@@ -15,8 +15,8 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261028-novos-comandos-01">
-  <link rel="stylesheet" href="/assets/css/gremory-tools.css?v=20261028-02">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261028-gremorium-gift-01">
+  <link rel="stylesheet" href="/assets/css/gremory-tools.css?v=20261028-gestao-01">
 </head>
 <body class="auth-loading">
   <section class="auth-gate" id="authModal" aria-hidden="false">
@@ -80,6 +80,7 @@
         <div class="nav-section nav-section-featured">
           <span class="nav-section-label">Conta</span>
           <button class="nav-item nav-premium" data-route="premium"><span>♛</span><b>Premium</b></button>
+          <button class="nav-item" data-route="giftshop"><span>🎁</span><b>Gift Cards</b></button>
           <button class="nav-item" data-route="personalize"><span>✧</span><b>Personalizar</b></button>
         </div>
 
@@ -101,7 +102,7 @@
           <span class="nav-section-label">Ferramentas</span>
           <button class="nav-item" data-route="studio"><span>▤</span><b>Ferramentas</b></button>
           <button class="nav-item" data-route="downloads"><span>↓</span><b>Downloads</b></button>
-          <button class="nav-item" data-route="feed"><span>▧</span><b>Comunidade</b></button>
+          <button class="nav-item" data-route="feed"><span>▧</span><b>Grémorium</b></button>
           <button class="nav-item" data-route="updates"><span>◌</span><b>Atualizações</b></button>
           <button class="nav-item" data-route="support"><span>?</span><b>Suporte</b></button>
         </div>
@@ -200,6 +201,8 @@
               </div>
             </article>
 
+            <article class="panel giftshop-redeem"><span class="tag">RESGATAR</span><h3>Ativar um código</h3><p class="muted">Cole um gift card válido. A Charlotte confere o código no servidor e ativa a assinatura.</p><form id="giftRedeemForm" class="stack-form"><label>Código do gift card<input id="giftRedeemCode" type="text" maxlength="42" autocomplete="off" spellcheck="false" placeholder="GREM-XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX" required></label><button type="submit" class="btn primary">Resgatar agora</button></form><p id="giftRedeemStatus" role="status" class="muted"></p></article>
+            <article class="panel charlotte-gift-shortcut"><p class="muted">Quer comprar ou visualizar seus códigos?</p><button type="button" class="btn" data-route="giftshop">Abrir loja e mensagens</button></article>
             <article class="panel command-launcher">
               <div class="panel-head"><div><span class="tag">CHARLOTTE</span><h3>Ações no site</h3></div><span class="pill">dados do bot</span></div>
               <div class="command-groups">
@@ -437,6 +440,13 @@
             <article class="gtools-card" aria-label="Criar figurinha"><h4>💜 Criar figurinha</h4><p>Crie um WebP quadrado, com fundo transparente e legenda opcional.</p><label class="gtools-upload">Escolher ou arrastar imagem<input id="gtoolsStickerImage" type="file" accept="image/jpeg,image/png,image/webp"></label><label>Texto opcional<input id="gtoolsStickerLabel" type="text" maxlength="90" placeholder="Ex.: Gremory 💜"></label><label>Zoom<input id="gtoolsStickerZoom" type="range" min="100" max="200" value="100"></label><button type="button" class="btn primary" id="gtoolsStickerBtn">Criar e baixar WebP</button><small id="gtoolsStickerStatus" class="gtools-status" role="status"></small></article>
             <article class="gtools-card" aria-label="Criar thumbnail"><h4>🎨 Capa e thumbnail</h4><p>Monte capa 16:9 com texto, fundo roxo e sua foto. Exporta PNG 1280×720.</p><label class="gtools-upload">Foto opcional<input id="gtoolsThumbImage" type="file" accept="image/jpeg,image/png,image/webp"></label><label>Título<input id="gtoolsThumbTitle" type="text" maxlength="90" placeholder="Meu vídeo Gremory"></label><button type="button" class="btn primary" id="gtoolsThumbBtn">Criar thumbnail</button><small id="gtoolsThumbStatus" class="gtools-status" role="status"></small></article>
           </div>
+          <div class="studio-section-label"><span>CRIAÇÃO</span><h3>Mais ferramentas</h3></div>
+          <div class="gtools-grid">
+           <article class="gtools-card"><h4>⇄ Converter imagem</h4><p>JPG, PNG ou WebP sem upload; escolha o formato de saída.</p><label class="gtools-upload">Imagem<input id="gtoolsConvertImage" type="file" accept="image/jpeg,image/png,image/webp"></label><label>Formato<select id="gtoolsConvertType"><option value="image/png">PNG</option><option value="image/jpeg">JPG</option><option value="image/webp">WebP</option></select></label><button class="btn primary" id="gtoolsConvertBtn" type="button">Converter e baixar</button><small id="gtoolsConvertStatus" role="status" class="gtools-status"></small></article>
+           <article class="gtools-card"><h4>▦ Criar mosaico</h4><p>Transforme até quatro fotos em uma arte quadrada.</p><label class="gtools-upload">Fotos<input id="gtoolsCollageImages" type="file" accept="image/jpeg,image/png,image/webp" multiple></label><button class="btn primary" id="gtoolsCollageBtn" type="button">Criar mosaico</button><small id="gtoolsCollageStatus" role="status" class="gtools-status"></small></article>
+           <article class="gtools-card"><h4>◈ Paleta de cores</h4><p>Crie uma faixa de cores para banners e personalizações.</p><label>Cor inicial<input type="color" id="gtoolsColorA" value="#7c4acd"></label><label>Cor final<input type="color" id="gtoolsColorB" value="#e45aaf"></label><button class="btn primary" id="gtoolsPaletteBtn" type="button">Baixar paleta</button><small id="gtoolsPaletteStatus" role="status" class="gtools-status"></small></article>
+          </div>
+          <article class="panel gtools-library"><div class="panel-head"><div><span class="tag">BIBLIOTECA</span><h3>Meus fundos e renders</h3></div><span class="pill">Neste dispositivo</span></div><p class="muted">Importe seu pack de imagens para buscar pelo nome e usar na capa ou figurinha. Os arquivos ficam guardados no navegador deste aparelho, não no Firebase.</p><label class="gtools-upload">Adicionar imagens do pack<input id="gtoolsLibraryFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple></label><label>Buscar no meu pack<input id="gtoolsLibrarySearch" type="search" placeholder="Ex.: render, fundo, roxo"></label><div id="gtoolsLibraryList" class="gtools-library-grid"></div><small id="gtoolsLibraryStatus" role="status" class="gtools-status"></small></article>
           <p class="gtools-privacy muted">Seus arquivos são processados no próprio navegador (até 8 MB por imagem). A figurinha gerada pode ser enviada manualmente ao WhatsApp. O envio automático via Charlotte será integrado somente após validação segura da transferência de mídia.</p>
           <div class="studio-section-label"><span>DOCUMENTOS</span><h3>Ferramentas PDF</h3></div>
           <div class="studio-tools-grid">
@@ -848,7 +858,20 @@
             <div><span class="tag">SUA CONTA</span><h3 id="premiumStatusTitle">Plano padrão</h3><p id="premiumStatusText">Vincule a Charlotte para comprar e sincronizar o Premium pelo site.</p></div>
             <span class="pill" id="premiumStatusPill">Padrão</span>
           </article>
-          <div class="gtools-premium-compare"><span class="tag">PLANOS E VANTAGENS</span><h3>O que você desbloqueia com a Charlotte?</h3><p>Os planos de 1, 7, 15 e 30 dias usam os valores oficiais que já existem no bot. Premium ativo mantém os benefícios compatíveis do Gremory e agora libera comandos exclusivos no WhatsApp.</p><details><summary>Ver benefícios e novos comandos</summary><ul><li>🎵 Charlotte Music sem cota compartilhada quando um Premium a ativa na sala</li><li>⚡ XP dobrado e mais energia onde o servidor já reconhece Premium</li><li>🎁 Daily VIP e comandos disponíveis na Charlotte</li><li>🔳 <code>/vipqr [link]</code> — gerar QR Code</li><li>🔐 <code>/vipsenha 20</code> — gerar senha forte</li><li>📝 <code>/viptexto [texto]</code> — analisar o texto</li><li>📚 <code>/menuvip extras</code> e <code>/vantagensvip</code> — consultar vantagens</li></ul><p>Benefícios de grupo e planos diferenciados dependem da integração de assinatura específica no servidor; não são ativados por esta interface.</p></details></div>
+          <div class="premium-shop-head" aria-labelledby="premiumShopTitle">
+            <div><span class="tag">PLANOS EM REAIS</span><h3 id="premiumShopTitle">Escolha seu Premium</h3><p>Ative com pagamento seguro. Escolha o período que combina com você e aproveite as vantagens atuais do Premium.</p></div>
+            <span class="premium-shop-head-aside">A partir de <strong>R$ 2</strong></span>
+          </div>
+          <div class="plans-grid">
+            <article class="plan-card"><small>1 DIA</small><strong>R$ 2</strong><span>Conheça o Premium por 1 dia</span><button class="btn" data-buy-plan="1">Comprar</button></article>
+            <article class="plan-card"><small>7 DIAS</small><strong>R$ 5</strong><span>Aproveite por 7 dias</span><button class="btn" data-buy-plan="7">Comprar</button></article>
+            <article class="plan-card featured"><small>15 DIAS · DESTAQUE</small><strong>R$ 8</strong><span>Mais tempo para aproveitar</span><button class="btn primary" data-buy-plan="15">Comprar</button></article>
+            <article class="plan-card"><small>30 DIAS</small><strong>R$ 12</strong><span>30 dias de Premium</span><button class="btn" data-buy-plan="30">Comprar</button></article>
+          </div>
+          <div class="form-status" id="premiumCheckoutStatus"></div>
+          <div class="premium-divider-label"><span>OU PAGUE COM RÚPIAS</span></div>
+          <article class="panel premium-rupias-card"><div><span class="tag">RÚPIAS</span><h3>Premium por 7 dias</h3><p>Ative por <strong>₹200.000</strong>. O link de grupo é opcional; se informar, a Charlotte entra e sai quando o Premium terminar.</p></div><label>Link do grupo (opcional)<input id="premiumRupiasGroupLink" type="url" placeholder="https://chat.whatsapp.com/..."></label><div class="admin-row-actions"><button class="btn primary" id="premiumRupiasBuyBtn" type="button">Comprar por ₹200.000</button><button class="btn" id="premiumGroupSetBtn" type="button">Vincular grupo depois</button></div><small id="premiumRupiasStatus" class="muted">Sem link, o Premium é ativado normalmente.</small></article>
+          <article class="panel premium-gift-teaser"><div><span class="tag">NOVO NA LOJA</span><h3>Gift Card por Rúpias</h3><p>Compre um código e resgate quando quiser ou presenteie um amigo.</p></div><button class="btn" data-route="giftshop" type="button">Abrir Loja de Gift Cards</button></article>
           <div class="premium-benefits-intro"><div><span class="tag">BENEFÍCIOS PREMIUM</span><h3>Mais possibilidades, sem complicação</h3><p>Estas vantagens já são reconhecidas pelo sistema quando o Premium está ativo na Charlotte.</p></div></div>
           <div class="premium-benefits-grid" aria-label="Vantagens incluídas no Premium">
             <div class="premium-benefit"><span aria-hidden="true">♫</span><div><strong>Música sem limites</strong><small>Ao ativar Charlotte Music, a cota da sala fica ilimitada.</small></div></div>
@@ -858,16 +881,17 @@
             <div class="premium-benefit"><span aria-hidden="true">♜</span><div><strong>Mais energia</strong><small>8 ações de pesca/mineração por ciclo, em vez de 6.</small></div></div>
             <div class="premium-benefit"><span aria-hidden="true">◈</span><div><strong>Grupo com Charlotte</strong><small>Vincule um convite de grupo enquanto tiver Premium ativo.</small></div></div>
           </div>
-          <article class="panel premium-rupias-card"><div><span class="tag">RÚPIAS</span><h3>Premium por 7 dias</h3><p>Ative por <strong>₹200.000</strong>. O link de grupo é opcional; se informar, a Charlotte entra e sai quando o Premium terminar.</p></div><label>Link do grupo (opcional)<input id="premiumRupiasGroupLink" type="url" placeholder="https://chat.whatsapp.com/..."></label><div class="admin-row-actions"><button class="btn primary" id="premiumRupiasBuyBtn" type="button">Comprar por ₹200.000</button><button class="btn" id="premiumGroupSetBtn" type="button">Vincular grupo depois</button></div><small id="premiumRupiasStatus" class="muted">Sem link, o Premium é ativado normalmente.</small></article>
-          <div class="plans-grid">
-            <article class="plan-card"><small>1 DIA</small><strong>R$ 2</strong><span>Experimente os benefícios</span><button class="btn" data-buy-plan="1">Comprar</button></article>
-            <article class="plan-card"><small>7 DIAS</small><strong>R$ 5</strong><span>Uma semana de vantagens</span><button class="btn" data-buy-plan="7">Comprar</button></article>
-            <article class="plan-card featured"><small>15 DIAS · DESTAQUE</small><strong>R$ 8</strong><span>15 dias para aproveitar</span><button class="btn primary" data-buy-plan="15">Comprar</button></article>
-            <article class="plan-card"><small>30 DIAS</small><strong>R$ 12</strong><span>Um mês completo</span><button class="btn" data-buy-plan="30">Comprar</button></article>
-          </div>
-          <div class="form-status" id="premiumCheckoutStatus"></div>
+          <div class="gtools-premium-compare"><span class="tag">PLANOS E VANTAGENS</span><h3>O que você desbloqueia com a Charlotte?</h3><p>Os planos atuais de 1, 7, 15 e 30 dias compartilham os benefícios Premium já disponíveis. A diferença hoje é a duração da assinatura. Vantagens exclusivas por faixa dependem de implementação no servidor e serão anunciadas somente quando estiverem ativas.</p><details><summary>Ver benefícios e novos comandos</summary><ul><li>🎵 Charlotte Music sem cota compartilhada quando um Premium a ativa na sala</li><li>⚡ XP dobrado e mais energia onde o servidor já reconhece Premium</li><li>🎁 Daily VIP e comandos disponíveis na Charlotte</li><li>🔳 <code>/vipqr [link]</code> — gerar QR Code</li><li>🔐 <code>/vipsenha 20</code> — gerar senha forte</li><li>📝 <code>/viptexto [texto]</code> — analisar o texto</li><li>📚 <code>/menuvip extras</code> e <code>/vantagensvip</code> — consultar vantagens</li></ul><p>Benefícios de grupo e planos diferenciados dependem da integração de assinatura específica no servidor; não são ativados por esta interface.</p></details></div>
         </section>
 
+        <section class="view giftshop-view" data-view="giftshop">
+          <div class="section-head"><div><span class="tag">LOJA DA CONTA</span><h2>Gift Cards</h2><p class="muted">Compre um código usando Rúpias e resgate na sua conta ou presenteie alguém.</p></div></div>
+          <div class="giftshop-grid">
+            <article class="panel giftshop-product"><span class="tag">CHARLOTTE PREMIUM</span><h3>Gift Card · 7 dias</h3><div class="giftshop-price">₹200.000</div><p class="muted">O código é criado pela Charlotte e chega na sua caixa de mensagens do site. Pode ser resgatado uma única vez. Não exige comprar o Premium imediatamente.</p><button class="btn primary" id="giftBuyBtn" type="button">Comprar e receber o código</button><p class="muted" id="giftBuyStatus" role="status"></p></article>
+            <article class="panel giftshop-inbox"><div class="panel-head"><div><span class="tag">MENSAGENS</span><h3>Correio da Charlotte</h3></div><span class="pill">Privado</span></div><p class="muted">Os códigos ficam ocultos até você tocar no olhinho.</p><div id="giftInbox" class="gift-inbox-messages" aria-live="polite"><p class="muted">Faça login para ver seus presentes.</p></div></article>
+          </div>
+          <article class="panel giftshop-next-step"><p class="muted">Já recebeu seu código? Copie na mensagem acima e você será levado para a aba Charlotte para fazer o resgate.</p><button class="btn" data-route="charlotte" type="button">Ir para resgate na Charlotte</button></article>
+        </section>
         <section class="view" data-view="personalize">
           <div class="section-head personalize-head">
             <div><span class="tag">PERSONALIZAR</span><h2>Estilo do perfil</h2><p class="muted">Monte sua identidade na Gremory.</p></div>
@@ -927,9 +951,11 @@
         </section>
 
 <section class="view community-view" data-view="feed">
- <div class="section-head"><div><span class="tag">COMUNIDADE</span><h2>Seu espaço na Gremory</h2><p class="muted">Momentos, amigos e suas conquistas.</p></div><button id="feedRefresh" class="btn" type="button">Atualizar</button></div>
+ <nav class="gremorium-nav" aria-label="Navegação do Grémorium"><button type="button" class="gremorium-tab active" data-community-tab="home">⌂ Início</button><button type="button" class="gremorium-tab" data-community-tab="explore">⌕ Explorar</button><button type="button" class="gremorium-tab" data-community-tab="create">＋ Criar</button><button type="button" class="gremorium-tab" data-community-tab="profile">◉ Perfil</button><button type="button" class="gremorium-tab" data-community-tab="saved">☆ Salvos</button><button type="button" class="gremorium-tab" data-community-tab="videos">▶ Vídeos</button><button type="button" class="gremorium-tab" data-route="friends">✉ Mensagens</button><button type="button" class="gremorium-tab" id="gremoriumNotificationsBtn">◌ Avisos</button></nav>
+ <div class="gremorium-discover" id="feedDiscover" hidden><label>Buscar pessoas, @usuários ou texto de posts<input id="feedDiscoverQuery" type="search" maxlength="60" placeholder="Nome, @arroba, #assunto"></label><div class="gremorium-search-results" id="feedDiscoverResults" aria-live="polite"></div></div>
+ <div class="section-head"><div><span class="tag">COMUNIDADE</span><h2>Grémorium</h2><p class="muted">Momentos, amigos e suas conquistas.</p></div><button id="feedRefresh" class="btn" type="button">Atualizar</button></div>
  <article class="panel feed-stories-panel"><div class="feed-stories-head"><strong>Stories · 24 horas</strong><label class="btn mini-btn">+ Meu story <input id="feedStoryFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden></label></div><div id="feedStories" class="feed-stories-strip" aria-live="polite"><small class="muted">Carregando stories…</small></div><p id="feedStoryStatus" class="muted small" role="status"></p></article>
- <article class="panel"><form id="feedForm" class="stack-form"><label>Nova publicação<textarea id="feedText" maxlength="1800" rows="3" placeholder="O que você quer compartilhar?"></textarea></label><label>Foto ou vídeo<input id="feedFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"></label><p class="muted">Fotos até 10 MB • Vídeos até 50 MB. Publique apenas conteúdo que você pode compartilhar.</p><label>Ou link HTTPS da mídia<input id="feedUrl" type="url" placeholder="https://..."></label><label>Tipo da mídia por link<select id="feedKind"><option value="image">Foto / GIF</option><option value="video">Vídeo MP4 / WebM</option></select></label><button class="btn primary" type="submit">Publicar</button><p id="feedProgress" role="status"></p></form></article>
+ <article class="panel" id="feedComposer"><form id="feedForm" class="stack-form"><label>Nova publicação<textarea id="feedText" maxlength="1800" rows="3" placeholder="O que você quer compartilhar?"></textarea></label><label>Foto ou vídeo<input id="feedFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"></label><p class="muted">Fotos até 10 MB • Vídeos até 50 MB. Publique apenas conteúdo que você pode compartilhar.</p><label>Ou link HTTPS da mídia<input id="feedUrl" type="url" placeholder="https://..."></label><label>Tipo da mídia por link<select id="feedKind"><option value="image">Foto / GIF</option><option value="video">Vídeo MP4 / WebM</option></select></label><button class="btn primary" type="submit">Publicar</button><p id="feedProgress" role="status"></p></form></article>
  <div class="feed-filters"><button class="btn active" id="feedAll" type="button">Todos</button><button class="btn" id="feedFollowing" type="button">Seguindo</button><button class="btn" id="feedMyProfile" type="button">Meu perfil e emblemas</button></div>
  <div id="feedProfile" class="panel" hidden></div><div id="feedStoryViewer" class="feed-story-viewer" hidden role="dialog" aria-modal="true" aria-label="Visualizar story"><button class="btn" id="feedStoryClose" type="button" aria-label="Fechar story">✕ Fechar</button><div id="feedStoryViewerContent"></div></div><div id="feedList" class="feed-list" aria-live="polite"></div><button id="feedMore" class="btn" type="button">Carregar mais</button>
 </section>
@@ -1086,6 +1112,7 @@
       <div class="drawer-head"><div><span class="tag">CONTA</span><h2>Meu perfil</h2></div><button class="modal-close static" id="accountDrawerClose">×</button></div>
       <div class="profile-own-cover" id="profileOwnCover"><div class="profile-own-media" id="profileOwnMedia" aria-hidden="true"></div><img src="/assets/img/gremory-logo.png" alt=""></div>
       <div class="profile-summary"><img id="profileAvatarPreview" src="/assets/img/profile.jpg" alt=""><div><strong id="profileNameView">Usuário</strong><span id="profileUsernameView">@usuario</span><span id="profilePlanView">Padrão</span></div></div>
+      <section class="account-security-mini" aria-label="Segurança do e-mail"><div><strong>Segurança da conta</strong><small id="accountEmailVerificationStatus">Conferindo e-mail…</small></div><button class="btn" id="accountVerifyEmailBtn" type="button">Verificar e-mail</button></section>
       <form id="profileForm" class="profile-form">
         <label>Nome<input id="profileName" maxlength="40"></label><label>Nome de usuário<input id="profileUsername" maxlength="20" autocomplete="username" placeholder="usuario"><small class="field-hint" id="profileUsernameHint">Pode ser alterado uma vez a cada 7 dias.</small></label>
         <label>Foto (URL)<input id="profileAvatar" type="url" placeholder="https://..."></label><label>Ou escolha do dispositivo<input id="profileAvatarFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><small class="field-hint" id="profileAvatarUploadStatus">Fotos de até 5 MB. Após enviar, salve o perfil.</small></label>
@@ -1150,7 +1177,7 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261028-novos-comandos-01"></script>
-  <script type="module" src="/assets/js/gremory-tools.js?v=20261028-02"></script>
+  <script type="module" src="/assets/js/app.js?v=20261028-gestao-01"></script>
+  <script type="module" src="/assets/js/gremory-tools.js?v=20261028-gestao-01"></script>
 </body>
 </html>

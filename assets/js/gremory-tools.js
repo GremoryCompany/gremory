@@ -68,6 +68,74 @@ function init(){
    ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';ctx.font='900 80px system-ui,sans-serif';ctx.lineWidth=12;ctx.strokeStyle='#140e22';centerText(ctx,title,640,570,1130);ctx.fillStyle='#fff';centerText(ctx,title,640,570,1130);
    saveBlob(await canvasBlob(c,'image/png'),'gremory-thumbnail.png');
  },'gtoolsThumbStatus'));
+ // Exportações locais: nenhuma dessas ferramentas altera dados do Firebase.
+ const convert=$('gtoolsConvertBtn');
+ convert?.addEventListener('click',()=>guarded('convert',convert,async()=>{
+   const file=$('gtoolsConvertImage')?.files?.[0],img=await readImage(file);
+   const c=makeCanvas(img.naturalWidth,img.naturalHeight),ctx=c.getContext('2d');
+   const type=$('gtoolsConvertType')?.value;
+   if(!['image/jpeg','image/png','image/webp'].includes(type))throw new Error('Formato inválido.');
+   if(type==='image/jpeg'){ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);}
+   ctx.drawImage(img,0,0);const ext=type==='image/jpeg'?'jpg':type.split('/')[1];
+   saveBlob(await canvasBlob(c,type,.86),safeName(file.name)+'-convertida.'+ext);
+ },'gtoolsConvertStatus'));
+ const collage=$('gtoolsCollageBtn');
+ collage?.addEventListener('click',()=>guarded('collage',collage,async()=>{
+   const files=Array.from($('gtoolsCollageImages')?.files||[]).slice(0,4);if(!files.length)throw new Error('Escolha de 1 a 4 fotos.');
+   const images=await Promise.all(files.map(readImage)),c=makeCanvas(1024,1024),ctx=c.getContext('2d');ctx.fillStyle='#16101f';ctx.fillRect(0,0,1024,1024);
+   const n=images.length,cols=n===1?1:2,rows=Math.ceil(n/cols),gap=12,w=(1024-(cols+1)*gap)/cols,h=(1024-(rows+1)*gap)/rows;
+   images.forEach((img,i)=>fitImage(ctx,img,gap+(i%cols)*(w+gap),gap+Math.floor(i/cols)*(h+gap),w,h,'cover'));
+   saveBlob(await canvasBlob(c,'image/png'),'gremory-mosaico.png');
+ },'gtoolsCollageStatus'));
+ const palette=$('gtoolsPaletteBtn');
+ palette?.addEventListener('click',()=>guarded('palette',palette,async()=>{
+   const c=makeCanvas(1200,250),ctx=c.getContext('2d'),a=$('gtoolsColorA')?.value,b=$('gtoolsColorB')?.value;
+   if(!/^#[a-f0-9]{6}$/i.test(a)||!/^#[a-f0-9]{6}$/i.test(b))throw new Error('Cores inválidas.');
+   const g=ctx.createLinearGradient(0,0,c.width,0);g.addColorStop(0,a);g.addColorStop(1,b);ctx.fillStyle=g;ctx.fillRect(0,0,c.width,c.height);
+   saveBlob(await canvasBlob(c,'image/png'),'gremory-paleta.png');
+ },'gtoolsPaletteStatus'));
+ // Biblioteca privada por navegador, limitada para não consumir armazenamento sem controle.
+ const DB_NAME='gremory-local-assets-v1';let libraryDb=null,libraryInit=null;
+ function initLibrary(){if(libraryInit)return libraryInit;libraryInit=new Promise((resolve,reject)=>{
+   if(!window.indexedDB)return reject(new Error('Seu navegador não oferece armazenamento local.'));
+   const request=indexedDB.open(DB_NAME,1);
+   request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains('images'))request.result.createObjectStore('images',{keyPath:'id'})};
+   request.onsuccess=()=>{libraryDb=request.result;resolve(libraryDb)};request.onerror=()=>reject(request.error||new Error('Não foi possível abrir a biblioteca.'));
+ });return libraryInit;}
+ function storeQuery(mode,operation){return initLibrary().then(db=>new Promise((resolve,reject)=>{
+   const tx=db.transaction('images',mode),req=operation(tx.objectStore('images'));
+   req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+   tx.onerror=()=>reject(tx.error);
+ }));}
+ let libraryItems=[];
+ async function loadLocalAssets(){libraryItems=await storeQuery('readonly',store=>store.getAll());renderLocalAssets();}
+ function renderLocalAssets(){const wrap=$('gtoolsLibraryList');if(!wrap)return;wrap.replaceChildren();const term=String($('gtoolsLibrarySearch')?.value||'').trim().toLowerCase();
+  const list=libraryItems.filter(a=>a.name.toLowerCase().includes(term)).slice(0,80);
+  for(const row of list){const item=document.createElement('div');item.className='gtools-library-asset';
+   const img=new Image();img.loading='lazy';img.alt=row.name;const url=URL.createObjectURL(row.file);img.src=url;img.onload=()=>URL.revokeObjectURL(url);img.onerror=()=>URL.revokeObjectURL(url);
+   const title=document.createElement('span');title.textContent=row.name;title.title=row.name;
+   const use=document.createElement('button');use.type='button';use.className='btn';use.textContent='Usar na capa';use.onclick=()=>{
+    try{const dt=new DataTransfer(),file=new File([row.file],row.name,{type:row.file.type});dt.items.add(file);$('gtoolsThumbImage').files=dt.files;$('gtoolsThumbTitle').focus();$('gtoolsThumbImage').closest('.gtools-card').scrollIntoView({behavior:'smooth'});status('gtoolsLibraryStatus','Imagem selecionada para a thumbnail.');}catch(e){status('gtoolsLibraryStatus','O navegador não conseguiu selecionar automaticamente. Exporte e importe manualmente.',true)}
+   };
+   const del=document.createElement('button');del.type='button';del.className='btn';del.textContent='Excluir';del.onclick=async()=>{await storeQuery('readwrite',st=>st.delete(row.id));await loadLocalAssets()};
+   item.append(img,title,use,del);wrap.append(item);
+  }
+  if(!list.length){const span=document.createElement('small');span.className='muted';span.textContent='Nenhuma imagem encontrada.';wrap.append(span)}
+ }
+ $('gtoolsLibraryFiles')?.addEventListener('change',async e=>{
+  const files=Array.from(e.target.files||[]);let count=0;try{
+   await initLibrary();const current=await storeQuery('readonly',st=>st.count());
+   if(current+files.length>40)throw new Error('Limite de 40 imagens por dispositivo. Exclua algumas antes de importar.');
+   const currentAssets=await storeQuery('readonly',st=>st.getAll());let usedBytes=currentAssets.reduce((n,a)=>n+Number(a.file?.size||0),0);
+   for(const file of files){if(!IMG_TYPES.has(file.type)||file.size>MAX_BYTES)continue;if(usedBytes+file.size>32*1024*1024)throw new Error('Sua biblioteca atingiu 32 MB. Exclua imagens para liberar espaço.');usedBytes+=file.size;
+    // Usar IDs criados pelo navegador impede sobrescrever um pack com mesmo nome.
+    const id=crypto.randomUUID();await storeQuery('readwrite',st=>st.put({id,name:safeName(file.name)+'.'+file.name.split('.').pop(),file,createdAt:Date.now()}));count++;
+   }
+   await loadLocalAssets();status('gtoolsLibraryStatus',`${count} imagem(ns) importadas. Arquivos disponíveis neste navegador.`);
+  }catch(err){status('gtoolsLibraryStatus',err?.message||'Armazenamento indisponível.',true)}finally{e.target.value=''}
+ });
+ $('gtoolsLibrarySearch')?.addEventListener('input',renderLocalAssets);
+ loadLocalAssets().catch(err=>status('gtoolsLibraryStatus',err.message,true));
  for(const node of document.querySelectorAll('.gtools-upload')){
    node.addEventListener('dragover',e=>{e.preventDefault();node.classList.add('gtools-over');});
    node.addEventListener('dragleave',()=>node.classList.remove('gtools-over'));

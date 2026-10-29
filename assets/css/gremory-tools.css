@@ -17,3 +17,6 @@
 .gtools-premium-compare summary{cursor:pointer;font-weight:650;padding:7px 0}.gtools-premium-compare ul{margin:8px 0 2px;padding-left:20px;line-height:1.8}
 @media(max-width:1000px){.gtools-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.gtools-grid{grid-template-columns:1fr}.gtools-intro{align-items:flex-start;flex-direction:column}.gtools-card{padding:16px}}
+
+/* Estúdio expandido: perfis responsivos e biblioteca de renders. */
+.gtools-library{margin:14px 0 30px}.gtools-library-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin:16px 0}.gtools-library-asset{display:flex;flex-direction:column;gap:8px;min-width:0;border:1px solid var(--line,#392b48);border-radius:12px;padding:10px;background:#191425}.gtools-library-asset img{aspect-ratio:1;object-fit:contain;border-radius:9px;background:#0a0810}.gtools-library-asset span{font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gtools-library-asset button{font-size:.76rem}.gtools-card select,.gtools-library input[type=search]{width:100%;min-height:42px;border-radius:10px;background:#170f25;color:#fff;border:1px solid #584570;padding:8px}
