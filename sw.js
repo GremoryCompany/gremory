@@ -1,12 +1,12 @@
-const CACHE='gremory-v14-20261028-gift-gremorium-01';
+const CACHE='gremory-v14-20261028-giftshop-02';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261028-gremorium-gift-01',
-  '/assets/js/app.js?v=20261028-gestao-01',
-  '/assets/js/community.js?v=20261028-gremorium-gift-01',
-  '/assets/css/gremory-tools.css?v=20261028-gestao-01',
-  '/assets/js/gremory-tools.js?v=20261028-gestao-01',
+  '/assets/css/app.css?v=20261028-gifts-catalog-02',
+  '/assets/js/app.js?v=20261028-gifts-catalog-02',
+  '/assets/js/community.js?v=20261028-gifts-catalog-02',
+  '/assets/css/gremory-tools.css?v=20261028-gifts-catalog-02',
+  '/assets/js/gremory-tools.js?v=20261028-gifts-catalog-02',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
   '/manifest.webmanifest'

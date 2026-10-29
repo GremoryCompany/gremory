@@ -15,21 +15,26 @@ test('Gift cards: regras mantêm códigos globais inacessíveis e inbox privativ
  assert.match(rules.siteBridgeJobs.$uid.$jobId['.validate'],/gift_card_redeem/);
  assert.match(rules.siteBridgeJobs.$uid.$jobId['.validate'],/!newData\.child\('price'\)\.exists\(\)/);
 });
-test('Gift cards: prêmio/valor e criação de código só no bridge',()=>{
- assert.match(bridge,/const GIFT_PRICE=200000, GIFT_DAYS=7/);
- assert.match(bridge,/crypto\.randomBytes\(16\)/);
- assert.match(bridge,/applySiteWalletEntry\(uid,jid,operationId,-GIFT_PRICE/);
- assert.match(bridge,/siteGiftCards\/\$\{order\.hash\}/);
- assert.match(bridge,/status:'claiming'/);
- assert.match(bridge,/status:'redeemed'/);
- assert.match(bridge,/withExclusiveKeys\(walletLocks,\['gift:'/);
+test('Gift cards: valores e códigos definidos no servidor e resgate idempotente',()=>{
+ const catalog=read('database/gremory_gift_catalog.js');
+ assert.match(catalog,/premium_7d: Object.freeze\(\{id:'premium_7d',kind:'premium'.*price:200000/);
+ assert.match(catalog,/premium_50d:/);
+ assert.match(catalog,/xp_300:/);
+ assert.match(bridge,/applySiteWalletEntry\(uid,jid,opId,-product.price,'gift_card'/);
+ assert.match(bridge,/siteWalletOps\/\$\{uid\}\/\$\{order.operationId\}/);
+ assert.match(bridge,/siteGiftInbox\/\$\{uid\}\/\$\{order.operationId\}/);
+ assert.match(bridge,/gremoryGiftReceipts/);
+ assert.match(bridge,/siteGiftGrants\/\$\{hash\}/);
+ assert.match(bridge,/siteProgress\/\$\{uid\}/);
+ assert.match(bridge,/gift_card_recover/);
  assert.doesNotMatch(ui,/set\(ref\(db,`siteGiftCards/);
- assert.match(ui,/bridgeRequest\('gift_card_buy',\{\}/);
+ assert.match(ui,/bridgeRequest\('gift_card_buy',\{productId:sku\}/);
 });
-test('Novo menu usa rotas reais e e-mail verificado pelo Firebase Auth',()=>{
- for(const id of ['giftBuyBtn','giftInbox','giftRedeemForm','accountVerifyEmailBtn','feedDiscoverQuery','gtoolsLibraryList','gtoolsConvertBtn','gtoolsCollageBtn'])assert.ok(html.includes('id="'+id+'"'),id);
+test('Menu e e-mail utilizam Auth, catálogo, correio e resgate existentes',()=>{
+ for(const id of ['giftshopCatalog','giftRecoverLastBtn','giftInbox','giftRedeemForm','accountVerifyEmailBtn','feedDiscoverQuery','gtoolsLibraryList','gtoolsConvertBtn','gtoolsCollageBtn'])assert.ok(html.includes('id="'+id+'"'),id);
  assert.match(ui,/giftshop:\['LOJA','Gift Cards'\]/);
  assert.match(ui,/sendEmailVerification\(auth\.currentUser\)/);
+ assert.match(ui,/navigate\('charlotte'\)/);
 });
 test('Grémorium: posts salvos são privados e posts públicos não viram carteira',()=>{
  assert.match(rules.communitySaved.$uid['.read'],/auth\.uid === \$uid/);
@@ -48,8 +53,17 @@ test('Gift jobs: regras aceitam compra sem preço cliente e resgate com formato 
  const valid=(data)=>fn(new Snap(data),auth,'job_new_test');
  assert.equal(valid({type:'gift_card_buy',createdAt:Date.now()}),true);
  assert.equal(valid({type:'gift_card_buy',price:1}),false);
+ assert.equal(valid({type:'gift_card_buy',productId:'xp_300'}),true);
+ assert.equal(valid({type:'gift_card_buy',productId:'xp_300',xp:9999999}),false);
+ assert.equal(valid({type:'gift_card_buy',productId:'custom_money'}),false);
  const code='GREM-AAAAAAAA-BBBBBBBB-CCCCCCCC-DDDDDDDD';
  assert.equal(valid({type:'gift_card_redeem',code}),true);
  assert.equal(valid({type:'gift_card_redeem',code:'FALSO'}),false);
  assert.equal(valid({type:'gift_card_redeem',code,price:200000}),false);
+ assert.equal(valid({type:'gift_card_redeem',code,xp:5000}),false);
+ assert.equal(valid({type:'gift_card_recover'}),true);
+ assert.equal(valid({type:'gift_card_recover',purchaseId:'giftbuy_'+'a'.repeat(32)}),true);
+ assert.equal(valid({type:'gift_card_recover',originJobId:'giftjob_'+'a'.repeat(32)}),true);
+ assert.equal(valid({type:'gift_card_recover',originJobId:'invalid'}),false);
+ assert.equal(valid({type:'gift_card_recover',purchaseId:'giftbuy_'+'a'.repeat(32),code}),false);
 });

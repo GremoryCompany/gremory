@@ -303,63 +303,166 @@ function createGremorySiteBridge({sock,getGremonDB,getGremonUser,gremonAtivo,log
       throw e
     }
   }
-  // Gift cards pagos por Rupias: o código nasce no servidor, nunca no navegador.
-  // O comprovante de pagamento fica separado do código e do resgate.
-  const GIFT_PRICE=200000, GIFT_DAYS=7;
-  function giftId(code){return crypto.createHash('sha256').update(String(code).toUpperCase()).digest('hex');}
-  function newGiftCode(){const hex=crypto.randomBytes(16).toString('hex').toUpperCase();return `GREM-${hex.match(/.{1,8}/g).join('-')}`;}
-  async function processGiftCardBuy(uid,jid,jobId){
+  // Gift cards são emitidos e resgatados exclusivamente pelo servidor. Os recibos
+  // financeiros e de prêmio são idempotentes; nunca reexecute débito incerto.
+  const {productById,CODE_REGEX,normalizeCode,giftHash,issueCode,giftPublicProduct} = require('./gremory_gift_catalog');
+  const giftTrialKey=jid=>crypto.createHash('sha256').update(cleanJid(jid)).digest('hex');
+  const giftOrderId=(uid,jobId)=>'giftbuy_'+crypto.createHash('sha256').update(uid+':'+jobId).digest('hex').slice(0,32);
+  function giftPayload(product){return giftPublicProduct(product)}
+  async function giftPaid(uid,order){
+    if(!order||!order.operationId)return false;
+    const receipt=(await rtdb.ref(`siteWalletOps/${uid}/${order.operationId}`).once('value')).val();
+    return receipt?.status==='done' && Number(receipt.delta)===-Number(order.price) && receipt.kind==='gift_card';
+  }
+  async function ensureGiftDelivery(uid,order){
+    if(order.uid!==uid)throw new Error('Pedido pertence a outro usuário.');
+    if(!await giftPaid(uid,order))throw new Error('Pagamento não confirmado. Não faremos uma segunda cobrança. Contate o suporte com o ID do pedido.');
+    const product=productById(order.productId||'premium_7d');
+    if(!product||product.price!==Number(order.price))throw new Error('Produto do pedido divergente. Revisão necessária.');
+    if(product.trial){const buyerJid=await linkedJidByUid(uid);if(!buyerJid)throw new Error('Vínculo da Charlotte ausente. Não foi possível conferir a degustação.');const tr=rtdb.ref(`siteGiftTrialPurchases/${giftTrialKey(buyerJid)}`);const paidTrial=await tr.transaction(old=>old?undefined:{purchaseId:order.operationId,createdAt:Date.now()},undefined,false);if(!paidTrial.committed&&paidTrial.snapshot.val()?.purchaseId!==order.operationId)throw new Error('Degustação já comprada por esta conta WhatsApp. Revisão necessária.');}
+    const hash=giftHash(order.code);
+    if(hash!==order.hash||!CODE_REGEX.test(String(order.code||'')))throw new Error('Código inconsistente no pedido. Contate o suporte.');
+    const cardRef=rtdb.ref(`siteGiftCards/${hash}`);
+    const exists=(await cardRef.once('value')).exists();
+    if(!exists){
+      if((await rtdb.ref(`siteGiftRedemptionIndex/${hash}`).once('value')).exists())throw new Error('Este gift card já teve resgate confirmado. Não pode ser emitido novamente.');
+      // Compatibilidade com resgates da versão anterior, sem índice global.
+      if(!order.schemaVersion){
+        const past=(await rtdb.ref('siteGiftRedeemed').once('value')).val()||{};
+        if(Object.values(past).some(entries=>entries&&Object.prototype.hasOwnProperty.call(entries,hash)))throw new Error('Código antigo já resgatado. Não será recriado.');
+      }
+    }
+    const created=await cardRef.transaction(old=>{
+      if(old)return;
+      return {purchaseId:order.operationId,ownerUid:uid,productId:product.id,kind:product.kind,minutes:product.minutes||0,xp:product.xp||0,price:product.price,status:'available',createdAt:order.createdAt||Date.now()};
+    },undefined,false);
+    const card=created.snapshot.val();
+    if(!card||card.purchaseId!==order.operationId||card.ownerUid!==uid)throw new Error('Gift card em revisão: registro duplicado ou divergente.');
+    await rtdb.ref(`siteGiftInbox/${uid}/${order.operationId}`).set({id:order.operationId,code:order.code,productId:product.id,title:product.title,kind:product.kind,minutes:product.minutes||0,xp:product.xp||0,days:product.minutes?product.minutes/1440:0,price:product.price,status:card.status,createdAt:order.createdAt||Date.now()});
+    await rtdb.ref(`siteGiftOrders/${uid}/${order.operationId}`).update({status:'paid',paidAt:order.paidAt||Date.now()});
+    return {purchaseId:order.operationId,product:giftPayload(product),status:card.status,balance:balanceFor(await linkedJidByUid(uid))};
+  }
+  async function processGiftCardBuy(uid,jid,jobId,data={}){
     if(!registeredFor(jid))throw new Error('Faça seu cadastro na Charlotte antes de comprar gift cards.');
-    const operationId='giftbuy_'+crypto.createHash('sha256').update(uid+':'+jobId).digest('hex').slice(0,32);
-    const orderRef=rtdb.ref(`siteGiftOrders/${uid}/${operationId}`);
-    const code=newGiftCode(),timestamp=Date.now();
-    const claim=await orderRef.transaction(old=>old?undefined:{uid,operationId,code,hash:giftId(code),status:'pending_payment',price:GIFT_PRICE,days:GIFT_DAYS,createdAt:timestamp},undefined,false);
-    const order=claim?.snapshot?.val?.();if(!order)throw new Error('Pedido indisponível.');
-    if(order.status==='paid')return{purchaseId:operationId,days:GIFT_DAYS,price:GIFT_PRICE,balance:balanceFor(jid)};
-    if(!claim.committed)throw new Error('Compra pendente. Verifique o histórico antes de tentar novamente.');
-    if(balanceFor(jid)<GIFT_PRICE){await orderRef.update({status:'insufficient'}).catch(()=>{});throw new Error('Rúpias insuficientes para comprar o gift card.');}
-    const result=await applySiteWalletEntry(uid,jid,operationId,-GIFT_PRICE,'gift_card',{days:GIFT_DAYS});
-    await rtdb.ref(`siteGiftCards/${order.hash}`).transaction(old=>old?undefined:{purchaseId:operationId,ownerUid:uid,days:GIFT_DAYS,status:'available',createdAt:timestamp},undefined,false);
-    await rtdb.ref(`siteGiftInbox/${uid}/${operationId}`).set({id:operationId,code:order.code,days:GIFT_DAYS,price:GIFT_PRICE,status:'available',createdAt:timestamp,kind:'gift_card'});
-    await orderRef.update({status:'paid',paidAt:Date.now()});
-    await notifySite(uid,{type:'gift_card',title:'Seu gift card chegou',text:'Abra a Loja de Gift Cards para revelar e copiar o código.',link:'#giftshop'}).catch(()=>{});
+    const product=productById(data.productId||'premium_7d');if(!product)throw new Error('Este pacote não está no catálogo.');
+    const opId=giftOrderId(uid,jobId),orderRef=rtdb.ref(`siteGiftOrders/${uid}/${opId}`),newCode=issueCode();
+    const claim=await orderRef.transaction(old=>old?undefined:{uid,operationId:opId,productId:product.id,code:newCode,hash:giftHash(newCode),status:'pending_payment',price:product.price,schemaVersion:2,createdAt:Date.now()},undefined,false);
+    const order=claim.snapshot.val();
+    if(!order||order.uid!==uid||order.productId!==product.id||Number(order.price)!==product.price)throw new Error('Pedido divergente. Contate o suporte.');
+    if(order.status==='paid'||await giftPaid(uid,order))return ensureGiftDelivery(uid,order);
+    if(!claim.committed)throw new Error(`Compra ${opId} pendente de confirmação; não será debitada novamente. Consulte o suporte.`);
+    if(product.trial){
+      const trial=(await rtdb.ref(`siteGiftTrialPurchases/${giftTrialKey(jid)}`).once('value')).val();
+      if(trial&&trial.purchaseId!==opId)throw new Error('A degustação Premium só pode ser comprada uma vez por WhatsApp vinculado.');
+    }
+    if(balanceFor(jid)<product.price){await orderRef.update({status:'insufficient'});throw new Error('Saldo insuficiente para comprar este presente.');}
+    await applySiteWalletEntry(uid,jid,opId,-product.price,'gift_card',{productId:product.id});
+    const out=await ensureGiftDelivery(uid,order);
+    await notifySite(uid,{type:'gift_card',title:'Seu gift card chegou',text:`${product.title}. Abra seu correio para revelar o código.`,link:'#giftshop'}).catch(()=>{});
     await syncAccount(uid,jid).catch(()=>{});
-    return{purchaseId:operationId,days:GIFT_DAYS,price:GIFT_PRICE,balance:result.balance};
+    return out;
+  }
+  // Recupera apenas pedido do próprio usuário, com recibo de débito confirmado.
+  async function processGiftCardRecover(uid,data={}){
+    const identifier=data.originJobId?giftOrderId(uid,String(data.originJobId)):String(data.purchaseId||'');
+    if(identifier){
+      if(!/^giftbuy_[a-f0-9]{32}$/.test(identifier))throw new Error('Pedido inválido.');
+      const order=(await rtdb.ref(`siteGiftOrders/${uid}/${identifier}`).once('value')).val();
+      if(!order)throw new Error('Compra não encontrada. Informe o ID ao suporte.');
+      return ensureGiftDelivery(uid,order);
+    }
+    // Reconcilia APENAS pagamentos realmente concluídos para o UID autenticado.
+    // Útil para compras antigas que ficaram sem correio por quedas do bot.
+    const orders=(await rtdb.ref(`siteGiftOrders/${uid}`).once('value')).val()||{};
+    const recent=Object.values(orders).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).slice(0,30);
+    let recovered=0,review=0;
+    for(const order of recent){
+      if(await giftPaid(uid,order)){
+        try{await ensureGiftDelivery(uid,order);recovered++;}catch(error){review++;logger.log('[GIFT CARD] pedido requer auditoria',order.operationId,error.message);}
+      }else if(order.status==='pending_payment')review++;
+    }
+    return {recovered,review,checked:recent.length};
+  }
+  async function applyGiftPremium(uid,jid,hash,card){
+    const minutes=Number(card.minutes||0)||Number(card.days||0)*1440;
+    if(!Number.isSafeInteger(minutes)||minutes<1||minutes>100000)throw new Error('Tempo de assinatura inválido.');
+    const clean=cleanJid(jid),grantRef=rtdb.ref(`siteGiftGrants/${hash}`);
+    const current=readJson(premiumPath,[]);if(!Array.isArray(current))throw new Error('Banco Premium indisponível.');
+    const rows=current.filter(x=>sameUser(x.id,clean));
+    const proposed=Math.max(Date.now(),...rows.map(r=>Number(r.expired||0)))+minutes*60000;
+    const reservation=await grantRef.transaction(old=>old?undefined:{uid,jidHash:giftTrialKey(jid),minutes,expiresAt:proposed,status:'reserved',createdAt:Date.now()},undefined,false);
+    const ledger=reservation.snapshot.val();
+    if(ledger.uid!==uid||ledger.jidHash!==giftTrialKey(jid)||ledger.minutes!==minutes)throw new Error('Concessão Premium divergente. Revisão necessária.');
+    // Mesmo após o vencimento, um recibo concluído nunca aumenta o prazo de novo.
+    if(ledger.status==='done')return{expiresAt:ledger.expiresAt,minutes,alreadyGranted:true};
+    const again=readJson(premiumPath,[]);if(!Array.isArray(again))throw new Error('Banco Premium indisponível.');
+    const previous=again.find(x=>sameUser(x.id,clean))||{id:clean,expired:0};
+    const receipts={...(previous.gremoryGiftReceipts||{})};
+    receipts[hash]=Number(ledger.expiresAt);
+    const next=again.filter(x=>!sameUser(x.id,clean));
+    next.push({...previous,id:clean,expired:Math.max(Number(previous.expired||0),Number(ledger.expiresAt)),gremoryGiftReceipts:receipts});
+    writeJson(premiumPath,next);
+    if(Array.isArray(global.gremoryPremiumDb))global.gremoryPremiumDb.splice(0,global.gremoryPremiumDb.length,...next);
+    await grantRef.update({status:'done',finishedAt:Date.now()});
+    return {expiresAt:Number(ledger.expiresAt),minutes};
+  }
+  async function applyGiftSiteXp(uid,hash,card){
+    const xp=Number(card.xp||0);if(!Number.isSafeInteger(xp)||xp<1||xp>50000)throw new Error('XP do gift card inválido.');
+    const tx=await rtdb.ref(`siteProgress/${uid}`).transaction(old=>{
+      const value=old||{xp:0,level:1};value.giftReceipts=value.giftReceipts||{};
+      if(value.giftReceipts[hash])return;
+      value.xp=Math.max(0,Number(value.xp||0))+xp;
+      value.level=1+Math.floor(Math.sqrt(value.xp/100));
+      value.giftReceipts[hash]={xp,at:Date.now()};value.updatedAt=Date.now();return value;
+    },undefined,false);
+    if(!tx.committed&&!tx.snapshot.val()?.giftReceipts?.[hash])throw new Error('XP não confirmado.');
+    return {xp,level:tx.snapshot.val()?.level,totalXp:tx.snapshot.val()?.xp};
   }
   async function processGiftCardRedeem(uid,jid,data){
     if(!registeredFor(jid))throw new Error('Registre-se na Charlotte antes do resgate.');
-    const code=String(data.code||'').trim().toUpperCase();
-    if(!/^GREM-(?:[A-F0-9]{8}-){3}[A-F0-9]{8}$/.test(code))throw new Error('Formato de gift card inválido.');
-    // A tentativa só pode consumir um gift ativo. A transação impede que dois usuários o resgatem.
-    const key=giftId(code),r=rtdb.ref(`siteGiftCards/${key}`),timestamp=Date.now();
-    const claimed=await r.transaction(old=>old?.status==='available'?{...old,status:'claiming',claimedByUid:uid,claimedAt:timestamp}:undefined,undefined,false);
-    const row=claimed?.snapshot?.val?.();
-    if(!claimed?.committed){
-      if(row?.status==='redeemed'&&row?.claimedByUid===uid)return{redeemed:true,alreadyRedeemed:true,days:row.days};
-      throw new Error(row?.status==='claiming'?'Resgate em processamento. Contate o suporte se demorar.':'Código inválido, usado ou indisponível.');
+    const code=normalizeCode(data.code);
+    if(!CODE_REGEX.test(code))throw new Error('Formato do gift card inválido.');
+    const hash=giftHash(code),cardRef=rtdb.ref(`siteGiftCards/${hash}`),timestamp=Date.now();
+    let before=(await cardRef.once('value')).val();
+    if(!before)throw new Error('Código não encontrado no servidor. Se foi comprado agora, use “Recuperar compra” no correio.');
+    if(before.status==='redeemed'){
+      if(before.claimedByUid===uid)return{redeemed:true,alreadyRedeemed:true,kind:before.kind||'premium',minutes:before.minutes||Number(before.days||7)*1440,xp:before.xp||0};
+      throw new Error('Este código já foi resgatado em outra conta.');
     }
+    if(before.status==='claiming'&&before.claimedByUid!==uid)throw new Error('Este código está sendo resgatado por outra conta.');
+    const initialProduct=productById(before.productId||'premium_7d');
+    if(initialProduct?.trial){const used=(await rtdb.ref(`siteGiftTrialRedemptions/${giftTrialKey(jid)}`).once('value')).val();if(used&&used.hash!==hash)throw new Error('A degustação de 3 minutos só pode ser resgatada uma vez por WhatsApp vinculado.');}
+    const tx=await cardRef.transaction(old=>{
+      if(!old)return;
+      if(old.status==='available')return {...old,status:'claiming',claimedByUid:uid,claimedAt:timestamp};
+      if(old.status==='claiming'&&old.claimedByUid===uid)return old;
+    },undefined,false);
+    const card=tx.snapshot.val();if(!tx.committed)throw new Error('O resgate está em processamento. Consulte o correio ou o suporte.');
+    const product=productById(card.productId||'premium_7d');
+    if(!product||card.kind&&card.kind!==product.kind)throw new Error('Produto inválido. Revisão necessária.');
     try{
-      const db=readJson(premiumPath,[]);if(!Array.isArray(db))throw new Error('Banco Premium indisponível.');
-      const clean=cleanJid(jid),previous=Math.max(Date.now(),...db.filter(v=>sameUser(v.id,clean)).map(v=>Number(v.expired||0)));
-      const expiration=previous+Number(row.days||GIFT_DAYS)*86400000;
-      // Atualiza o cache vivo da index para o Premium valer sem reiniciar a Charlotte.
-      const next=db.filter(v=>!sameUser(v.id,clean));next.push({id:clean,expired:expiration});
-      writeJson(premiumPath,next);
-      if(Array.isArray(global.gremoryPremiumDb))global.gremoryPremiumDb.splice(0,global.gremoryPremiumDb.length,...next);
-      await r.update({status:'redeemed',redeemedAt:Date.now(),redeemedJid:clean});
-      await rtdb.ref(`siteGiftRedeemed/${uid}/${key}`).set({days:row.days||GIFT_DAYS,redeemedAt:Date.now()});
-      await syncAccount(uid,jid).catch(()=>{});
-      await notifySite(uid,{type:'premium',title:'Gift card resgatado',text:`Premium de ${row.days||GIFT_DAYS} dias ativado.`,link:'#premium'}).catch(()=>{});
-      return{redeemed:true,days:row.days||GIFT_DAYS,expiresAt:expiration};
-    }catch(error){
-      // Não retorna o código ao estoque: é mais seguro revisar um resgate interrompido
-      // do que entregar Premium duas vezes após uma queda do processo.
-      logger.log('[GIFT CARD] Resgate requer revisão:',uid,key,error.message);
-      throw new Error('Resgate iniciado, mas falta confirmação. Contate o suporte.');
-    }
+      // A degustação só pode ser usada uma vez por WhatsApp, inclusive se o código for transferido.
+      if(product.trial){
+        const trialRef=rtdb.ref(`siteGiftTrialRedemptions/${giftTrialKey(jid)}`);
+        const t=await trialRef.transaction(old=>old?undefined:{hash,uid,claimedAt:Date.now()},undefined,false);
+        if(!t.committed&&t.snapshot.val()?.hash!==hash)throw new Error('Você já utilizou a degustação Premium de 3 minutos.');
+      }
+      const granted=product.kind==='xp'?await applyGiftSiteXp(uid,hash,card):await applyGiftPremium(uid,jid,hash,card);
+      const auditRef=rtdb.ref(`siteGiftRedemptionIndex/${hash}`);
+      const audit=await auditRef.transaction(old=>old?undefined:{uid,jidHash:giftTrialKey(jid),redeemedAt:Date.now()},undefined,false);
+      if(!audit.committed&&audit.snapshot.val()?.uid!==uid)throw new Error('Já existe um resgate registrado para este código.');
+      await cardRef.update({status:'redeemed',redeemedAt:Date.now(),redeemedJid:cleanJid(jid),claimedByUid:uid});
+      if(card.ownerUid&&card.purchaseId)await rtdb.ref(`siteGiftInbox/${card.ownerUid}/${card.purchaseId}`).update({status:'redeemed',redeemedAt:Date.now()}).catch(()=>{});
+      await rtdb.ref(`siteGiftRedeemed/${uid}/${hash}`).set({productId:product.id,kind:product.kind,xp:product.xp||0,minutes:product.minutes||0,redeemedAt:Date.now()});
+      if(product.kind==='premium')await syncAccount(uid,jid).catch(()=>{});
+      await notifySite(uid,{type:'gift_card',title:'Código resgatado',text:`${product.title} ativado com sucesso.`,link:'#giftshop'}).catch(()=>{});
+      return{redeemed:true,kind:product.kind,productId:product.id,...granted};
+    }catch(e){logger.log('[GIFT CARD] Resgate precisa de confirmação:',uid,hash,e.message);throw new Error('Resgate pendente de confirmação: '+e.message+' Não utilize outro código até consultar o suporte.');}
   }
   async function processPremiumGroupSet(uid,jid,data){
     if(!readPremium(jid).active)throw new Error('Você precisa estar com Premium ativo para vincular um grupo.');
+    const premiumEntries=readJson(premiumPath,[]);const remainingMs=Math.max(0,...(Array.isArray(premiumEntries)?premiumEntries:[]).filter(x=>sameUser(x.id,jid)).map(x=>Number(x.expired||0)-Date.now()));
+    if(remainingMs<10*60000)throw new Error('Para colocar a Charlotte no grupo, seu Premium precisa ter pelo menos 10 minutos restantes. O teste de 3 minutos não permite grupos.');
     const link=String(data.groupLink||'').trim();if(!whatsappInviteCode(link))throw new Error('Link de grupo inválido.');
     const current=(await rtdb.ref(`premiumGroupMemberships/${uid}`).once('value').catch(()=>null))?.val?.();
     if(current?.active&&current.groupJid){
@@ -1756,8 +1859,9 @@ ${siteOrigin}/#feed`});sent++;await receipt.child('sent').child(jid.replace(/[^a
       else if(type==='equip_customization')payload=await processEquipCustomization(uid,data);
       else if(type==='premium_checkout')payload=await processPremiumCheckout(uid,jid,data);
       else if(type==='premium_rupias_buy')payload=await processPremiumRupiasBuy(uid,jid,data);
-      else if(type==='gift_card_buy')payload=await withExclusiveKeys(walletLocks,[jid],()=>processGiftCardBuy(uid,jid,jobId));
-      else if(type==='gift_card_redeem')payload=await withExclusiveKeys(walletLocks,['gift:'+giftId(String(data.code||''))],()=>processGiftCardRedeem(uid,jid,data));
+      else if(type==='gift_card_buy')payload=await withExclusiveKeys(walletLocks,[jid],()=>processGiftCardBuy(uid,jid,jobId,data));
+      else if(type==='gift_card_recover')payload=await processGiftCardRecover(uid,data);
+      else if(type==='gift_card_redeem')payload=await withExclusiveKeys(walletLocks,[jid,'gift:'+giftHash(String(data.code||''))],()=>processGiftCardRedeem(uid,jid,data));
       else if(type==='premium_group_set')payload=await processPremiumGroupSet(uid,jid,data);
       else if(type==='send_download_link')payload=await processSendDownload(uid,jid,data);
       else if(type==='youtube_bot_download')payload=await processYoutubeDownload(uid,jid,data);
