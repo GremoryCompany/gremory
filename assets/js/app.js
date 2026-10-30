@@ -1729,7 +1729,7 @@ $('watchPlayBtn')?.addEventListener('click',toggleWatchPlayback);
 $('watchSyncBtn')?.addEventListener('click',syncWatchPlayer);
 $('watchLocalFileBtn')?.addEventListener('click',()=>{if(!isWatchHost())return toast('Somente o host pode transmitir um arquivo.');$('watchLocalFileInput')?.click()});
 $('watchLocalFileInput')?.addEventListener('change',async ev=>{const file=ev.target.files?.[0];ev.target.value='';if(file)await startWatchLocalFile(file)});
-async function prewarmWatchMicrophone(){try{const live=state.watchRtc.localStream?.getAudioTracks?.().some(t=>t.readyState==='live');if(live)return true;const existing=state.watchRtc.localStream;const stream=existing?.getAudioTracks?.().some(t=>t.readyState==='live')?existing:await navigator.mediaDevices.getUserMedia({audio:true,video:false});state.watchRtc.localStream=stream;return true}catch{return false}}
+async function prewarmWatchMicrophone(){try{const live=state.watchRtc.localStream?.getAudioTracks?.().some(t=>t.readyState==='live');if(live)return true;const existing=state.watchRtc.localStream;const stream=existing?.getAudioTracks?.().some(t=>t.readyState==='live')?existing:await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});state.watchRtc.localStream=stream;return true}catch{return false}}
 async function uniqueWatchCode(){for(let i=0;i<8;i++){const c=randomCode();const sn=await get(ref(db,`watchRooms/${c}`));if(!sn.exists())return c}throw new Error('Não foi possível gerar código.')}
 async function createWatchRoom(ev){ev.preventDefault();if(!state.user)return;try{const code=await uniqueWatchCode(),createdAt=nowIso(),name=$('watchNameInput').value.trim()||'Watch Party',privacy=['public','private','invite'].includes($('watchPrivacyInput')?.value)?$('watchPrivacyInput').value:'private';const room={meta:{code,name,privacy,ownerUid:state.user.uid,createdAt},members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Host',joinedAt:createdAt}},media:{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}};await set(ref(db,`watchRooms/${code}`),room);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name,privacy,role:'Host',joinedAt:createdAt});if(privacy==='public')await set(ref(db,`watchPublicRooms/${code}`),{code,name,ownerUid:state.user.uid,createdAt}).catch(e=>{console.warn('[WATCH] Índice público indisponível:',e?.message||e);toast('Sala criada, mas ainda não aparece na listagem pública.')});closeModal('watchCreateModal');$('watchCreateForm').reset();await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível criar a sala.'),6000)}}
 async function loadWatchRooms(){if(!state.user)return;loadPublicWatchRooms().catch(()=>{});const box=$('watchRoomsList');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await get(ref(db,`watchUserRooms/${state.user.uid}`));box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];$('homeWatchRecent').textContent=rows.length?`${rows.length} sala${rows.length===1?'':'s'}`:'Assistir e conversar';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala.</div>';return}rows.forEach(r=>{const item=document.createElement('div');item.className='room-item';const c=document.createElement('div');c.innerHTML=`<strong>${escText(r.name||r.code)}</strong><small>${escText(r.code)} • ${escText(r.role||'Participante')}</small>`;const acts=document.createElement('div');acts.className='room-item-actions';const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=()=>openWatchRoom(r.code);acts.appendChild(b);if(r.role==='Host'){const del=document.createElement('button');del.className='btn danger-ghost';del.textContent='Apagar';del.onclick=()=>deleteWatchRoom(r.code,r.name);acts.appendChild(del)}item.append(c,acts);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
@@ -2088,9 +2088,23 @@ $('watchMusicSkipBtn')?.addEventListener('click',async()=>{
 function renderWatchChat(obj={}){const box=$('watchChatList');if(!box)return;const rows=Object.values(obj||{}).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0)).slice(-100);box.innerHTML='';if(!rows.length){box.innerHTML='<div class="empty-state small">Sem mensagens ainda.</div>';return}rows.forEach(m=>{const d=document.createElement('div');d.className='watch-chat-message'+(m.uid===state.user?.uid?' mine':'');d.innerHTML=`<strong>${escText(m.name||'Usuário')}</strong><span>${escText(m.text||'')}</span><small>${shortDateTime(m.createdAt)}</small>`;box.appendChild(d)});box.scrollTop=box.scrollHeight}
 $('watchChatForm')?.addEventListener('submit',async ev=>{ev.preventDefault();if(!state.user||!state.watchCode)return;const input=$('watchChatInput'),text=String(input?.value||'').trim();if(!text)return;try{await push(ref(db,`watchRooms/${state.watchCode}/chat`),{uid:state.user.uid,name:displayName(),text:text.slice(0,500),createdAt:Date.now()});input.value=''}catch(e){toast(permissionMessage(e))}});
 $('watchInviteFriendBtn')?.addEventListener('click',async()=>{if(!isWatchHost())return;const targetUid=$('watchInviteFriendSelect')?.value;if(!targetUid)return toast('Escolha um amigo.');try{await set(ref(db,`watchInvites/${state.watchCode}/${targetUid}`),{uid:targetUid,fromUid:state.user.uid,createdAt:Date.now()});await set(ref(db,`siteNotifications/${targetUid}/watch_${state.watchCode}`),{id:`watch_${state.watchCode}`,type:'watch_invite',actorUid:state.user.uid,title:'Convite para Watch Party',text:`${displayName()} convidou você para ${state.watchRoom?.meta?.name||'uma sala'}.`,link:`#watch`,watchCode:state.watchCode,createdAt:Date.now()});toast('Convite enviado.')}catch(e){toast(permissionMessage(e))}});
-async function closeWatchRoom(silent=false){await leaveWatchVoice(true);destroyWatchMusicPlayback();clearUnsubs(state.watchUnsubs);state.watchCode=null;state.watchRoom=null;$('watchRoom').hidden=true;$('watchLobby').hidden=false;if($('watchCreateBtn'))$('watchCreateBtn').hidden=false;if(!silent)loadWatchRooms()}
+async function closeWatchRoom(silent=false){setWatchMobileTab('people');await leaveWatchVoice(true);destroyWatchMusicPlayback();clearUnsubs(state.watchUnsubs);state.watchCode=null;state.watchRoom=null;$('watchRoom').hidden=true;$('watchLobby').hidden=false;if($('watchCreateBtn'))$('watchCreateBtn').hidden=false;if(!silent)loadWatchRooms()}
 async function exitWatchRoom(){if(!state.user||!state.watchCode)return;const code=state.watchCode;if(isWatchHost())return deleteWatchRoom(code,state.watchRoom?.meta?.name);try{await remove(ref(db,`watchRooms/${code}/members/${state.user.uid}`));await remove(ref(db,`watchUserRooms/${state.user.uid}/${code}`));await closeWatchRoom(false)}catch(e){toast(permissionMessage(e))}}
 async function deleteWatchRoom(code,name='Sala'){if(!state.user||!code||!confirm(`Apagar "${name||code}" para todos?`))return;try{const sn=await get(ref(db,`watchRooms/${code}`));const room=sn.val()||{};if(room.meta?.ownerUid!==state.user.uid)throw new Error('Só o host pode apagar.');await Promise.all(Object.keys(room.members||{}).map(uid=>remove(ref(db,`watchUserRooms/${uid}/${code}`)).catch(()=>{})));await remove(ref(db,`watchPublicRooms/${code}`)).catch(()=>{});await remove(ref(db,`watchInvites/${code}`)).catch(()=>{});await remove(ref(db,`watchRooms/${code}`));await remove(ref(db,`watchVoice/${code}`)).catch(()=>{});await remove(ref(db,`watchRtc/${code}`)).catch(()=>{});await closeWatchRoom(false);toast('Sala apagada.')}catch(e){toast(permissionMessage(e,e.message))}}
+
+function setWatchMobileTab(tab='people'){
+  if(!['people','chat','music'].includes(tab))tab='people';
+  const target=tab==='chat'?document.querySelector('.watch-chat-panel'):tab==='music'?document.querySelector('.watch-music-panel'):document.querySelector('.watch-call-panel');
+  const room=$('watchRoom');if(room)room.dataset.watchMobileTab=tab;
+  $$('button[data-watch-mobile-tab]').forEach(b=>{
+    const on=b.dataset.watchMobileTab===tab;b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));
+  });
+  return target;
+}
+$$('button[data-watch-mobile-tab]').forEach(b=>b.addEventListener('click',()=>{
+  const target=setWatchMobileTab(b.dataset.watchMobileTab);
+  target?.scrollIntoView({behavior:'smooth',block:'start'});
+}));
 
 // WebRTC da Watch Party (separado do RPG)
 function watchVoiceUi(){
@@ -2099,9 +2113,32 @@ function watchVoiceUi(){
   if($('watchMicBtn')){$('watchMicBtn').hidden=!audio;$('watchMicBtn').textContent=rtc.micEnabled?'Silenciar':'Ativar microfone'}
   if($('watchShareBtn')){$('watchShareBtn').hidden=!state.watchCode;$('watchShareBtn').textContent=rtc.screenStream?(rtc.screenSource==='file'?'Parar filme local':'Parar compartilhamento'):'Compartilhar tela';$('watchShareBtn').classList.toggle('active',!!rtc.screenStream)}
   if($('watchLeaveVoiceBtn'))$('watchLeaveVoiceBtn').hidden=!audio;
-  if($('watchVoiceConnectionLabel'))$('watchVoiceConnectionLabel').textContent=audio?'Na chamada de voz':'Fora da chamada';
+  updateWatchVoiceConnectionLabel();
   if(state.watchRoom)renderWatchMusic(state.watchRoom.musicQueue||{},state.watchRoom.musicAccess||{},state.watchRoom.musicPlan||{},state.watchRoom.musicPlayback||{})
 }
+function updateWatchVoiceConnectionLabel(){
+  const label=$('watchVoiceConnectionLabel');if(!label)return;
+  if(!state.watchRtc.audioJoined){label.textContent='Fora da chamada';return}
+  const peers=Object.entries(state.watchRtc.presence||{}).filter(([uid,p])=>uid!==state.user?.uid&&p?.audio);
+  const connected=peers.filter(([uid])=>{
+    const pc=state.watchRtc.peers.get(uid),tracks=state.watchRtc.remoteVoiceStreams.get(uid)?.getAudioTracks?.()||[];
+    return pc?.connectionState==='connected'&&tracks.some(t=>t.readyState==='live'&&!t.muted)
+  }).length;
+  label.textContent=!peers.length?'Na voz · aguardando participantes':connected===peers.length?
+    `Na voz · ${connected} conectado${connected===1?'':'s'}`:`Na voz · conectando ${connected}/${peers.length}`;
+}
+async function resumeWatchIncomingAudio(){
+  try{await watchPeerAudioCtx?.resume?.()}catch{}
+  let blocked=false;
+  for(const audio of $$('#watchRemoteMedia .watch-call-card audio')){
+    if(!audio.srcObject||!audio.srcObject.getAudioTracks?.().length)continue;
+    try{await audio.play()}catch(e){if(e?.name==='NotAllowedError')blocked=true}
+  }
+  const btn=$('watchAudioResumeBtn');if(btn)btn.hidden=!blocked;
+  if(blocked)setWatchRtcStatus('Toque em Ativar áudio para ouvir a chamada.','warn');
+  return !blocked
+}
+$('watchAudioResumeBtn')?.addEventListener('click',()=>resumeWatchIncomingAudio().catch(()=>{}));
 function setWatchRtcStatus(text,tone=''){
   const el=$('watchRtcStatus');if(!el)return;el.textContent=String(text||'');el.dataset.tone=tone||''
 }
@@ -2129,8 +2166,8 @@ function ensureWatchPeerAudioGraph(uid,audio){
 function releaseWatchPeerAudioGraph(uid){const g=watchPeerAudioGraphs.get(String(uid||''));if(!g)return;try{g.source.disconnect();g.gain.disconnect();g.limiter.disconnect()}catch{}watchPeerAudioGraphs.delete(String(uid||''))}
 function applyWatchPeerMute(uid,card=null){
   uid=String(uid||'');card=card||$('watchRemoteMedia')?.querySelector(`[data-watch-peer="${CSS.escape(uid)}"]`);if(!card)return;
-  const isSelf=uid===String(state.user?.uid||''),muted=watchPeerMuted(uid),audio=card.querySelector('audio'),btn=card.querySelector('.watch-mute-peer'),pct=watchPeerVolume(uid),level=(!state.watchRtc.audioJoined||muted)?0:pct/100;
-  if(audio){const graph=ensureWatchPeerAudioGraph(uid,audio);if(graph){audio.muted=false;audio.volume=1;try{graph.gain.gain.setTargetAtTime(level,watchPeerAudioCtx.currentTime,.015)}catch{graph.gain.gain.value=level};if(level>0)watchPeerAudioCtx.resume?.().catch(()=>{})}else{audio.muted=!state.watchRtc.audioJoined||muted;audio.volume=Math.min(1,pct/100)}}
+  const isSelf=uid===String(state.user?.uid||''),muted=watchPeerMuted(uid),audio=card.querySelector('audio'),btn=card.querySelector('.watch-mute-peer'),pct=watchPeerVolume(uid),level=(isSelf||!state.watchRtc.audioJoined||muted)?0:pct/100;
+  if(audio){const graph=ensureWatchPeerAudioGraph(uid,audio);if(graph){audio.muted=false;audio.volume=1;try{graph.gain.gain.setTargetAtTime(level,watchPeerAudioCtx.currentTime,.015)}catch{graph.gain.gain.value=level};if(level>0)watchPeerAudioCtx.resume?.().catch(()=>{})}else{audio.muted=isSelf||!state.watchRtc.audioJoined||muted;audio.volume=Math.min(1,pct/100)}}
   if(btn){btn.hidden=isSelf;btn.textContent=muted?'Ouvir voz':'Silenciar voz';btn.classList.toggle('active',muted)}
 }
 function toggleWatchPeerMute(uid){uid=String(uid||'');if(!uid||uid===String(state.user?.uid||''))return;if(watchPeerMuted(uid))state.watchRtc.mutedPeers.delete(uid);else state.watchRtc.mutedPeers.add(uid);applyWatchPeerMute(uid)}
@@ -2143,7 +2180,7 @@ function ensureWatchCallCard(uid){
     const actions=document.createElement('div');actions.className='watch-call-actions';
     const view=document.createElement('button');view.type='button';view.className='mini-btn watch-view-screen';view.textContent='Assistir tela';view.hidden=true;
     const mute=document.createElement('button');mute.type='button';mute.className='mini-btn watch-mute-peer';mute.textContent='Silenciar voz';mute.onclick=()=>toggleWatchPeerMute(uid);const vol=document.createElement('input');vol.type='range';vol.min='0';vol.max='200';vol.step='5';vol.value=String(watchPeerVolume(uid));vol.className='watch-peer-volume';vol.title='Volume desta pessoa';vol.oninput=()=>{state.watchRtc.peerVolumes.set(uid,Number(vol.value));applyWatchPeerMute(uid,card)};
-    const audio=document.createElement('audio');audio.autoplay=true;audio.muted=!state.watchRtc.audioJoined||watchPeerMuted(uid);
+    const audio=document.createElement('audio');audio.autoplay=true;audio.playsInline=true;audio.muted=uid===String(state.user?.uid||'')||!state.watchRtc.audioJoined||watchPeerMuted(uid);
     actions.append(view,mute,vol);card.append(avatar,copy,actions,audio);grid.appendChild(card)
   }
   applyWatchPeerMute(uid,card);return card
@@ -2162,7 +2199,7 @@ async function flushWatchDedicatedCandidates(kind,key,pc){
 }
 function setupWatchDedicatedScreenPc(pc,peerUid,ownerUid,mode){
   const targetUid=String(peerUid||''),owner=String(ownerUid||'');
-  pc.onicecandidate=ev=>{if(ev.candidate)sendWatchRtc(targetUid,{type:'screen_candidate',ownerUid:owner,candidate:ev.candidate.toJSON()}).catch(()=>{})};
+  pc.onicecandidate=ev=>{if(ev.candidate)sendWatchRtc(targetUid,{type:'screen_candidate',ownerUid:owner,offerId:pc.__watchScreenOfferId||'',candidate:ev.candidate.toJSON()}).catch(()=>{})};
   if(mode==='in'){
     const remote=new MediaStream();state.watchRtc.remoteScreenStreams.set(owner,remote);state.watchRtc.remoteStreams.set(owner,remote);
     pc.ontrack=ev=>{
@@ -2185,8 +2222,8 @@ function setupWatchDedicatedScreenPc(pc,peerUid,ownerUid,mode){
   pc.onconnectionstatechange=()=>{
     if(pc.connectionState==='connected'){setWatchRtcStatus('Transmissão conectada','ok');return}
     if(['failed','disconnected'].includes(pc.connectionState)){
-      if(mode==='in')setTimeout(()=>{if(['failed','disconnected'].includes(pc.connectionState))requestWatchScreenFrom(owner,true).catch(()=>{})},1200);
-      else if(state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live'))setTimeout(()=>offerWatchScreenToPeer(targetUid,'connection-retry',true).catch(()=>{}),1400)
+      if(mode==='in')setTimeout(()=>{if(state.watchRtc.screenInPeers.get(owner)===pc&&['failed','disconnected'].includes(pc.connectionState))requestWatchScreenFrom(owner,true).catch(()=>{})},5000);
+      else if(state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live'))setTimeout(()=>{if(state.watchRtc.screenOutPeers.get(targetUid)===pc&&['failed','disconnected'].includes(pc.connectionState))offerWatchScreenToPeer(targetUid,'connection-retry',true).catch(()=>{})},5000)
     }
   }
 }
@@ -2195,42 +2232,50 @@ async function offerWatchScreenToPeer(peerUid,reason='screen-sync',force=false){
   const videoTrack=state.watchRtc.screenStream?.getVideoTracks?.().find(t=>t.readyState==='live');if(!videoTrack)return false;
   const lock=state.watchRtc.screenOfferLocks;if(lock.has(peerUid))return false;
   const existing=state.watchRtc.screenOutPeers.get(peerUid),now=Date.now(),last=Number(state.watchRtc.screenOfferAt.get(peerUid)||0);
-  if(!force&&existing&&['new','connecting','connected'].includes(existing.connectionState)&&now-last<4500)return true;
-  if(!force&&now-last<900)return false;
+  // Uma oferta ativa não deve ser encerrada por notificações repetidas de presença.
+  // Só reconstruímos se ela realmente falhou ou não conectou após 20 segundos.
+  if(existing&&existing.connectionState==='connected')return true;
+  if(existing&&['new','connecting'].includes(existing.connectionState)&&now-last<20000)return true;
+  if(now-last<3000)return false;
   lock.add(peerUid);state.watchRtc.screenOfferAt.set(peerUid,now);
   try{
     closeWatchDedicatedScreen(state.watchRtc.screenOutPeers,peerUid);state.watchRtc.screenOutCandidates.delete(peerUid);
     const pc=new RTCPeerConnection({...RTC_CONFIG,iceCandidatePoolSize:8});state.watchRtc.screenOutPeers.set(peerUid,pc);
+    pc.__watchScreenOfferId=crypto.randomUUID();
     setupWatchDedicatedScreenPc(pc,peerUid,String(state.user.uid),'out');
-    pc.addTrack(videoTrack,state.watchRtc.screenStream);
+    const sender=pc.addTrack(videoTrack,state.watchRtc.screenStream);
+    try{const parameters=sender.getParameters();parameters.encodings=parameters.encodings?.length?parameters.encodings:[{}];parameters.encodings[0].maxBitrate=1800000;parameters.encodings[0].maxFramerate=24;await sender.setParameters(parameters)}catch{}
     const audioTrack=state.watchRtc.screenStream?.getAudioTracks?.().find(t=>t.readyState==='live');if(audioTrack)pc.addTrack(audioTrack,state.watchRtc.screenStream);
     const offer=await pc.createOffer();await pc.setLocalDescription(offer);
-    await sendWatchRtc(peerUid,{type:'screen_offer',ownerUid:String(state.user.uid),sdp:pc.localDescription?.sdp||offer.sdp,reason});
+    await sendWatchRtc(peerUid,{type:'screen_offer',ownerUid:String(state.user.uid),offerId:pc.__watchScreenOfferId,sdp:pc.localDescription?.sdp||offer.sdp,reason});
     return true
   }catch(e){closeWatchDedicatedScreen(state.watchRtc.screenOutPeers,peerUid);console.warn('[WATCH SCREEN OFFER]',e);return false}
   finally{lock.delete(peerUid)}
 }
 async function acceptWatchScreenOffer(from,msg){
   const owner=String(msg.ownerUid||from||'');if(!owner||owner!==String(from||''))return false;
+  const current=state.watchRtc.screenInPeers.get(owner);
+  if(msg.offerId&&current?.__watchScreenOfferId===msg.offerId&&current.signalingState!=='closed')return true;
   closeWatchDedicatedScreen(state.watchRtc.screenInPeers,owner);
   const pc=new RTCPeerConnection({...RTC_CONFIG,iceCandidatePoolSize:8});state.watchRtc.screenInPeers.set(owner,pc);
+  pc.__watchScreenOfferId=String(msg.offerId||'');
   setupWatchDedicatedScreenPc(pc,owner,owner,'in');
   await pc.setRemoteDescription({type:'offer',sdp:msg.sdp});await flushWatchDedicatedCandidates('in',owner,pc);
   const answer=await pc.createAnswer();await pc.setLocalDescription(answer);
-  await sendWatchRtc(owner,{type:'screen_answer',ownerUid:owner,sdp:pc.localDescription?.sdp||answer.sdp});return true
+  await sendWatchRtc(owner,{type:'screen_answer',ownerUid:owner,offerId:pc.__watchScreenOfferId,sdp:pc.localDescription?.sdp||answer.sdp});return true
 }
 async function acceptWatchScreenAnswer(from,msg){
   if(String(msg.ownerUid||'')!==String(state.user?.uid||''))return false;
-  const pc=state.watchRtc.screenOutPeers.get(String(from||''));if(!pc||pc.signalingState==='closed')return false;
+  const pc=state.watchRtc.screenOutPeers.get(String(from||''));if(!pc||pc.signalingState==='closed'||(msg.offerId&&pc.__watchScreenOfferId!==msg.offerId))return false;
   if(pc.signalingState==='have-local-offer'){await pc.setRemoteDescription({type:'answer',sdp:msg.sdp});await flushWatchDedicatedCandidates('out',String(from),pc);return true}return false
 }
 async function acceptWatchScreenCandidate(from,msg){
   const owner=String(msg.ownerUid||'');if(!owner||!msg.candidate)return false;
   if(owner===String(state.user?.uid||'')){
-    const key=String(from||''),pc=state.watchRtc.screenOutPeers.get(key);if(pc?.remoteDescription)try{await pc.addIceCandidate(msg.candidate)}catch{}else{const q=state.watchRtc.screenOutCandidates.get(key)||[];q.push(msg.candidate);state.watchRtc.screenOutCandidates.set(key,q)};return true
+    const key=String(from||''),pc=state.watchRtc.screenOutPeers.get(key);if(msg.offerId&&pc?.__watchScreenOfferId&&pc.__watchScreenOfferId!==msg.offerId)return false;if(pc?.remoteDescription)try{await pc.addIceCandidate(msg.candidate)}catch{}else{const q=state.watchRtc.screenOutCandidates.get(key)||[];q.push(msg.candidate);state.watchRtc.screenOutCandidates.set(key,q)};return true
   }
   if(owner===String(from||'')){
-    const key=owner,pc=state.watchRtc.screenInPeers.get(key);if(pc?.remoteDescription)try{await pc.addIceCandidate(msg.candidate)}catch{}else{const q=state.watchRtc.screenInCandidates.get(key)||[];q.push(msg.candidate);state.watchRtc.screenInCandidates.set(key,q)};return true
+    const key=owner,pc=state.watchRtc.screenInPeers.get(key);if(msg.offerId&&pc?.__watchScreenOfferId&&pc.__watchScreenOfferId!==msg.offerId)return false;if(pc?.remoteDescription)try{await pc.addIceCandidate(msg.candidate)}catch{}else{const q=state.watchRtc.screenInCandidates.get(key)||[];q.push(msg.candidate);state.watchRtc.screenInCandidates.set(key,q)};return true
   }
   return false
 }
@@ -2268,7 +2313,7 @@ async function tuneWatchScreenAudioSender(pc){
 }
 async function requestWatchScreenFrom(uid,force=false){
   uid=String(uid||'');if(!uid||uid===state.user?.uid||!state.watchRtc.screenSharers.has(uid))return;
-  const last=Number(state.watchRtc.screenRetry.get(uid)||0);if(!force&&Date.now()-last<900)return;
+  const last=Number(state.watchRtc.screenRetry.get(uid)||0);if(Date.now()-last<(force?3200:5500))return;
   state.watchRtc.screenRetry.set(uid,Date.now());await sendWatchRtc(uid,{type:'screen_request'}).catch(()=>{})
 }
 
@@ -2325,7 +2370,7 @@ function refreshWatchScreenStage(){
   if(localFile){stage.hidden=true;if(mediaStage)mediaStage.hidden=false;return}
   stage.hidden=false;if(mediaStage)mediaStage.hidden=true;
   const vtrack=stream.getVideoTracks?.().find(t=>t.readyState==='live'),atrack=stream.getAudioTracks?.().find(t=>t.readyState==='live');
-  const videoStream=new MediaStream();if(vtrack)videoStream.addTrack(vtrack);if(video.srcObject?.getVideoTracks?.()[0]?.id!==vtrack?.id)video.srcObject=videoStream;video.muted=true;video.playsInline=true;video.play?.().catch(()=>{});
+  const videoStream=new MediaStream();if(vtrack)videoStream.addTrack(vtrack);if(video.srcObject?.getVideoTracks?.()[0]?.id!==vtrack?.id)video.srcObject=videoStream;video.muted=true;video.playsInline=true;if(video.paused)video.play?.().catch(()=>{});
   if(audio){
     // O host NÃO reproduz localmente o áudio capturado da própria tela.
     // O sistema/jogo já está tocando no computador; reproduzir a captura aqui
@@ -2348,7 +2393,7 @@ function refreshWatchScreenStage(){
 function attachWatchRemote(uid){
   const voice=watchVoiceStreamFor(uid),screen=watchScreenStreamFor(uid),card=ensureWatchCallCard(uid),audio=card?.querySelector('audio');
   if(audio&&voice&&audio.srcObject!==voice)audio.srcObject=voice;
-  if(audio){audio.muted=!state.watchRtc.audioJoined||watchPeerMuted(uid);audio.play?.().catch(()=>{})}applyWatchPeerMute(uid,card)
+  if(audio){audio.muted=uid===String(state.user?.uid||'')||!state.watchRtc.audioJoined||watchPeerMuted(uid);audio.play?.().catch(e=>{if(e?.name==='NotAllowedError'){$('watchAudioResumeBtn').hidden=false;setWatchRtcStatus('Toque em Ativar áudio para ouvir a chamada.','warn')}})}applyWatchPeerMute(uid,card)
 
   for(const track of screen?.getVideoTracks?.()||[]){
     const refresh=()=>{updateWatchPeerScreenButton(uid);refreshWatchScreenStage()};
@@ -2366,6 +2411,7 @@ function attachWatchRemote(uid){
   refreshWatchScreenStage()
 }
 function removeWatchPeer(uid){
+  stopWatchVoiceRepair(uid);
   const pc=state.watchRtc.peers.get(uid);try{pc?.close()}catch{}state.watchRtc.peers.delete(uid);state.watchRtc.mutedPeers.delete(String(uid||''));state.watchRtc.peerVolumes.delete(String(uid||''));releaseWatchPeerAudioGraph(uid);closeWatchDedicatedScreen(state.watchRtc.screenOutPeers,uid);closeWatchDedicatedScreen(state.watchRtc.screenInPeers,uid);state.watchRtc.screenOutCandidates.delete(uid);state.watchRtc.screenInCandidates.delete(uid);state.watchRtc.screenOfferAt.delete(uid);state.watchRtc.remoteStreams.delete(uid);state.watchRtc.remoteVoiceStreams.delete(uid);state.watchRtc.remoteScreenStreams.delete(uid);state.watchRtc.pendingCandidates.delete(uid);state.watchRtc.screenRetry.delete(uid);
   $('watchRemoteMedia')?.querySelector(`[data-watch-peer="${CSS.escape(uid)}"]`)?.remove();refreshWatchScreenStage()
 }
@@ -2393,7 +2439,8 @@ async function createWatchPeer(peerUid,initiator=false){
   pc.ontrack=ev=>{
     if(ev.track.kind!=='audio')return;
     if(!voiceRemote.getTracks().some(t=>t.id===ev.track.id))voiceRemote.addTrack(ev.track);
-    ev.track.onunmute=()=>attachWatchRemote(peerUid);ev.track.onended=()=>attachWatchRemote(peerUid);attachWatchRemote(peerUid)
+    ev.track.onunmute=()=>{attachWatchRemote(peerUid);resumeWatchIncomingAudio().catch(()=>{});updateWatchVoiceConnectionLabel();stopWatchVoiceRepair(peerUid)};
+    ev.track.onended=()=>{attachWatchRemote(peerUid);scheduleWatchVoiceRepair(peerUid)};attachWatchRemote(peerUid)
   };
 
   pc.onicecandidate=ev=>{if(ev.candidate)sendWatchRtc(peerUid,{type:'candidate',candidate:ev.candidate.toJSON()}).catch(()=>{})};
@@ -2407,10 +2454,10 @@ async function createWatchPeer(peerUid,initiator=false){
     }
   };
   pc.onconnectionstatechange=()=>{
-    if(pc.connectionState==='connected'){setWatchRtcStatus('Chamada conectada','ok');return}
+    if(pc.connectionState==='connected'){setWatchRtcStatus('Chamada conectada','ok');resumeWatchIncomingAudio().catch(()=>{});updateWatchVoiceConnectionLabel();return}
     if(pc.connectionState==='disconnected'){
       setWatchRtcStatus('Conexão instável, recuperando...','warn');
-      setTimeout(()=>{if(pc.connectionState==='disconnected'){if(String(state.user?.uid).localeCompare(peerUid)<0)negotiateWatchPeer(peerUid,{iceRestart:true,reason:'disconnected'}).catch(()=>{});else if(state.watchRtc.screenSharers.has(peerUid))requestWatchScreenFrom(peerUid,true)}},700)
+      setTimeout(()=>{if(state.watchRtc.peers.get(peerUid)!==pc)return;if(pc.connectionState==='disconnected'&&String(state.user?.uid).localeCompare(peerUid)<0)negotiateWatchPeer(peerUid,{iceRestart:true,reason:'disconnected'}).catch(()=>{})},3500)
     }
   };
 
@@ -2429,7 +2476,7 @@ async function handleWatchRtc(id,msg){
       const owner=String(msg.ownerUid||from);closeWatchDedicatedScreen(state.watchRtc.screenInPeers,owner);state.watchRtc.screenInCandidates.delete(owner);state.watchRtc.remoteScreenStreams.delete(owner);state.watchRtc.remoteStreams.delete(owner);if(state.watchRtc.activeScreenUid===owner)state.watchRtc.activeScreenUid=null;refreshWatchScreenStage();updateWatchPeerScreenButton(owner);return
     }
     if(msg.type==='screen_request'){
-      const videoTrack=state.watchRtc.screenStream?.getVideoTracks?.()[0];if(videoTrack&&videoTrack.readyState==='live'){await offerWatchScreenToPeer(from,'screen-request',true)}return
+      const videoTrack=state.watchRtc.screenStream?.getVideoTracks?.()[0];if(videoTrack&&videoTrack.readyState==='live'){await offerWatchScreenToPeer(from,'screen-request',false)}return
     }
     const pc=await createWatchPeer(from,false);if(!pc)return;
     if(msg.type==='offer'){
@@ -2449,21 +2496,72 @@ async function handleWatchRtc(id,msg){
   }finally{remove(ref(db,`watchRtc/${state.watchCode}/${state.user.uid}/${id}`)).catch(()=>{})}
 }
 function watchWatchRtcInbox(){try{state.watchRtc.inboxUnsub?.()}catch{}state.watchRtc.inboxUnsub=onValue(ref(db,`watchRtc/${state.watchCode}/${state.user.uid}`),sn=>{const all=sn.exists()?sn.val():{};Object.entries(all).sort((a,b)=>(a[1]?.at||0)-(b[1]?.at||0)).forEach(([id,msg])=>{state.watchRtc.signalQueue=(state.watchRtc.signalQueue||Promise.resolve()).then(()=>handleWatchRtc(id,msg)).catch(e=>setWatchRtcStatus('Falha na conexão: '+e.message,'warn'))})})}
+// Repara a voz de quem entra depois sem recriar a chamada inteira.
+// A conta de menor UID conduz a renegociação para evitar duas ofertas simultâneas.
+const watchVoiceRepairTimers=new Map();
+function stopWatchVoiceRepair(uid){
+  const timers=watchVoiceRepairTimers.get(String(uid||''))||[];
+  for(const timer of timers)clearTimeout(timer);
+  watchVoiceRepairTimers.delete(String(uid||''));
+}
+function scheduleWatchVoiceRepair(uid){
+  uid=String(uid||'');const rtc=state.watchRtc;
+  if(!uid||uid===String(state.user?.uid||'')||!rtc.joined||!rtc.audioJoined||!rtc.presence?.[uid]?.audio||watchVoiceRepairTimers.has(uid))return;
+  const room=state.watchCode;
+  const delays=[500,1900,5000,10500];
+  const timers=delays.map((delay,index)=>setTimeout(async()=>{
+    if(room!==state.watchCode||!rtc.joined||!rtc.audioJoined||!rtc.presence?.[uid]?.audio){stopWatchVoiceRepair(uid);return}
+    let pc=rtc.peers.get(uid);
+    if(!pc&&String(state.user.uid).localeCompare(uid)<0){
+      await createWatchPeer(uid,true).catch(e=>console.warn('[WATCH VOICE PEER]',e));
+      pc=rtc.peers.get(uid);
+    }
+    if(!pc||pc.signalingState==='closed'){if(index===delays.length-1)stopWatchVoiceRepair(uid);return}
+    const mic=rtc.localStream?.getAudioTracks?.().find(t=>t.readyState==='live');
+    const sender=watchPcSender(pc,'audio','voice');
+    if(mic&&sender&&sender.track!==mic)await sender.replaceTrack(mic).catch(()=>{});
+    const remoteTrack=rtc.remoteVoiceStreams.get(uid)?.getAudioTracks?.().find(t=>t.readyState==='live'&&!t.muted);
+    if(remoteTrack&&pc.connectionState==='connected'){
+      attachWatchRemote(uid);resumeWatchIncomingAudio().catch(()=>{});
+      updateWatchVoiceConnectionLabel();stopWatchVoiceRepair(uid);return;
+    }
+    if(index>=2&&String(state.user.uid).localeCompare(uid)<0&&pc.signalingState==='stable'){
+      const restart=['failed','disconnected'].includes(pc.iceConnectionState)||['failed','disconnected'].includes(pc.connectionState);
+      await negotiateWatchPeer(uid,{iceRestart:restart,reason:'voice-late-join'}).catch(()=>{});
+    }
+    if(index===delays.length-1){
+      if(!remoteTrack)setWatchRtcStatus('Voz sem mídia remota. Verifique TURN ou toque em Ativar áudio.','warn');
+      stopWatchVoiceRepair(uid);
+    }
+  },delay));
+  watchVoiceRepairTimers.set(uid,timers);
+}
 function watchWatchPresence(){
   try{state.watchRtc.presenceUnsub?.()}catch{}
   state.watchRtc.presenceUnsub=onValue(ref(db,`watchVoice/${state.watchCode}`),sn=>{
-    const p=sn.exists()?sn.val():{};state.watchRtc.presence=p;
+    const p=sn.exists()?sn.val():{},previousPresence=state.watchRtc.presence||{};state.watchRtc.presence=p;
     const ids=Object.keys(p).filter(uid=>uid!==state.user.uid),voiceCount=Object.values(p).filter(x=>x?.audio===true).length;
     $('watchVoiceCount').textContent=String(voiceCount);
     state.watchRtc.screenSharers=new Set(Object.entries(p).filter(([,x])=>x?.screen===true).map(([uid])=>String(uid)));
-    for(const uid of ids){if(!state.watchRtc.peers.has(uid)&&String(state.user.uid).localeCompare(uid)<0)createWatchPeer(uid,true).catch(()=>{})}
+    for(const uid of ids){
+      if(!state.watchRtc.peers.has(uid)&&String(state.user.uid).localeCompare(uid)<0)createWatchPeer(uid,true).catch(()=>{});
+      if(p[uid]?.audio&&(!previousPresence[uid]?.audio||!state.watchRtc.remoteVoiceStreams.get(uid)?.getAudioTracks?.().some(t=>t.readyState==='live'&&!t.muted)))scheduleWatchVoiceRepair(uid);
+    }
+    updateWatchVoiceConnectionLabel();
     for(const uid of [...state.watchRtc.peers.keys()])if(!p[uid])removeWatchPeer(uid);
     const localSharing=!!state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live');
     for(const uid of ids){
       updateWatchPeerScreenButton(uid);
-      if(localSharing){[80,300,800].forEach((delay,idx)=>setTimeout(()=>{if(state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live'))syncLocalScreenToPeer(uid,idx?'late-join-retry':'late-join').catch(()=>{})},delay))}
-      if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteHasScreen(uid,watchScreenStreamFor(uid))){
-        [100,350,900,1800].forEach((delay,idx)=>setTimeout(()=>{if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteHasScreen(uid,watchScreenStreamFor(uid)))requestWatchScreenFrom(uid,idx>0).catch(()=>{})},delay))
+      // Uma mudança qualquer na presença não é motivo para derrubar o stream.
+      const arrived=!previousPresence[uid],voiceJoined=!!p[uid]?.audio&&!previousPresence[uid]?.audio;
+      if(localSharing&&(arrived||voiceJoined)){
+        setTimeout(()=>{if(state.watchRtc.screenStream?.getVideoTracks?.().some(t=>t.readyState==='live'))syncLocalScreenToPeer(uid,'late-join').catch(()=>{})},450);
+      }
+      const screenStarted=!!p[uid]?.screen&&!previousPresence[uid]?.screen;
+      if((arrived||screenStarted)&&state.watchRtc.screenSharers.has(uid)){
+        [400,4800,11500].forEach((delay,idx)=>setTimeout(()=>{
+          if(state.watchRtc.screenSharers.has(uid)&&!watchRemoteScreenFlowing(uid))requestWatchScreenFrom(uid,idx>0).catch(()=>{});
+        },delay));
       }
     }
     const remoteSharingUid=ids.find(uid=>state.watchRtc.screenSharers.has(uid));
@@ -2501,15 +2599,18 @@ async function joinWatchVoice({automatic=false}={}){
   }
   if(!await ensureWatchRtcSession())return false;
   try{
-    const existing=state.watchRtc.localStream;const stream=existing?.getAudioTracks?.().some(t=>t.readyState==='live')?existing:await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    const existing=state.watchRtc.localStream;const stream=existing?.getAudioTracks?.().some(t=>t.readyState==='live')?existing:await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
     if(existing&&existing!==stream)existing.getTracks?.().forEach(t=>{try{t.stop()}catch{}});state.watchRtc.localStream=stream;state.watchRtc.micEnabled=true;
     const track=stream.getAudioTracks()[0];
     await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:true,muted:false});
     state.watchRtc.audioJoined=true;
+    for(const uid of Object.keys(state.watchRtc.presence||{}))if(uid!==state.user.uid)scheduleWatchVoiceRepair(uid);
+    resumeWatchIncomingAudio().catch(()=>{});
     // A transmissão P2P pode negociar depois; não bloqueie a música esperando ICE.
     for(const [uid,pc] of state.watchRtc.peers){
       const sender=watchPcSender(pc,'audio','voice');if(sender)await sender.replaceTrack(track).catch(()=>{});
-      if(pc.signalingState==='stable')negotiateWatchPeer(uid,{reason:'audio-join'}).catch(e=>console.warn('[WATCH VOICE] Negociação:',e));
+      if(pc.signalingState==='stable'&&String(state.user.uid).localeCompare(uid)<0)negotiateWatchPeer(uid,{reason:'audio-join'}).catch(e=>console.warn('[WATCH VOICE] Negociação:',e));
+      scheduleWatchVoiceRepair(uid);
     }
     $$('.watch-call-card').forEach(card=>{const uid=String(card.dataset.watchPeer||'');applyWatchPeerMute(uid,card);const a=card.querySelector('audio');a?.play?.().catch(()=>{})});watchVoiceUi();if(!automatic)toast('Você entrou na voz.');return true
   }catch(e){state.watchRtc.audioJoined=false;watchVoiceUi();if(automatic)setWatchRtcStatus('Toque em “Entrar na voz” para liberar o microfone.','warn');else toast(e?.name==='NotAllowedError'?'Permissão do microfone negada.':permissionMessage(e,'Não foi possível confirmar a voz no Firebase.'));return false}
@@ -2517,6 +2618,7 @@ async function joinWatchVoice({automatic=false}={}){
 function toggleWatchMic(){const track=state.watchRtc.localStream?.getAudioTracks?.()[0];if(!track)return;track.enabled=!track.enabled;state.watchRtc.micEnabled=track.enabled;update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{muted:!track.enabled}).catch(()=>{});watchVoiceUi()}
 async function leaveWatchAudio(silent=false){
   const track=state.watchRtc.localStream?.getAudioTracks?.()[0];if(track)track.stop();state.watchRtc.localStream=null;state.watchRtc.audioJoined=false;state.watchRtc.micEnabled=true;
+  for(const uid of [...watchVoiceRepairTimers.keys()])stopWatchVoiceRepair(uid);
   for(const pc of state.watchRtc.peers.values()){const sender=watchPcSender(pc,'audio','voice');if(sender)await sender.replaceTrack(null)}
   if(state.watchCode&&state.user)await update(ref(db,`watchVoice/${state.watchCode}/${state.user.uid}`),{audio:false}).catch(()=>{});
   $$('.watch-call-card audio').forEach(a=>a.muted=true);destroyWatchMusicPlayback();watchVoiceUi();if(!silent)toast('Você saiu da voz.')
@@ -2653,7 +2755,7 @@ async function toggleWatchScreen(){
       await syncLocalScreenToPeer(uid,'screen-start').catch(()=>{})
     }
 
-    videoTrack.onended=()=>{if(state.watchRtc.screenStream)toggleWatchScreen().catch(()=>{})};
+    videoTrack.onended=()=>{if(state.watchRtc.screenStream===stream)stopWatchPublishedStream().catch(()=>{})};
     if(screenAudioTrack)screenAudioTrack.onended=()=>refreshWatchScreenStage();
 
     setWatchRtcStatus(screenAudioTrack?'Tela e áudio sendo compartilhados':'Tela compartilhada sem áudio','ok');
@@ -2720,6 +2822,7 @@ async function leaveWatchVoice(silent=false){
   const code=state.watchCode,uid=state.user?.uid;
   try{state.watchRtc.presenceUnsub?.()}catch{}try{state.watchRtc.inboxUnsub?.()}catch{}try{await state.watchRtc.disconnectRef?.cancel?.()}catch{}
   state.watchRtc.presenceUnsub=null;state.watchRtc.inboxUnsub=null;state.watchRtc.disconnectRef=null;
+  for(const uid of [...watchVoiceRepairTimers.keys()])stopWatchVoiceRepair(uid);
   for(const pc of state.watchRtc.peers.values()){try{pc.close()}catch{}}
   for(const pc of state.watchRtc.screenOutPeers.values()){try{pc.close()}catch{}}for(const pc of state.watchRtc.screenInPeers.values()){try{pc.close()}catch{}}
   state.watchRtc.peers.clear();state.watchRtc.screenOutPeers.clear();state.watchRtc.screenInPeers.clear();state.watchRtc.remoteStreams.clear();state.watchRtc.remoteVoiceStreams.clear();state.watchRtc.remoteScreenStreams.clear();state.watchRtc.localStream?.getTracks?.().forEach(t=>t.stop());state.watchRtc.screenStream?.getTracks?.().forEach(t=>t.stop());

@@ -1,9 +1,9 @@
-const CACHE='gremory-v14-20261029-integracao-01';
+const CACHE='gremory-v14-20261030-watch-voice-02';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261028-gifts-catalog-02',
-  '/assets/js/app.js?v=20261028-gifts-catalog-02',
+  '/assets/css/app.css?v=20261030-watch-voice-02',
+  '/assets/js/app.js?v=20261030-watch-voice-02',
   '/assets/js/community.js?v=20261028-gifts-catalog-02',
   '/assets/css/gremory-tools.css?v=20261028-gifts-catalog-02',
   '/assets/js/gremory-tools.js?v=20261028-gifts-catalog-02',

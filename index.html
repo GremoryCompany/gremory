@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261028-gifts-catalog-02">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261030-watch-voice-02">
   <link rel="stylesheet" href="/assets/css/gremory-tools.css?v=20261028-gifts-catalog-02">
 </head>
 <body class="auth-loading">
@@ -701,7 +701,7 @@
             <article class="panel rooms-panel watch-public-card"><div class="panel-head"><div><span class="tag">PÚBLICAS</span><h3>Salas abertas</h3></div><button class="text-button" id="watchPublicRefreshBtn" type="button">Atualizar</button></div><div id="watchPublicRoomsList" class="room-list watch-room-list"><div class="empty-state small">Nenhuma sala pública.</div></div></article>
           </div>
 
-          <div class="watch-room watch-room-v2" id="watchRoom" hidden>
+          <div class="watch-room watch-room-v2" id="watchRoom" data-watch-mobile-tab="people" hidden>
             <header class="watch-room-hero">
               <button class="back-button watch-room-back" id="watchBackBtn" type="button">← Salas</button>
               <div class="watch-room-identity">
@@ -761,6 +761,11 @@
               </section>
 
               <aside class="watch-side watch-side-stack">
+                <nav class="watch-mobile-tabs" aria-label="Acesso rápido aos painéis da sala">
+                  <button class="active" data-watch-mobile-tab="people" type="button" aria-pressed="true">🎙️ Voz e pessoas</button>
+                  <button data-watch-mobile-tab="chat" type="button" aria-pressed="false">💬 Chat</button>
+                  <button data-watch-mobile-tab="music" type="button" aria-pressed="false">🎵 Música</button>
+                </nav>
                 <section class="panel watch-call-panel">
                   <div class="panel-head">
                     <div><span class="tag">CHAMADA</span><h3>Na ligação</h3></div>
@@ -771,6 +776,7 @@
                     <button class="btn primary" id="watchJoinVoiceBtn" type="button">Entrar na voz</button>
                     <button class="btn" id="watchMicBtn" type="button" hidden>Microfone</button>
                     <button class="btn danger-ghost" id="watchLeaveVoiceBtn" type="button" hidden>Sair da voz</button>
+                     <button class="btn" id="watchAudioResumeBtn" type="button" hidden>🔊 Ativar áudio dos participantes</button>
                   </div>
                   <div class="remote-media-grid watch-remote-media" id="watchRemoteMedia"></div>
                   <div class="watch-members-head"><strong>Participantes</strong><span class="pill" id="watchMemberCount">0</span></div>
@@ -1177,7 +1183,7 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261028-gifts-catalog-02"></script>
+  <script type="module" src="/assets/js/app.js?v=20261030-watch-voice-02"></script>
   <script type="module" src="/assets/js/gremory-tools.js?v=20261028-gifts-catalog-02"></script>
 </body>
 </html>

@@ -1,22 +1,42 @@
-GREMORY — RECUPERAÇÃO V14 — 27/10/2026
+PATCH SITE GREMORY - WATCH PARTY - 30/10/2026
 
-LEITURA OBRIGATÓRIA: GUIA_INSTALACAO_E_LIMITACOES.md
+INSTALAR: extraia o ZIP na raiz do repositório do SITE Gremory (Vercel), mantendo a estrutura:
+  index.html
+  sw.js
+  assets/js/app.js
+  assets/css/app.css
 
-Este é um pacote completo de arquivos do site. Há melhorias implementadas e
-32 testes locais passando, mas ele ainda NÃO foi validado na infraestrutura
-Firebase, Vercel e Railway/Charlotte real. Não declare pagamentos e WebRTC
-homologados antes de testar em ambiente controlado.
+ATENÇÃO: use o repositório do SITE, não o repositório Charlotte.
+O arquivo app.js foi baseado no último app.js enviado pelo usuário em 30/10/2026.
+index.html e sw.js partem do PATCH_SITE_V14 fornecido anteriormente.
+app.css foi baseado no gremory-main (2).zip.
+Se você fez outras mudanças nesses arquivos depois, confira diferenças antes de substituir.
 
-O Bridge mantém Charlotte como autoridade de Rúpias. Novas atividades de XP
-no site utilizam API Firebase Admin na Vercel e precisam de credenciais
-privadas configuradas SOMENTE no painel de Environment Variables da Vercel.
-Pokémon, Slots, Premium WhatsApp e Watch Music continuam precisando do bot
-Bridge online. O ZIP do site não faz deploy automático do bot.
+CORREÇÕES DESTA VERSÃO
+- Presença de novos participantes não dispara mais várias novas conexões de tela.
+- Reenvio de ofertas de tela limitado e correlacionado com um ID por negociação.
+- Recuperação automática da voz de participantes tardios, com tentativas limitadas.
+- Botão Ativar áudio para browsers que bloqueiam autoplay de som remoto.
+- Cancelamento de eco, redução de ruído e ganho automático no microfone.
+- Controles mais organizados no celular, com atalhos Voz / Chat / Música.
+- Cache JS/CSS atualizado para novas versões após deploy.
 
-Antes de instalar: backup da Firebase RTDB e JSONs do bot; conciliar operações
-financeiras pendentes; publicar regras completas RTDB e Storage separadamente;
-substituir o Bridge do bot na Railway; fazer deploy do site na Vercel.
+NÃO INCLUÍDO
+- Gift cards novos / alterações em pagamentos, carteira ou Firebase Rules.
+- Mudanças no bot da Wispbyte.
+- Configuração do TURN em produção: o endpoint /api/main?action=rtc_config aceita TURN_URL,
+  TURN_USERNAME, TURN_CREDENTIAL no ambiente da Vercel; você deve fornecer
+  um servidor TURN real, com credenciais válidas, para redes onde STUN não basta.
+- Não garante reprodução de mídia protegida por DRM/captura bloqueada pelo browser.
 
-Funcionalidades pendentes (não dizer que prontas): Poker Texas Hold'em e Cores
-e Caos completos, finalização de captura individual da Raid e videogames de
-corrida avançados. Não reutilizar conteúdo autoral de Resident Evil 7.
+TESTE DE HOMOLOGAÇÃO
+1. Faça backup/commit antes de substituir.
+2. Publique na Vercel e atualize todos os navegadores.
+3. Em dispositivos distintos, abra A -> B -> C e entre na voz em cada um.
+4. Confira o áudio nos dois sentidos sem recarregar; use fones para evitar retorno.
+5. Transmita tela e filme local; confirme se não pisca e se o som não duplica.
+6. Se ainda ficar tela preta em redes diferentes, verifique /api/main?action=rtc_config,
+   configuração de TURN e eventuais erros do console do navegador.
+7. Para desfazer, reverta o commit correspondente no GitHub.
+
+Este patch foi checado sintaticamente, mas NÃO foi testado com 2-3 dispositivos em produção.

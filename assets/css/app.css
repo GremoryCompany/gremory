@@ -1406,3 +1406,42 @@ body.watch-pseudo-fullscreen #watchScreenStage.watch-fullscreen-ui-hidden{cursor
 .giftshop-sku button{width:100%}.giftshop-sku:hover{border-color:#a46ed6}.giftshop-inbox{align-self:start}
 @media(max-width:760px){.giftshop-grid{grid-template-columns:1fr}.giftshop-catalog{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.giftshop-sku{padding:12px}.giftshop-sku .giftshop-price{font-size:1.22rem}}
 @media(max-width:360px){.giftshop-catalog{grid-template-columns:1fr}}
+
+
+/* PATCH 2026-10-30 - Watch Party mobile: controls legiveis e atalhos sem desmontar players */
+.watch-mobile-tabs{display:none}
+#watchAudioResumeBtn:not([hidden]){border:1px solid #a95373;background:rgba(175,61,99,.12);color:#ffb3c5;grid-column:1/-1}
+@media(max-width:760px){
+  .watch-room-v2,.watch-room-v2 .watch-layout-v2,.watch-room-v2 .watch-main-v2,.watch-room-v2 .watch-side-stack{min-width:0;width:100%}
+  .watch-room-v2 .watch-layout-v2{display:flex;flex-direction:column;gap:12px}
+  .watch-room-v2 .watch-main-v2{padding:8px}
+  .watch-room-v2 .watch-side-stack{display:flex!important;flex-direction:column;gap:10px!important}
+  .watch-room-v2 .watch-mobile-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;order:-1;padding:6px;border:1px solid #313946;border-radius:15px;background:#11151c;position:relative;z-index:2}
+  .watch-mobile-tabs button{border:0;border-radius:10px;background:transparent;color:#aeb6c2;padding:11px 5px;min-width:0;font-size:12px;font-weight:700;white-space:nowrap}
+  .watch-mobile-tabs button.active{background:linear-gradient(135deg,#53202f,#32202b);color:#fff;box-shadow:inset 0 0 0 1px #864055}
+  .watch-room-v2 .watch-call-panel,.watch-room-v2 .watch-chat-panel,.watch-room-v2 .watch-music-panel{scroll-margin-top:90px;min-width:0}
+  .watch-room-v2 .watch-voice-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .watch-room-v2 .watch-voice-actions .watch-voice-label{grid-column:1/-1}
+  .watch-room-v2 .watch-voice-actions .btn{min-width:0;width:100%;min-height:44px;font-size:12px;padding:10px 5px}
+  .watch-room-v2 .watch-remote-media{display:flex!important;gap:8px;overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x proximity;scrollbar-width:thin;padding-bottom:7px}
+  .watch-room-v2 .watch-remote-media .watch-call-card{flex:0 0 min(78vw,290px);scroll-snap-align:start;min-width:0}
+  .watch-room-v2 .watch-main-v2 .watch-player-shell{min-height:0!important;aspect-ratio:16/9;overflow:hidden}
+  .watch-room-v2 .watch-main-v2 .watch-screen-stage,.watch-room-v2 .watch-main-v2 .watch-media-stage{min-height:0!important;height:100%;max-height:none}
+  .watch-room-v2 .watch-main-v2 .watch-screen-stage video{width:100%;max-width:100%;height:auto;max-height:52vh;object-fit:contain}
+  .watch-room-v2 .watch-source-card{padding:10px 3px 0;min-width:0}
+  .watch-room-v2 .watch-controls{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px}
+  .watch-room-v2 .watch-controls .screen-share-btn{grid-column:1/-1}
+  .watch-room-v2 .watch-controls .btn{min-height:44px;font-size:12px;min-width:0}
+  .watch-room-v2 .watch-local-source{display:flex;flex-wrap:wrap;gap:8px}
+  .watch-room-v2 .watch-local-source small{width:100%}
+  .watch-room-v2 .watch-screen-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .watch-room-v2 .watch-screen-head{flex-wrap:wrap}
+  .watch-room-v2 .watch-screen-head>div{min-width:0}
+}
+@media(max-width:420px){
+  .watch-room-v2 .watch-room-hero{position:relative;top:auto}
+  .watch-room-v2 .watch-main-v2 .watch-player-shell{min-height:185px!important}
+  .watch-room-v2 .watch-local-source .btn{width:100%}
+  .watch-room-v2 .watch-mobile-tabs button{font-size:11px}
+  .watch-room-v2 .watch-call-panel,.watch-room-v2 .watch-chat-panel,.watch-room-v2 .watch-music-panel{scroll-margin-top:14px}
+}
