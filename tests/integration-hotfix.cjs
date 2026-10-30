@@ -24,8 +24,16 @@ test('Avatar paths are unique and restricted to owner with content-type and size
  assert.match(storage,/request\.auth\.uid == uid/);
  assert.match(storage,/request\.resource\.size <= 5 \* 1024 \* 1024/);
 });
-test('Unimplemented gift products cannot be purchased in the UI',()=>{
- const all=[...html.matchAll(/<button\b[^>]*\bdata-gift-product="([^"]+)"[^>]*>/g)];assert.equal(all.length,9);
- for(const [tag,sku] of all){if(sku==='premium_7d')assert.doesNotMatch(tag,/\bdisabled\b/);else assert.match(tag,/\bdisabled\b/)}
+test('Catálogo do site só disponibiliza produtos definidos na Charlotte atual',()=>{
+ const {PRODUCTS}=require('../database/gremory_gift_catalog.js');
+ const all=[...html.matchAll(/<button\b[^>]*\bdata-gift-product="([^"]+)"[^>]*>/g)];
+ assert.equal(all.length,Object.keys(PRODUCTS).length);
+ const seen=new Set();
+ for(const [tag,sku] of all){
+   assert.ok(PRODUCTS[sku],`SKU sem implementação no servidor: ${sku}`);
+   assert.equal(seen.has(sku),false,`SKU duplicado no catálogo: ${sku}`);
+   seen.add(sku);
+   assert.doesNotMatch(tag,/\bdisabled\b/,`Produto implementado desativado: ${sku}`);
+ }
  assert.match(ui,/bridgeRequest\('gift_card_verify',\{code:item\.code\}/);
 });

@@ -201,6 +201,16 @@
               </div>
             </article>
 
+            <article class="panel link-card">
+              <div class="link-card-head"><div class="charlotte-orb">🎮</div><div><small>DISCORD</small><h3>Vincular Gremory Bot</h3></div></div>
+              <p>Entre no servidor Gremory Studios e digite <strong>/vincular</strong> no Discord. O bot enviará um código privado de 10 minutos.</p>
+              <form id="discordLinkForm" class="stack-form">
+                <label>Código gerado pelo Discord<input id="discordLinkInput" type="text" minlength="18" maxlength="18" pattern="[A-Fa-f0-9]{18}" autocomplete="off" spellcheck="false" placeholder="COLE SEU CÓDIGO" required></label>
+                <button class="btn primary" type="submit">Conectar meu Discord</button>
+              </form>
+              <p id="discordLinkStatus" class="muted" role="status">Sua conta Discord e a Charlotte poderão compartilhar o mesmo Premium e Rupias.</p>
+            </article>
+
             <article class="panel giftshop-redeem"><span class="tag">RESGATAR</span><h3>Ativar um código</h3><p class="muted">Cole um gift card válido. A Charlotte confere o código no servidor e ativa a assinatura.</p><form id="giftRedeemForm" class="stack-form"><label>Código do gift card<input id="giftRedeemCode" type="text" maxlength="42" autocomplete="off" spellcheck="false" placeholder="GREM-XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX" required></label><button type="submit" class="btn primary">Resgatar agora</button></form><p id="giftRedeemStatus" role="status" class="muted"></p></article>
             <article class="panel charlotte-gift-shortcut"><p class="muted">Quer comprar ou visualizar seus códigos?</p><button type="button" class="btn" data-route="giftshop">Abrir loja e mensagens</button></article>
             <article class="panel command-launcher">

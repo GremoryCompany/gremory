@@ -1298,6 +1298,9 @@ module.exports = async (req, res) => {
 
   if (action === 'rtc_config') {
     if (req.method !== 'GET') return sendJson(res, 405, { erro: 'Método inválido' });
+    // STUN é público. Credenciais permanentes de TURN não podem ser expostas
+    // para visitantes anônimos: seriam utilizáveis fora da Gremory.
+    res.setHeader('Cache-Control', 'private, no-store');
     const iceServers = [
       { urls:'stun:stun.l.google.com:19302' },
       { urls:'stun:stun1.l.google.com:19302' },
@@ -1305,8 +1308,21 @@ module.exports = async (req, res) => {
       { urls:'stun:stun3.l.google.com:19302' }
     ];
     const turnUrl = String(process.env.TURN_URL || '').trim();
+    let authorizedTurn = false;
     if (turnUrl) {
-      const urls = turnUrl.split(',').map(x => x.trim()).filter(Boolean);
+      try {
+        const token=String(req.headers?.authorization||'').replace(/^Bearer\s+/i,'').trim();
+        if (token) {
+          const {getAdmin}=require('./site-wallet');
+          const {auth}=getAdmin();
+          await auth.verifyIdToken(token);
+          authorizedTurn=true;
+        }
+      } catch { authorizedTurn=false; }
+    }
+    if (turnUrl && authorizedTurn) {
+      const urls = turnUrl.split(',').map(x => x.trim()).filter(x=>/^turns?:/i.test(x));
+      if (!urls.length) return sendJson(res, 503, { erro:'TURN_URL inválida: use turn: ou turns:.' });
       const turn = { urls: urls.length === 1 ? urls[0] : urls };
       const username = String(process.env.TURN_USERNAME || '').trim();
       const credential = String(process.env.TURN_CREDENTIAL || '').trim();
@@ -1314,7 +1330,7 @@ module.exports = async (req, res) => {
       if (credential) turn.credential = credential;
       iceServers.push(turn);
     }
-    return sendJson(res, 200, { ok:true, iceServers, turnConfigured: !!turnUrl });
+    return sendJson(res, 200, { ok:true, iceServers, turnConfigured: !!turnUrl && authorizedTurn });
   }
 
   if (action === 'proxy') {

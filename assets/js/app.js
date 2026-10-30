@@ -1208,6 +1208,26 @@ function renderCharlotteStatus(){
 async function loadPendingLinkCode(){if(!state.user)return;try{const s=await get(ref(db,`charlotteLinkRequests/${state.user.uid}`));if(s.exists()){const v=s.val();$('linkCodeValue').textContent=v.code||'------';$('linkCodeBox').hidden=false;$('openCharlotteLinkBtn').hidden=false}}catch{}}
 $('createLinkCodeBtn').addEventListener('click',async()=>{if(!state.user)return;const code=randomCode(6);try{await set(ref(db,`charlotteLinkRequests/${state.user.uid}`),{uid:state.user.uid,code,createdAt:nowIso(),expiresAt:Date.now()+10*60*1000});$('linkCodeValue').textContent=code;$('linkCodeBox').hidden=false;$('openCharlotteLinkBtn').hidden=false;toast('Código criado. Ele dura 10 minutos.')}catch(e){toast(permissionMessage(e))}});
 $('openCharlotteLinkBtn').addEventListener('click',()=>{const code=$('linkCodeValue').textContent.trim();if(code&&code!=='------')wa(`/vincular ${code}`)});
+
+// Vínculo entre Discord, conta Firebase do site e carteira espelhada da Charlotte.
+$('discordLinkForm')?.addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const status = $('discordLinkStatus');
+  const code = String($('discordLinkInput')?.value || '').trim().toUpperCase();
+  if (!auth.currentUser) { status.textContent = 'Entre na sua conta do site primeiro.'; return; }
+  const button = ev.currentTarget.querySelector('button[type="submit"]');
+  try {
+    button.disabled = true;
+    status.textContent = 'Confirmando sua identidade com segurança...';
+    const idToken = await auth.currentUser.getIdToken();
+    const response = await fetch('/api/discord-integration', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'confirm_link', idToken, code }) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Não foi possível vincular.');
+    status.textContent = `✅ Discord vinculado: ${result.discordId}. Consulte /carteira ou /premium no bot.`;
+    $('discordLinkInput').value = '';
+  } catch (error) { status.textContent = `❌ ${error.message}`; }
+  finally { button.disabled = false; }
+});
 $('syncCharlotteBtn').addEventListener('click',async()=>{if(!state.user)return;if(state.charlottePublic?.status!=='linked')return toast('Vincule a Charlotte primeiro.');try{await requestAccountSync();toast('Dados sincronizados.')}catch(e){toast(e.message||permissionMessage(e))}});
 function renderCharlotteSync(){
   const s=state.charlotteSync||{};const mons=s.pokemon?.collection||s.pokemon?.team||[];const count=Array.isArray(mons)?mons.length:Object.keys(mons||{}).length;const acc=s.account||{};const ach=s.achievements||{};
@@ -2963,7 +2983,14 @@ async function copyInvite(){if(!state.roomCode)return;const url=`${location.orig
 
 
 // Voz + compartilhamento de tela (WebRTC P2P, Firebase apenas para sinalização)
-async function loadRtcConfig(){try{const r=await fetch('/api/main?action=rtc_config',{cache:'no-store'});if(!r.ok)return;const j=await r.json();if(Array.isArray(j.iceServers)&&j.iceServers.length)RTC_CONFIG={iceServers:j.iceServers}}catch{}}
+async function loadRtcConfig(){try{
+  const token=auth.currentUser?await auth.currentUser.getIdToken():'';
+  const headers=token?{authorization:`Bearer ${token}`}:{ };
+  const r=await fetch('/api/main?action=rtc_config',{cache:'no-store',headers});
+  if(!r.ok)return;
+  const j=await r.json();
+  if(Array.isArray(j.iceServers)&&j.iceServers.length)RTC_CONFIG={iceServers:j.iceServers};
+}catch{}}
 loadRtcConfig();
 function voiceUi(){
   const joined=state.rtc.joined;$('voiceStrip')?.classList.toggle('connected',joined);
@@ -3044,6 +3071,7 @@ async function joinVoice(){
   if(state.rtc.joined)return;if(!state.user||!state.roomCode)return toast('Entre em uma mesa primeiro.');
   if(!navigator.mediaDevices?.getUserMedia)return toast('Seu navegador não oferece suporte à sala de voz.');
   try{
+    await loadRtcConfig();
     const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true},video:false});
     state.rtc.localStream=stream;state.rtc.joined=true;state.rtc.micEnabled=true;state.rtc.processed.clear();
     const presenceRef=ref(db,`rpgVoice/${state.roomCode}/${state.user.uid}`);
