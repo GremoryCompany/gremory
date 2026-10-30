@@ -1019,11 +1019,17 @@ async function adminCloseReport(id){
 }
 async function adminBanUid(uid,reason='Violação das regras'){
   if(!isSiteAdmin()||!uid)return;
-  try{const hours=Number($('adminBanDuration')?.value||0),expiresAt=Number.isFinite(hours)&&hours>0?Date.now()+hours*3600000:0;await set(ref(db,`siteBans/${uid}`),{uid,active:true,reason:String(reason||'Violação das regras').slice(0,300),by:state.user.uid,createdAt:Date.now(),expiresAt});toast(expiresAt?'Conta suspensa temporariamente.':'Conta suspensa.');await loadAdminDashboard()}catch(e){toast(permissionMessage(e),5500)}
+  try{
+    const hours=Number($('adminBanDuration')?.value||0),text=String(reason||'').trim();
+    if(text.length<8)throw new Error('Descreva o motivo com pelo menos 8 caracteres.');
+    if(!confirm(`Suspender a conta ${uid}?\nMotivo: ${text}`))return;
+    await bridgeRequest('admin_site_ban',{targetUid:uid,reason:text,hours:Number.isFinite(hours)?hours:0},30000,false);
+    toast(hours>0?'Conta suspensa temporariamente.':'Conta suspensa.');await loadAdminDashboard()
+  }catch(e){toast(e?.message||'Falha ao suspender usuário.',6500)}
 }
 async function adminUnbanUid(uid){
   if(!isSiteAdmin()||!uid)return;
-  try{await remove(ref(db,`siteBans/${uid}`));toast('Banimento removido.');await loadAdminDashboard()}catch(e){toast(permissionMessage(e),5500)}
+  try{await bridgeRequest('admin_site_unban',{targetUid:uid},25000,false);toast('Banimento removido.');await loadAdminDashboard()}catch(e){toast(e?.message||'Falha ao remover ban.',6000)}
 }
 async function adminLookupUser(ev){
   ev?.preventDefault?.();if(!isSiteAdmin())return;
@@ -3236,6 +3242,86 @@ watchEnable.addEventListener('click',async()=>{primeGameAudio();const stage=$('w
 
 async function renderPublicBadge(uid){let badge=$('publicEarnedBadge');if(!badge){badge=document.createElement('p');badge.id='publicEarnedBadge';badge.className='profile-badge';$('publicProfileName')?.after(badge)}badge.hidden=true;try{const id=(await get(ref(db,`profileEquippedBadge/${uid}`))).val();if(!id)return;const b=(await get(ref(db,`profileBadges/${uid}/${id}`))).val();if(b&&currentPublicProfile?.uid===uid){badge.textContent=`${b.icon} ${b.name}`;badge.hidden=false}}catch{}}
 
+// Consultas e moderações restritas ao dono: somente o Bridge vê o Firebase Admin SDK.
+function adminSecurityOutput(text=''){
+  const el=$('adminSecurityResult');if(el)el.textContent=String(text);
+}
+function adminSelectedUidForSecurity(){
+  if(!isSiteAdmin())throw new Error('Acesso restrito ao administrador.');
+  return requireAdminSelectedUid();
+}
+function adminFormatDate(when){
+  if(!when)return '—';
+  const ts=typeof when==='number'?when:Date.parse(String(when));
+  return Number.isFinite(ts)?new Date(ts).toLocaleString('pt-BR'):'—';
+}
+$('adminInspectUserBtn')?.addEventListener('click',async()=>{
+  const button=$('adminInspectUserBtn');
+  try{
+    const targetUid=adminSelectedUidForSecurity();button.disabled=true;adminSecurityOutput('Consultando usuário no Firebase Auth...');
+    const {user:u,backup}=await bridgeRequest('admin_user_inspect',{targetUid},35000,false);
+    if(!u)throw new Error('O servidor não retornou a conta.');
+    adminSecurityOutput([
+      `Nome: ${u.name||'—'}`,
+      `Usuário: ${u.username?'@'+u.username:'Não definido'}`,
+      `UID: ${u.uid}`,
+      `E-mail: ${u.email||'—'} | Verificado: ${u.emailVerified?'sim':'não'}`,
+      `Cadastro: ${adminFormatDate(u.createdAt)}`,
+      `Último login: ${adminFormatDate(u.lastSignInAt)}`,
+      `Conta bloqueada no Auth: ${u.disabled?'sim':'não'}`,
+      `Vinculada à Charlotte: ${u.linked?'sim':'não'}`,
+      `Premium: ${u.premium?'ativo':'não ativo'}`,
+      `Rúpias (projeção): ₹${formatNumber(u.balance)}`,
+      `Saldo pendente de conciliação: ${u.walletVersion>u.walletSyncedVersion?'SIM - não altere valores':'não'}`,
+      `Banida no site: ${u.ban?.active?'sim':'não'}`,
+      `Compras: ${u.purchaseCount||0} | Revisão: ${u.purchasesPending||0}`,
+      `Último backup: ${adminFormatDate(backup?.lastSuccessAt)}`
+    ].join('\n'));
+  }catch(e){adminSecurityOutput(e.message||'Falha ao consultar conta.')}finally{button.disabled=false}
+});
+$('adminReviewPurchasesBtn')?.addEventListener('click',async()=>{
+  const button=$('adminReviewPurchasesBtn');
+  try{
+    const targetUid=adminSelectedUidForSecurity();button.disabled=true;adminSecurityOutput('Conferindo recibos oficiais...');
+    const result=await bridgeRequest('admin_purchase_review',{targetUid},35000,false);
+    const rows=Array.isArray(result.orders)?result.orders:[];
+    adminSecurityOutput(rows.length?rows.map(x=>[
+      `${adminFormatDate(x.createdAt)} | ${x.productId||'Gift Card'}`,
+      `Pedido ${x.purchaseId||'—'} | ₹${formatNumber(x.price)}`,
+      `Status ${x.status||'—'} | Recibo ${x.receiptStatus||'—'}`
+    ].join('\n')).join('\n\n'):'Nenhum pedido para esta conta.');
+  }catch(e){adminSecurityOutput(e.message||'Falha na consulta de compras.')}finally{button.disabled=false}
+});
+$('adminSyncSelectedBtn')?.addEventListener('click',async()=>{
+  const button=$('adminSyncSelectedBtn');
+  try{
+    const targetUid=adminSelectedUidForSecurity();button.disabled=true;
+    const result=await bridgeRequest('admin_sync_user',{targetUid},35000,false);
+    adminSecurityOutput(`Sincronização concluída para ${targetUid}.\nRúpias: ₹${formatNumber(result.account?.balance)}\nPremium: ${result.account?.premium?'ativo':'não ativo'}`);
+    toast('Conta sincronizada com a Charlotte.');
+  }catch(e){adminSecurityOutput(e.message||'Falha ao sincronizar conta.')}finally{button.disabled=false}
+});
+$('adminRecentAuditBtn')?.addEventListener('click',async()=>{
+  const button=$('adminRecentAuditBtn');
+  try{
+    button.disabled=true;adminSecurityOutput('Consultando registro de moderações...');
+    const result=await bridgeRequest('admin_audit_recent',{},35000,false);
+    adminSecurityOutput((result.events||[]).map(e=>`${adminFormatDate(e.at)} | ${e.type||'ação'}\nResponsável: ${e.actorUid||'—'} | Conta: ${e.targetUid||'—'}${e.reason?'\nMotivo: '+e.reason:''}`).join('\n\n')||'Nenhuma ação registrada ainda.');
+  }catch(e){adminSecurityOutput(e.message||'Falha na auditoria.')}finally{button.disabled=false}
+});
+$('adminModerateNameBtn')?.addEventListener('click',async()=>{
+  const button=$('adminModerateNameBtn');
+  try{
+    const targetUid=adminSelectedUidForSecurity(),reason=String($('adminModerateNameReason')?.value||'').trim();
+    if(reason.length<8)throw new Error('Informe um motivo com 8 caracteres ou mais.');
+    if(!confirm(`Moderar o nome público de ${targetUid}?\nA conta continuará ativa e o nome atual será substituído.`))return;
+    button.disabled=true;
+    const result=await bridgeRequest('admin_moderate_username',{targetUid,reason},35000,false);
+    adminSecurityOutput(`Conta ${result.targetUid} marcada para regularização. O nome público foi substituído sem alterar os dados da Charlotte.`);
+    toast('Nome moderado com registro administrativo.');await loadAdminDashboard();
+  }catch(e){adminSecurityOutput(e.message||'Falha ao moderar nome.')}finally{button.disabled=false}
+});
+
 $('adminVerifyEmail')?.addEventListener('click',async()=>{try{if(auth.currentUser?.emailVerified)return toast('Seu e-mail já está confirmado.');await sendEmailVerification(auth.currentUser);toast('Confirme o e-mail pelo link recebido; depois saia e entre novamente.')}catch(e){toast(e.message)}});
 // Correio de gift cards: apenas leitura no navegador. Código, preço e prêmio nascem no Bridge.
 let giftInboxUnsub=null;
@@ -3247,14 +3333,14 @@ function findGiftPending(){if(!state.user)return null;for(let i=0;i<sessionStora
 function refreshGiftRecovery(){const el=$('giftRecoverLastBtn');if(el)el.textContent=findGiftPending()?'Verificar compra pendente':'Recuperar minhas compras';}
 function renderGiftCards(rows){const box=$('giftInbox');if(!box)return;box.replaceChildren();const entries=Object.values(rows||{}).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));if(!entries.length){const p=document.createElement('p');p.textContent='Nenhum gift card ainda. Seus códigos aparecerão aqui.';p.className='muted';box.append(p);return;}
  for(const item of entries){if(!/^GREM-(?:[A-F0-9]{8}-){3}[A-F0-9]{8}$/.test(String(item.code||'')))continue;
- const wrap=document.createElement('article');wrap.className='gift-message';const title=document.createElement('strong');title.textContent='✦ Charlotte · '+giftLabel(item);const badge=document.createElement('small');badge.textContent=item.status==='redeemed'?'✓ Resgatado':'Código recebido • pronto para resgatar';const code=document.createElement('code');code.textContent='GREM-••••••••-••••••••-••••••••-••••••••';code.className='gift-hidden-code';const row=document.createElement('div');row.className='gift-message-actions';const reveal=document.createElement('button');reveal.className='btn';reveal.type='button';reveal.textContent='◉ Revelar';let shown=false;reveal.onclick=()=>{shown=!shown;code.textContent=shown?item.code:'GREM-••••••••-••••••••-••••••••-••••••••';reveal.textContent=shown?'Ocultar':'◉ Revelar'};
+ const wrap=document.createElement('article');wrap.className='gift-message';const title=document.createElement('strong');title.textContent='✦ Charlotte · '+giftLabel(item);const badge=document.createElement('small');badge.textContent=item.status==='redeemed'?'✓ Resgatado':item.status==='claiming'?'⏳ Em processamento':item.status==='review'?'⚠️ Em revisão':'Código recebido • pronto para resgatar';const receipt=document.createElement('small');receipt.className='gift-receipt';receipt.textContent='Recibo: '+String(item.id||item.purchaseId||'não informado');const code=document.createElement('code');code.textContent='GREM-••••••••-••••••••-••••••••-••••••••';code.className='gift-hidden-code';const row=document.createElement('div');row.className='gift-message-actions';const reveal=document.createElement('button');reveal.className='btn';reveal.type='button';reveal.textContent='◉ Revelar';let shown=false;reveal.onclick=()=>{shown=!shown;code.textContent=shown?item.code:'GREM-••••••••-••••••••-••••••••-••••••••';reveal.textContent=shown?'Ocultar':'◉ Revelar'};
  const copy=document.createElement('button');copy.type='button';copy.className='btn primary';copy.textContent='Copiar e resgatar';copy.disabled=item.status==='redeemed';copy.onclick=async()=>{try{await navigator.clipboard.writeText(item.code);toast('Código copiado!');}catch(e){toast('Código preenchido. Se precisar copiar, toque em Revelar.');}const input=$('giftRedeemCode');input.value=item.code;navigate('charlotte');input.scrollIntoView({behavior:'smooth',block:'center'});input.focus();};
  const restore=document.createElement('button');restore.type='button';restore.className='btn';restore.textContent='Verificar código';restore.onclick=async()=>{restore.disabled=true;try{const r=await bridgeRequest('gift_card_verify',{code:item.code},25000,true);const labels={available:'Disponível para resgate',redeemed:'Já resgatado',processing:'Resgate em processamento',expired:'Expirado',not_found:'Não encontrado',review:'Em revisão'};toast(labels[r.status]||'Estado indisponível.');}catch(e){toast(e.message)}finally{restore.disabled=false}};
- row.append(reveal,copy,restore);wrap.append(title,badge,code,row);box.append(wrap);}
+ row.append(reveal,copy,restore);wrap.append(title,badge,receipt,code,row);box.append(wrap);}
 }
 onAuthStateChanged(auth,user=>{giftInboxUnsub?.();giftInboxUnsub=null;renderGiftCards({});renderEmailSafety();refreshGiftRecovery();if(user)giftInboxUnsub=onValue(ref(db,`siteGiftInbox/${user.uid}`),sn=>renderGiftCards(sn.val()||{}),err=>{const n=$('giftInbox');if(n)n.textContent='Não foi possível abrir seus presentes: '+err.message});});
 $('gremoriumNotificationsBtn')?.addEventListener('click',()=>{$('notificationBtn')?.click();});
-$('giftshopCatalog')?.addEventListener('click',async e=>{const b=e.target.closest('[data-gift-product]');if(!b)return;const sku=b.dataset.giftProduct;const card=b.closest('.giftshop-sku');const price=card?.querySelector('.giftshop-price')?.textContent||'';const label=card?.querySelector('strong')?.textContent||sku;const out=$('giftBuyStatus');if(!confirm(`Comprar ${label} por ${price}? O valor será debitado somente pela Charlotte.`))return;const key=giftPendingKey(sku);let originJobId=sessionStorage.getItem(key);if(!originJobId){originJobId='giftjob_'+crypto.randomUUID().replace(/-/g,'');sessionStorage.setItem(key,originJobId);}refreshGiftRecovery();try{b.disabled=true;out.textContent='Confirmando compra no servidor…';const r=await bridgeRequest('gift_card_buy',{productId:sku},45000,true,originJobId);sessionStorage.removeItem(key);refreshGiftRecovery();out.textContent='Compra confirmada! Seu código está no correio privado.';toast('Gift card recebido.');}catch(err){out.textContent=err.pending?'Operação pendente: use “Verificar última compra” antes de comprar de novo.':err.message;if(!err.pending&&!/pendente|análise|revisão|confirm/i.test(err.message||''))sessionStorage.removeItem(key);refreshGiftRecovery();toast(err.message)}finally{b.disabled=false}});
+$('giftshopCatalog')?.addEventListener('click',async e=>{const b=e.target.closest('[data-gift-product]');if(!b)return;const sku=b.dataset.giftProduct;const card=b.closest('.giftshop-sku');const price=card?.querySelector('.giftshop-price')?.textContent||'';const label=card?.querySelector('strong')?.textContent||sku;const out=$('giftBuyStatus');if(!confirm(`Comprar ${label} por ${price}? O valor será debitado somente pela Charlotte.`))return;const key=giftPendingKey(sku);let originJobId=sessionStorage.getItem(key);if(!originJobId){originJobId='giftjob_'+crypto.randomUUID().replace(/-/g,'');sessionStorage.setItem(key,originJobId);}refreshGiftRecovery();try{b.disabled=true;out.textContent='Confirmando compra no servidor…';const r=await bridgeRequest('gift_card_buy',{productId:sku},45000,true,originJobId);sessionStorage.removeItem(key);refreshGiftRecovery();out.textContent='Compra confirmada! Seu código está no correio privado.';toast('Gift card recebido.');}catch(err){out.textContent=err.pending?'Operação pendente: use “Verificar última compra” antes de comprar de novo.':err.message;if(!err.pending&&!/pendente|análise|revisão|confirm|pagamento|cobrança|saldo/i.test(err.message||''))sessionStorage.removeItem(key);refreshGiftRecovery();toast(err.message)}finally{b.disabled=false}});
 $('giftRecoverLastBtn')?.addEventListener('click',async()=>{const info=findGiftPending();const b=$('giftRecoverLastBtn'),out=$('giftBuyStatus');try{b.disabled=true;out.textContent='Conferindo recibos de compra sem descontar novamente…';const r=await bridgeRequest('gift_card_recover',info?{originJobId:info.originJobId}:{},30000,true);if(info)sessionStorage.removeItem(info.key);refreshGiftRecovery();out.textContent=info?`Compra consultada: ${r.status||'em análise'}. Confira seu correio.`:`Pedidos conferidos: ${r.recovered||0}. Em análise: ${r.review||0}.`;toast('Consulta finalizada sem novo débito.');}catch(err){out.textContent=err.message;toast(err.message)}finally{b.disabled=false}});
 $('giftRedeemForm')?.addEventListener('submit',async e=>{e.preventDefault();const btn=e.currentTarget.querySelector('button[type=submit]'),out=$('giftRedeemStatus');try{btn.disabled=true;out.textContent='Confirmando código no servidor…';const code=$('giftRedeemCode').value.trim().toUpperCase();const r=await bridgeRequest('gift_card_redeem',{code},35000,true);out.textContent=r.kind==='xp'?`${Number(r.xp||0)} XP creditados no seu progresso. Nível: ${r.level||'atualizado'}.`:`Premium ativado por ${Number(r.minutes||10080)} minutos!`;toast(r.alreadyRedeemed?'Esse presente já foi resgatado por você.':'Presente resgatado!');if(r.kind!=='xp')await requestAccountSync().catch(()=>{});}catch(err){out.textContent=err.message;toast(err.message)}finally{btn.disabled=false}});
 
