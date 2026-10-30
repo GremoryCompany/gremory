@@ -14,10 +14,18 @@ function send(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 async function bodyOf(req) {
+  if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+    if (Buffer.byteLength(JSON.stringify(req.body)) > 16000) throw Object.assign(new Error('Requisição muito grande.'), {status: 413});
+    return req.body;
+  }
+  if (typeof req.body === 'string') {
+    if (Buffer.byteLength(req.body) > 16000) throw Object.assign(new Error('Requisição muito grande.'), {status: 413});
+    try { return JSON.parse(req.body); } catch { throw Object.assign(new Error('JSON inválido.'), {status: 400}); }
+  }
   let raw = '';
   for await (const chunk of req) {
     raw += chunk.toString();
-    if (raw.length > 16000) throw new Error('Requisição muito grande.');
+    if (Buffer.byteLength(raw) > 16000) throw Object.assign(new Error('Requisição muito grande.'), {status: 413});
   }
   try { return JSON.parse(raw || '{}'); }
   catch { throw new Error('JSON inválido.'); }
@@ -35,7 +43,7 @@ function requireBot(req) {
 }
 async function requireSiteUser(auth, idToken) {
   if (!idToken || String(idToken).length > 10000) throw Object.assign(new Error('Faça login no site.'), { status: 401 });
-  try { return (await auth.verifyIdToken(String(idToken))).uid; }
+  try { return (await auth.verifyIdToken(String(idToken), true)).uid; }
   catch { throw Object.assign(new Error('Sessão expirada. Entre no site novamente.'), { status: 401 }); }
 }
 function codeHash(code) { return crypto.createHash('sha256').update(String(code).toUpperCase()).digest('hex'); }
@@ -66,22 +74,44 @@ async function confirmLink(db, uid, code) {
   if (!isSnowflake(discordId)) throw new Error('Identificador de Discord inválido.');
   const byDiscord = db.ref(`discordLinksByDiscord/${discordId}`);
   const byUid = db.ref(`discordLinksByUid/${uid}`);
-  const [a, b] = await Promise.all([byDiscord.once('value'), byUid.once('value')]);
-  if (a.val()?.uid && a.val().uid !== uid || b.val()?.discordId && b.val().discordId !== discordId) {
-    throw Object.assign(new Error('Conta já vinculada. Desvinculação exige confirmação da equipe.'), { status: 409 });
+  const reservation = crypto.randomUUID();
+  const linkedAt = Date.now();
+  let previousDiscord = null;
+  const discordClaim = await byDiscord.transaction(old => {
+    previousDiscord = old;
+    if (old?.uid && old.uid !== uid) return;
+    if (old?.reservation) return;
+    return {uid, linkedAt: old?.linkedAt || linkedAt, reservation};
+  }, undefined, false);
+  if (!discordClaim.committed) throw Object.assign(new Error('Discord já vinculado ou vínculo em processamento.'), {status: 409});
+  try {
+    const uidClaim = await byUid.transaction(old => {
+      if (old?.discordId && old.discordId !== discordId) return;
+      if (old?.reservation) return;
+      return {discordId, linkedAt: old?.linkedAt || linkedAt, reservation};
+    }, undefined, false);
+    if (!uidClaim.committed) throw Object.assign(new Error('Conta já vinculada ou vínculo em processamento.'), {status: 409});
+    // Both unique identities were reserved transactionally before publishing indices.
+    await db.ref().update({
+      [`discordLinksByDiscord/${discordId}`]: {uid, linkedAt: discordClaim.snapshot.val().linkedAt},
+      [`discordLinksByUid/${uid}`]: {discordId, linkedAt: uidClaim.snapshot.val().linkedAt},
+      [`discordLinkCodes/${codeHash(cleaned)}`]: null
+    });
+  } catch (error) {
+    // Failed writes keep reservations for review. Only a rejected identity claim
+    // can release a brand-new Discord reservation without losing an old link.
+    if (error.status === 409) await byDiscord.transaction(old => {
+      if (old?.reservation !== reservation) return;
+      return previousDiscord;
+    }, undefined, false);
+    throw error;
   }
-  // Código só pode ser resgatado uma vez. Os dois índices são atualizados juntos.
-  await db.ref().update({
-    [`discordLinksByDiscord/${discordId}`]: { uid, linkedAt: Date.now() },
-    [`discordLinksByUid/${uid}`]: { discordId, linkedAt: Date.now() },
-    [`discordLinkCodes/${codeHash(cleaned)}`]: null
-  });
   return { linked: true, discordId };
 }
 
 async function accountStatus(db, discordId) {
   const record = (await db.ref(`discordLinksByDiscord/${discordId}`).once('value')).val();
-  if (!record?.uid) return { linked: false };
+  if (!record?.uid || record.reservation) return { linked: false };
   const uid = String(record.uid);
   const [wallet, charlotte, linkedJid] = await Promise.all([
     db.ref(`siteWallets/${uid}`).once('value'),
@@ -101,7 +131,7 @@ async function accountStatus(db, discordId) {
 async function queueCheckout(db, discordId, plan) {
   if (!PLANS.has(String(plan))) throw Object.assign(new Error('Plano inválido.'), { status: 400 });
   const record = (await db.ref(`discordLinksByDiscord/${discordId}`).once('value')).val();
-  if (!record?.uid) throw Object.assign(new Error('Vincule seu Discord no site antes de comprar.'), { status: 409 });
+  if (!record?.uid || record.reservation) throw Object.assign(new Error('Vincule seu Discord no site antes de comprar.'), { status: 409 });
   const uid = String(record.uid);
   const linked = (await db.ref(`charlottePrivate/${uid}/whatsappJid`).once('value')).val();
   if (!linked) throw Object.assign(new Error('Vincule a Charlotte ao site primeiro.'), { status: 409 });
@@ -120,7 +150,7 @@ async function queueCheckout(db, discordId, plan) {
 async function checkoutStatus(db, discordId, jobId) {
   if (!/^[A-Za-z0-9_-]{10,100}$/.test(String(jobId || ''))) throw Object.assign(new Error('Pedido inválido.'), { status: 400 });
   const record = (await db.ref(`discordLinksByDiscord/${discordId}`).once('value')).val();
-  if (!record?.uid) throw Object.assign(new Error('Discord não vinculado.'), { status: 409 });
+  if (!record?.uid || record.reservation) throw Object.assign(new Error('Discord não vinculado.'), { status: 409 });
   const result = (await db.ref(`siteBridgeResults/${record.uid}/${jobId}`).once('value')).val();
   if (!result) return { pending: true };
   if (result.ok === false) return { pending: false, error: String(result.error || 'Pagamento não iniciado.').slice(0, 220) };
@@ -136,16 +166,16 @@ module.exports = async function handler(req, res) {
   try {
     const body = await bodyOf(req);
     const action = String(body.action || '');
+    if (!['confirm_link', 'site_status'].includes(action)) requireBot(req);
     const { auth, db } = getAdmin();
     if (action === 'confirm_link' || action === 'site_status') {
       const uid = await requireSiteUser(auth, body.idToken);
       if (action === 'site_status') {
         const data = (await db.ref(`discordLinksByUid/${uid}`).once('value')).val();
-        return send(res, 200, { linked: !!data?.discordId, discordId: data?.discordId || null });
+        return send(res, 200, { linked: !!data?.discordId && !data.reservation, discordId: data?.reservation ? null : data?.discordId || null });
       }
       return send(res, 200, await confirmLink(db, uid, body.code));
     }
-    requireBot(req);
     const discordId = String(body.discordId || '');
     if (!isSnowflake(discordId)) return send(res, 400, { error: 'ID do Discord inválido.' });
     if (action === 'request_link') return send(res, 200, await issueCode(db, discordId));
@@ -155,6 +185,6 @@ module.exports = async function handler(req, res) {
     return send(res, 400, { error: 'Ação desconhecida.' });
   } catch (error) {
     console.error('[Discord Bridge]', error.message);
-    return send(res, error.status || 503, { error: error.status ? error.message : 'Falha temporária no Bridge. Consulte os logs da Vercel.' });
+    return send(res, error.status || 503, { error: error.status ? error.message : error.code?.startsWith('FIREBASE_ADMIN_') ? error.message : 'Falha temporária no Bridge. Consulte os logs da Vercel.' });
   }
 };

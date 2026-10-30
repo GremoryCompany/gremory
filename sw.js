@@ -1,12 +1,14 @@
-const CACHE='gremory-v14-20261030-megapack-v1';
+const CACHE='gremory-v14-20261030-studios-v3';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261030-megapack-v1',
-  '/assets/js/app.js?v=20261030-megapack-v1',
-  '/assets/js/community.js?v=20261028-gifts-catalog-02',
+  '/assets/css/app.css?v=20261030-studios-v3',
+  '/assets/js/app.js?v=20261030-studios-v3',
+  '/assets/js/community.js?v=20261030-studios-v3',
   '/assets/css/gremory-tools.css?v=20261028-gifts-catalog-02',
   '/assets/js/gremory-tools.js?v=20261028-gifts-catalog-02',
+  '/assets/js/watch-device.js',
+  '/assets/js/profile-details.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
   '/manifest.webmanifest'

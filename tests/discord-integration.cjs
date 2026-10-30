@@ -17,7 +17,7 @@ function fakeFirebase(){
       async transaction(update){
         const value=update(getValue(key));
         if(value===undefined)return {committed:false,snapshot:{val:()=>getValue(key)}};
-        storage.set(key,value);
+        if(value===null)storage.delete(key);else storage.set(key,value);
         return {committed:true,snapshot:{val:()=>value}};
       },
       async update(patch){
@@ -108,4 +108,29 @@ test('Premium do Discord só entra na fila da Charlotte se ambos os vínculos ex
     if(previous===undefined)delete process.env.GREMORY_BRIDGE_API_KEY;
     else process.env.GREMORY_BRIDGE_API_KEY=previous;
   }
+});
+
+test('Concurrent Discord link confirmations reserve one account without orphaning the other identity',async()=>{
+ const previous=process.env.GREMORY_BRIDGE_API_KEY;process.env.GREMORY_BRIDGE_API_KEY='test-secret-for-concurrency-123456789012345';
+ try{
+  const {db,handler}=setup(),header={authorization:'Bearer '+process.env.GREMORY_BRIDGE_API_KEY};
+  const ids=['111111111111111111','222222222222222222'];
+  const issued=await Promise.all(ids.map(discordId=>request(handler,{action:'request_link',discordId},header)));
+  const replies=await Promise.all(issued.map(r=>request(handler,{action:'confirm_link',code:r.body.code,idToken:'alice-token'})));
+  assert.deepEqual(replies.map(r=>r.status).sort(),[200,409]);
+  const winner=db.storage.get('discordLinksByUid/alice').discordId,loser=ids.find(id=>id!==winner);
+  assert.equal(db.storage.get('discordLinksByDiscord/'+winner).uid,'alice');
+  assert.equal(db.storage.has('discordLinksByDiscord/'+loser),false);
+ }finally{if(previous===undefined)delete process.env.GREMORY_BRIDGE_API_KEY;else process.env.GREMORY_BRIDGE_API_KEY=previous;}
+});
+
+test('Vercel parsed request bodies are supported, unauthenticated bot calls rejected before Admin initialization',async()=>{
+ const previous=process.env.GREMORY_BRIDGE_API_KEY;process.env.GREMORY_BRIDGE_API_KEY='test-secret-for-request-1234567890123456789';
+ try{
+  const {handler}=setup();let payload;
+  const req={method:'POST',headers:{authorization:'Bearer '+process.env.GREMORY_BRIDGE_API_KEY},body:{action:'status',discordId:'123456789012345678'}};
+  const res={setHeader(){},end(v){payload=JSON.parse(v)}};
+  await handler(req,res);assert.equal(res.statusCode,200);assert.equal(payload.linked,false);
+  const denied=await request(handler,{action:'status',discordId:'123456789012345678'});assert.equal(denied.status,401);
+ }finally{if(previous===undefined)delete process.env.GREMORY_BRIDGE_API_KEY;else process.env.GREMORY_BRIDGE_API_KEY=previous;}
 });
