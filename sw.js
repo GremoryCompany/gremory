@@ -1,4 +1,4 @@
-const CACHE='gremory-v14-20261028-giftshop-02';
+const CACHE='gremory-v14-20261029-integracao-01';
 const CORE=[
   '/',
   '/index.html',

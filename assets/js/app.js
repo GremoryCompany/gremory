@@ -258,9 +258,11 @@ $('registerForm').addEventListener('submit',async ev=>{
       if(taken?.exists()&&taken.val()?.uid!==cred.user.uid){
         usernameOk=false;
       }else{
-        await withTimeout(set(ref(db,`usernames/${username}`),{uid:cred.user.uid,username,updatedAt:stamp}),8000,'DB_TIMEOUT');
+        const claim=await withTimeout(runTransaction(ref(db,`usernames/${username}`),existing=>existing&&existing.uid!==cred.user.uid?undefined:{uid:cred.user.uid,username,updatedAt:stamp},{applyLocally:false}),8000,'DB_TIMEOUT');
+        if(!claim.committed)usernameOk=false;
       }
     }catch(e){
+      usernameOk=false;
       if(String(e?.code||e?.message)==='DB_TIMEOUT'){
         console.warn('[GREMORY AUTH] Banco demorou ao reservar username. O perfil poderá ser concluído depois.');
       }else{
@@ -353,7 +355,8 @@ $('profileAvatarFile')?.addEventListener('change',async ev=>{
   if(!/^image\/(jpeg|png|webp|gif)$/.test(file.type)||file.size>5*1024*1024){toast('Foto deve ser JPG, PNG, WebP ou GIF com até 5 MB.');ev.target.value='';return;}
   if(status)status.textContent='Enviando foto...';ev.target.disabled=true;
   try{
-    const target=storageRef(storage,`avatars/${state.user.uid}/profile`);
+    const ext=({ 'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif'})[file.type];
+    const target=storageRef(storage,`avatars/${state.user.uid}/profile_${Date.now()}_${crypto.randomUUID().replace(/-/g,'').slice(0,12)}.${ext}`);
     const job=uploadBytesResumable(target,file,{contentType:file.type});
     await new Promise((resolve,reject)=>job.on('state_changed',null,reject,resolve));
     const url=await getDownloadURL(job.snapshot.ref);
@@ -375,16 +378,17 @@ $('profileForm').addEventListener('submit',async ev=>{
   let reservedNew=false;
   try{
     if(changing){
-      const sn=await get(ref(db,`usernames/${username}`));
-      if(sn.exists()&&sn.val()?.uid!==state.user.uid)throw new Error('Esse nome de usuário já está em uso.');
-      await set(ref(db,`usernames/${username}`),{uid:state.user.uid,username,updatedAt:Date.now()});
+      const claim=await runTransaction(ref(db,`usernames/${username}`),previous=>{
+        if(previous&&previous.uid!==state.user.uid)return;
+        return {uid:state.user.uid,username,updatedAt:Date.now()};
+      },{applyLocally:false});
+      if(!claim.committed)throw new Error('Esse nome de usuário já está em uso.');
       reservedNew=true;
     }
     const payload={uid:state.user.uid,nome:$('profileName').value.trim().slice(0,40)||'Usuário',username,usernameChangedAt:changing?Date.now():Number(oldProfile.usernameChangedAt||Date.now()),avatar:$('profileAvatar').value.trim(),bio:$('profileBio').value.trim().slice(0,500),favoriteAnime:$('profileFavoriteAnime').value.trim().slice(0,80),profileSongTitle:String($('profileSongTitle')?.value||'').trim().slice(0,80),profileSongUrl:String($('profileSongUrl')?.value||'').trim().slice(0,500),profilePlaylistUrl:String($('profilePlaylistUrl')?.value||'').trim().slice(0,500),email:state.user.email||oldProfile.email||'',whatsappSiteNotify:Boolean($('profileWhatsappSiteNotify')?.checked),raidWhatsappNotify:Boolean($('profileRaidWhatsapp')?.checked),createdAt:oldProfile.createdAt||nowIso(),updatedAt:nowIso()};
-    await set(ref(db,`profiles/${state.user.uid}`),payload);
-    await set(ref(db,`directory/${state.user.uid}`),publicProfile(payload));
-    if(changing&&oldUsername)await remove(ref(db,`usernames/${oldUsername}`)).catch(()=>{});
-    if(state.user.displayName!==payload.nome)await updateProfile(state.user,{displayName:payload.nome});
+    await update(ref(db),{[`profiles/${state.user.uid}`]:payload,[`directory/${state.user.uid}`]:publicProfile(payload)});
+    if(changing&&oldUsername)await runTransaction(ref(db,`usernames/${oldUsername}`),old=>old?.uid===state.user.uid?null:undefined,{applyLocally:false}).catch(()=>{});
+    if(state.user.displayName!==payload.nome)await updateProfile(state.user,{displayName:payload.nome}).catch(e=>console.warn('[GREMORY PERFIL] Auth displayName:',e));
     state.profile=payload;renderAccount();
     // O saldo continua preso à conta vinculada (UID <-> WhatsApp), não ao texto do @.
     // Sincronizamos a identidade no bridge para que backup, Tinder e saldo usem o novo nome imediatamente.
@@ -394,7 +398,7 @@ $('profileForm').addEventListener('submit',async ev=>{
     }
     toast('Perfil salvo. Seu saldo continua vinculado à mesma conta.');
   }catch(e){
-    if(reservedNew&&changing)await remove(ref(db,`usernames/${username}`)).catch(()=>{});
+    if(reservedNew&&changing)await runTransaction(ref(db,`usernames/${username}`),old=>old?.uid===state.user.uid?null:undefined,{applyLocally:false}).catch(()=>{});
     toast(permissionMessage(e,e.message||'Não foi possível salvar o perfil.'))
   }
 });
@@ -3142,13 +3146,13 @@ function renderGiftCards(rows){const box=$('giftInbox');if(!box)return;box.repla
  for(const item of entries){if(!/^GREM-(?:[A-F0-9]{8}-){3}[A-F0-9]{8}$/.test(String(item.code||'')))continue;
  const wrap=document.createElement('article');wrap.className='gift-message';const title=document.createElement('strong');title.textContent='✦ Charlotte · '+giftLabel(item);const badge=document.createElement('small');badge.textContent=item.status==='redeemed'?'✓ Resgatado':'Código recebido • pronto para resgatar';const code=document.createElement('code');code.textContent='GREM-••••••••-••••••••-••••••••-••••••••';code.className='gift-hidden-code';const row=document.createElement('div');row.className='gift-message-actions';const reveal=document.createElement('button');reveal.className='btn';reveal.type='button';reveal.textContent='◉ Revelar';let shown=false;reveal.onclick=()=>{shown=!shown;code.textContent=shown?item.code:'GREM-••••••••-••••••••-••••••••-••••••••';reveal.textContent=shown?'Ocultar':'◉ Revelar'};
  const copy=document.createElement('button');copy.type='button';copy.className='btn primary';copy.textContent='Copiar e resgatar';copy.disabled=item.status==='redeemed';copy.onclick=async()=>{try{await navigator.clipboard.writeText(item.code);toast('Código copiado!');}catch(e){toast('Código preenchido. Se precisar copiar, toque em Revelar.');}const input=$('giftRedeemCode');input.value=item.code;navigate('charlotte');input.scrollIntoView({behavior:'smooth',block:'center'});input.focus();};
- const restore=document.createElement('button');restore.type='button';restore.className='btn';restore.textContent='Verificar código';restore.disabled=item.status==='redeemed';restore.onclick=async()=>{restore.disabled=true;try{const r=await bridgeRequest('gift_card_recover',{purchaseId:item.id},25000,true);toast(r.status==='redeemed'?'Este gift card já foi resgatado.':'Código confirmado no servidor.');}catch(e){toast(e.message)}finally{restore.disabled=false}};
+ const restore=document.createElement('button');restore.type='button';restore.className='btn';restore.textContent='Verificar código';restore.onclick=async()=>{restore.disabled=true;try{const r=await bridgeRequest('gift_card_verify',{code:item.code},25000,true);const labels={available:'Disponível para resgate',redeemed:'Já resgatado',processing:'Resgate em processamento',expired:'Expirado',not_found:'Não encontrado',review:'Em revisão'};toast(labels[r.status]||'Estado indisponível.');}catch(e){toast(e.message)}finally{restore.disabled=false}};
  row.append(reveal,copy,restore);wrap.append(title,badge,code,row);box.append(wrap);}
 }
 onAuthStateChanged(auth,user=>{giftInboxUnsub?.();giftInboxUnsub=null;renderGiftCards({});renderEmailSafety();refreshGiftRecovery();if(user)giftInboxUnsub=onValue(ref(db,`siteGiftInbox/${user.uid}`),sn=>renderGiftCards(sn.val()||{}),err=>{const n=$('giftInbox');if(n)n.textContent='Não foi possível abrir seus presentes: '+err.message});});
 $('gremoriumNotificationsBtn')?.addEventListener('click',()=>{$('notificationBtn')?.click();});
 $('giftshopCatalog')?.addEventListener('click',async e=>{const b=e.target.closest('[data-gift-product]');if(!b)return;const sku=b.dataset.giftProduct;const card=b.closest('.giftshop-sku');const price=card?.querySelector('.giftshop-price')?.textContent||'';const label=card?.querySelector('strong')?.textContent||sku;const out=$('giftBuyStatus');if(!confirm(`Comprar ${label} por ${price}? O valor será debitado somente pela Charlotte.`))return;const key=giftPendingKey(sku);let originJobId=sessionStorage.getItem(key);if(!originJobId){originJobId='giftjob_'+crypto.randomUUID().replace(/-/g,'');sessionStorage.setItem(key,originJobId);}refreshGiftRecovery();try{b.disabled=true;out.textContent='Confirmando compra no servidor…';const r=await bridgeRequest('gift_card_buy',{productId:sku},45000,true,originJobId);sessionStorage.removeItem(key);refreshGiftRecovery();out.textContent='Compra confirmada! Seu código está no correio privado.';toast('Gift card recebido.');}catch(err){out.textContent=err.pending?'Operação pendente: use “Verificar última compra” antes de comprar de novo.':err.message;if(!err.pending&&!/pendente|análise|revisão|confirm/i.test(err.message||''))sessionStorage.removeItem(key);refreshGiftRecovery();toast(err.message)}finally{b.disabled=false}});
-$('giftRecoverLastBtn')?.addEventListener('click',async()=>{const info=findGiftPending();const b=$('giftRecoverLastBtn'),out=$('giftBuyStatus');try{b.disabled=true;out.textContent='Conferindo recibos de compra sem descontar novamente…';const r=await bridgeRequest('gift_card_recover',info?{originJobId:info.originJobId}:{},30000,true);if(info)sessionStorage.removeItem(info.key);refreshGiftRecovery();out.textContent=info?'Compra localizada! Confira seu correio.':`Pedidos conferidos: ${r.recovered||0}. Em análise: ${r.review||0}.`;toast('Consulta finalizada sem novo débito.');}catch(err){out.textContent=err.message;toast(err.message)}finally{b.disabled=false}});
+$('giftRecoverLastBtn')?.addEventListener('click',async()=>{const info=findGiftPending();const b=$('giftRecoverLastBtn'),out=$('giftBuyStatus');try{b.disabled=true;out.textContent='Conferindo recibos de compra sem descontar novamente…';const r=await bridgeRequest('gift_card_recover',info?{originJobId:info.originJobId}:{},30000,true);if(info)sessionStorage.removeItem(info.key);refreshGiftRecovery();out.textContent=info?`Compra consultada: ${r.status||'em análise'}. Confira seu correio.`:`Pedidos conferidos: ${r.recovered||0}. Em análise: ${r.review||0}.`;toast('Consulta finalizada sem novo débito.');}catch(err){out.textContent=err.message;toast(err.message)}finally{b.disabled=false}});
 $('giftRedeemForm')?.addEventListener('submit',async e=>{e.preventDefault();const btn=e.currentTarget.querySelector('button[type=submit]'),out=$('giftRedeemStatus');try{btn.disabled=true;out.textContent='Confirmando código no servidor…';const code=$('giftRedeemCode').value.trim().toUpperCase();const r=await bridgeRequest('gift_card_redeem',{code},35000,true);out.textContent=r.kind==='xp'?`${Number(r.xp||0)} XP creditados no seu progresso. Nível: ${r.level||'atualizado'}.`:`Premium ativado por ${Number(r.minutes||10080)} minutos!`;toast(r.alreadyRedeemed?'Esse presente já foi resgatado por você.':'Presente resgatado!');if(r.kind!=='xp')await requestAccountSync().catch(()=>{});}catch(err){out.textContent=err.message;toast(err.message)}finally{btn.disabled=false}});
 
 
