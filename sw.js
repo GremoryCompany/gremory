@@ -1,10 +1,10 @@
-const CACHE='gremory-v14-20261030-sync-upload-v4';
+const CACHE='gremory-v14-20261030-recovery-v4';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261030-sync-upload-v4',
-  '/assets/js/app.js?v=20261030-sync-upload-v4',
-  '/assets/js/community.js?v=20261030-sync-upload-v4',
+  '/assets/css/app.css?v=20261030-recovery-v4',
+  '/assets/js/app.js?v=20261030-recovery-v4',
+  '/assets/js/community.js?v=20261030-recovery-v4',
   '/assets/css/gremory-tools.css?v=20261028-gifts-catalog-02',
   '/assets/js/gremory-tools.js?v=20261028-gifts-catalog-02',
   '/assets/js/watch-device.js',

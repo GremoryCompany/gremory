@@ -829,6 +829,16 @@
     "siteAdminAudit": {
       ".read": "auth != null && auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true",
       ".write": false
+    },
+    "discordLinkRequests": {
+      ".indexOn": [
+        "codeHash"
+      ],
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['uid','codeHash','createdAt','expiresAt']) && newData.numChildren() === 4 && newData.child('uid').val() === $uid && newData.child('codeHash').isString() && newData.child('codeHash').val().matches(/^[a-f0-9]{64}$/) && newData.child('createdAt').isNumber() && newData.child('createdAt').val() >= now - 60000 && newData.child('createdAt').val() <= now + 60000 && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > now && newData.child('expiresAt').val() <= newData.child('createdAt').val() + 600000"
+      }
     }
   }
 }

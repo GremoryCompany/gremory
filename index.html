@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261030-sync-upload-v4">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261030-recovery-v4">
   <link rel="stylesheet" href="/assets/css/gremory-tools.css?v=20261028-gifts-catalog-02">
 </head>
 <body class="auth-loading">
@@ -204,10 +204,11 @@
             <article class="panel link-card">
               <div class="link-card-head"><div class="charlotte-orb">🎮</div><div><small>DISCORD</small><h3>Vincular Gremory Bot</h3></div></div>
               <p>Entre no servidor Gremory Studios e digite <strong>/vincular</strong> no Discord. O bot enviará um código privado de 10 minutos.</p>
-              <form id="discordLinkForm" class="stack-form">
+              <div class="stack-form"><p class="muted">Gere um código aqui e envie ao bot do Discord, como no vínculo da Charlotte.</p><button class="btn primary" id="createDiscordLinkCodeBtn" type="button">Gerar código para o Discord</button><code id="discordGeneratedCode" class="gift-hidden-code" hidden></code><button class="btn" id="copyDiscordLinkCodeBtn" type="button" hidden>Copiar comando /vincular</button></div>
+<details><summary>Compatibilidade com bot antigo</summary><form id="discordLinkForm" class="stack-form">
                 <label>Código gerado pelo Discord<input id="discordLinkInput" type="text" minlength="18" maxlength="18" pattern="[A-Fa-f0-9]{18}" autocomplete="off" spellcheck="false" placeholder="COLE SEU CÓDIGO" required></label>
                 <button class="btn primary" type="submit">Conectar meu Discord</button>
-              </form>
+              </form></details>
               <p id="discordLinkStatus" class="muted" role="status">Sua conta Discord e a Charlotte poderão compartilhar o mesmo Premium e Rupias.</p>
             </article>
 
@@ -1227,7 +1228,7 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261030-sync-upload-v4"></script>
+  <script type="module" src="/assets/js/app.js?v=20261030-recovery-v4"></script>
   <script type="module" src="/assets/js/gremory-tools.js?v=20261028-gifts-catalog-02"></script>
 </body>
 </html>

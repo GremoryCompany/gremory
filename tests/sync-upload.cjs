@@ -33,3 +33,6 @@ test('website rule regex accepts HTTPS and rejects arbitrary schemes after JSON 
  const rules=JSON.parse(fs.readFileSync(path.join(__dirname,'../firebase.rules.production.json'),'utf8')).rules;
  for(const key of ['profiles','directory']){const expression=rules[key].$uid.details.website['.validate'].replaceAll('.matches(','.match(');const evaluate=new Function('newData',`return !!(${expression})`);for(const [value,expected]of [['',true],['https://example.org/',true],['https://exa mple.org/',false],['javascript:alert(1)',false]])assert.equal(evaluate({isString:()=>true,val:()=>value}),expected);}
 });
+test('a late profile read cannot overwrite a profile explicitly saved during the same login',async()=>{
+ let resolve;const x=profileFixture(()=>new Promise(r=>resolve=r)),pending=x.readUserData({uid:'alice'});x.state.profileRevision=1;x.state.profile={uid:'alice',nome:'New name',username:'alice'};resolve(snap({nome:'Old name'}));await pending;assert.equal(x.state.profile.nome,'New name');assert.equal(x.writes.length,0);
+});

@@ -289,7 +289,7 @@ $('registerForm').addEventListener('submit',async ev=>{
       if(results.some(r=>r.status==='rejected'))console.warn('[GREMORY AUTH] Perfil será sincronizado novamente após entrar.');
     });
 
-    state.profile=p;
+    state.profileRevision=(state.profileRevision||0)+1;state.profile=p;
     $('authStatus').textContent=usernameOk?'Conta criada. Entrando...':'Conta criada. Escolha outro @ no seu perfil.';
 
     // onAuthStateChanged abre o app; este fallback impede a tela de cadastro de ficar presa.
@@ -311,9 +311,11 @@ $('registerForm').addEventListener('submit',async ev=>{
 $('resetPasswordBtn').addEventListener('click',async()=>{const email=$('loginEmail').value.trim();if(!email)return $('authStatus').textContent='Digite seu e-mail primeiro.';try{await sendPasswordResetEmail(auth,email);$('authStatus').textContent='E-mail de recuperação enviado.'}catch(e){$('authStatus').textContent=authError(e)}});
 $('logoutBtn').addEventListener('click',async()=>{localStorage.removeItem('gremory:remember');clearUserSubscriptions();await signOut(auth);setDrawer(false)});
 
+let profileFormDirty=false;
+$('profileForm')?.addEventListener('input',()=>{profileFormDirty=true});
 const profileDetailInputs={pronouns:'profilePronouns',favoriteGame:'profileFavoriteGame',interests:'profileInterests',lookingFor:'profileLookingFor',website:'profileWebsite',accent:'profileAccent'};
 function readProfileDetailsForm(){return profileDetails(Object.fromEntries(Object.entries(profileDetailInputs).map(([k,id])=>[k,$(id)?.value||''])))}
-function renderProfileDetails(p){const details=profileDetails(p.details);for(const [key,id]of Object.entries(profileDetailInputs))if($(id))$(id).value=details[key];const card=$('accountDrawerCard');if(card)card.dataset.profileAccent=details.accent;if($('profileBioPreview'))$('profileBioPreview').textContent=p.bio||'Seu próximo grupo de amigos começa aqui.';if($('profileGamePreview'))$('profileGamePreview').textContent=details.favoriteGame||'Escolha seu jogo favorito';}
+function renderProfileDetails(p){const details=profileDetails(p.details);if(!profileFormDirty)for(const [key,id]of Object.entries(profileDetailInputs))if($(id))$(id).value=details[key];const card=$('accountDrawerCard');if(card)card.dataset.profileAccent=details.accent;if($('profileBioPreview'))$('profileBioPreview').textContent=p.bio||'Seu próximo grupo de amigos começa aqui.';if($('profileGamePreview'))$('profileGamePreview').textContent=details.favoriteGame||'Escolha seu jogo favorito';}
 function renderPublicDetails(p){const d=profileDetails(p.details),box=$('publicProfileExtra');if(!box)return;box.replaceChildren();box.closest('.public-profile-card')?.setAttribute('data-profile-accent',d.accent);for(const [key,label]of [['pronouns','Pronomes'],['favoriteGame','Jogo favorito'],['interests','Interesses'],['lookingFor','Bora jogar?']]){if(!d[key])continue;const row=document.createElement('div'),title=document.createElement('span'),text=document.createElement('strong');title.textContent=label;text.textContent=d[key];row.append(title,text);box.appendChild(row)}if(d.website){const a=document.createElement('a');a.href=d.website;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Meu link ↗';a.className='mini-btn';box.appendChild(a)}box.hidden=!box.children.length;}
 
 function publicCustomizationIds(){
@@ -338,7 +340,7 @@ function profileLoadStatus(text,retry=false){
   if($('retryProfileLoadBtn'))$('retryProfileLoadBtn').hidden=!retry;
 }
 async function readUserData(user){
-  const uid=user.uid;
+  const uid=user.uid,revision=state.profileRevision||0;
   profileLoadStatus('Carregando os dados da conta…');
   // A failed read is not evidence that a profile is missing. Never overwrite
   // an existing account with Auth defaults after a permission/network failure.
@@ -346,7 +348,7 @@ async function readUserData(user){
   if(state.user?.uid!==uid)return;
   const p=ps.exists()?ps.val():{};
   const old=ps.exists()?null:await withTimeout(get(ref(db,`users/${uid}`)),3000,'DB_TIMEOUT').catch(()=>null);
-  if(state.user?.uid!==uid)return;
+  if(state.user?.uid!==uid||(state.profileRevision||0)!==revision)return;
   const o=old?.exists()?old.val():{};
   const merged={details:profileDetails(p.details),uid,nome:p.nome||o.nome||user.displayName||'Usuário',username:normalizeUsername(p.username||o.username||''),usernameChangedAt:Number(p.usernameChangedAt||o.usernameChangedAt||0),avatar:p.avatar||o.avatar||user.photoURL||'',bio:p.bio||o.bio||'',favoriteAnime:p.favoriteAnime||o.favoriteAnime||o.animeFavorito||'',email:p.email||user.email||'',whatsappSiteNotify:p.whatsappSiteNotify!==false,raidWhatsappNotify:p.raidWhatsappNotify!==false,profileSongTitle:String(p.profileSongTitle||''),profileSongUrl:String(p.profileSongUrl||''),profilePlaylistUrl:String(p.profilePlaylistUrl||''),createdAt:p.createdAt||o.createdAt||user.metadata?.creationTime||nowIso()};
   state.profile=merged;state.privateData=o;renderAccount();
@@ -388,7 +390,7 @@ function accountSnapshot(){
 }
 function renderAccount(){
   const p=state.profile||{};const avatar=avatarFor(p);const name=p.nome||'Usuário';const acc=accountSnapshot();const premium=acc.premium;const level=acc.level;const balance=acc.balance;
-  ['sideAvatar','topAvatar','profileAvatarPreview'].forEach(id=>{if($(id))$(id).src=avatar});$('sideName').textContent=name;$('sideStatus').textContent=premium?'Premium':usernameLabel(p);$('profileNameView').textContent=name;if($('profileUsernameView'))$('profileUsernameView').textContent=usernameLabel(p);$('profilePlanView').textContent=premium?'Premium':'Padrão';$('profileName').value=name;if($('profileUsername'))$('profileUsername').value=normalizeUsername(p.username||'');if($('profileUsernameHint'))$('profileUsernameHint').textContent=formatCooldown(usernameCooldownRemaining(p));$('profileAvatar').value=p.avatar||'';$('profileBio').value=p.bio||'';$('profileFavoriteAnime').value=p.favoriteAnime||'';if($('profileSongTitle'))$('profileSongTitle').value=p.profileSongTitle||'';if($('profileSongUrl'))$('profileSongUrl').value=p.profileSongUrl||'';if($('profilePlaylistUrl'))$('profilePlaylistUrl').value=p.profilePlaylistUrl||'';if($('profileWhatsappSiteNotify'))$('profileWhatsappSiteNotify').checked=p.whatsappSiteNotify!==false;if($('profileRaidWhatsapp'))$('profileRaidWhatsapp').checked=p.raidWhatsappNotify!==false;if($('profileBrowserNotify'))$('profileBrowserNotify').checked=browserNotificationsEnabled();if($('raidWhatsappNotify'))$('raidWhatsappNotify').checked=Boolean(p.raidWhatsappNotify);renderAdminAccess();$('profileLevel').textContent=formatNumber(level);$('profileBalance').textContent=`₹ ${formatNumber(balance)}`;$('homePlan').textContent=premium?'Premium':'Padrão';$('homeLevel').textContent=formatNumber(level);$('homeBalance').textContent=`₹ ${formatNumber(balance)}`;$('homeGreeting').textContent=`Olá, ${name}.`;
+  (profileFormDirty?['sideAvatar','topAvatar']:['sideAvatar','topAvatar','profileAvatarPreview']).forEach(id=>{if($(id))$(id).src=avatar});$('sideName').textContent=name;$('sideStatus').textContent=premium?'Premium':usernameLabel(p);$('profileNameView').textContent=name;if($('profileUsernameView'))$('profileUsernameView').textContent=usernameLabel(p);$('profilePlanView').textContent=premium?'Premium':'Padrão';if(!profileFormDirty){$('profileName').value=name;if($('profileUsername'))$('profileUsername').value=normalizeUsername(p.username||'');if($('profileUsernameHint'))$('profileUsernameHint').textContent=formatCooldown(usernameCooldownRemaining(p));$('profileAvatar').value=p.avatar||'';$('profileBio').value=p.bio||'';$('profileFavoriteAnime').value=p.favoriteAnime||'';if($('profileSongTitle'))$('profileSongTitle').value=p.profileSongTitle||'';if($('profileSongUrl'))$('profileSongUrl').value=p.profileSongUrl||'';if($('profilePlaylistUrl'))$('profilePlaylistUrl').value=p.profilePlaylistUrl||'';if($('profileWhatsappSiteNotify'))$('profileWhatsappSiteNotify').checked=p.whatsappSiteNotify!==false;if($('profileRaidWhatsapp'))$('profileRaidWhatsapp').checked=p.raidWhatsappNotify!==false;if($('profileBrowserNotify'))$('profileBrowserNotify').checked=browserNotificationsEnabled();if($('raidWhatsappNotify'))$('raidWhatsappNotify').checked=Boolean(p.raidWhatsappNotify);}renderAdminAccess();$('profileLevel').textContent=formatNumber(level);$('profileBalance').textContent=`₹ ${formatNumber(balance)}`;$('homePlan').textContent=premium?'Premium':'Padrão';$('homeLevel').textContent=formatNumber(level);$('homeBalance').textContent=`₹ ${formatNumber(balance)}`;$('homeGreeting').textContent=`Olá, ${name}.`;
   if($('storeBalance'))$('storeBalance').textContent=`₹ ${formatNumber(balance)}`;
   if($('slotsBalance'))$('slotsBalance').textContent=`₹ ${formatNumber(balance)}`;
   if($('premiumStatusPill'))$('premiumStatusPill').textContent=premium?'Premium':'Padrão';
@@ -410,7 +412,7 @@ $('profileAvatarFile')?.addEventListener('change',async ev=>{
     await waitForUpload(job,{onProgress:sn=>{if(status&&state.user?.uid===uploadUid)status.textContent=`Enviando foto: ${Math.round(100*sn.bytesTransferred/sn.totalBytes)}%`}});
     const url=await deadline(getDownloadURL(job.snapshot.ref),15000,'upload/url-timeout');
     if(state.user?.uid!==uploadUid)return;
-    $('profileAvatar').value=url;$('profileAvatarPreview').src=url;
+    profileFormDirty=true;$('profileAvatar').value=url;$('profileAvatarPreview').src=url;
     if(status)status.textContent='Foto enviada. Clique em Salvar perfil para confirmar.';
     toast('Foto enviada! Salve o perfil para aplicar.');
   }catch(error){if(state.user?.uid===uploadUid){if(status)status.textContent=uploadMessage(error);toast(uploadMessage(error));}}
@@ -439,7 +441,7 @@ $('profileForm').addEventListener('submit',async ev=>{
     await update(ref(db),{[`profiles/${state.user.uid}`]:payload,[`directory/${state.user.uid}`]:publicProfile(payload)});
     if(changing&&oldUsername)await runTransaction(ref(db,`usernames/${oldUsername}`),old=>old?.uid===state.user.uid?null:undefined,{applyLocally:false}).catch(()=>{});
     if(state.user.displayName!==payload.nome)await updateProfile(state.user,{displayName:payload.nome}).catch(e=>console.warn('[GREMORY PERFIL] Auth displayName:',e));
-    state.profile=payload;renderAccount();
+    state.profileRevision=(state.profileRevision||0)+1;state.profile=payload;profileFormDirty=false;renderAccount();
     // O saldo continua preso à conta vinculada (UID <-> WhatsApp), não ao texto do @.
     // Sincronizamos a identidade no bridge para que backup, Tinder e saldo usem o novo nome imediatamente.
     if(linkedCharlotte()){
@@ -490,6 +492,8 @@ function startUserSubscriptions(){
   state.userUnsubs.push(onValue(ref(db,'directory'),snapshot=>{if(state.user?.uid!==uid)return;state.directory=snapshot.val()||{};renderPeople($('friendSearchInput')?.value||'')},error=>{if(state.user?.uid!==uid)return;const box=$('peopleSearchResults');if(box)box.textContent=profileDataError(error)}));
   state.userUnsubs.push(onValue(ref(db,`friends/${uid}`),s=>{state.friends=s.exists()?s.val():{};renderFriends();renderDuelFriendSelect();$('homeFriendsText').textContent=`${Object.keys(state.friends).length} amigo${Object.keys(state.friends).length===1?'':'s'}`}));
   state.userUnsubs.push(onValue(ref(db,`friendRequests/${uid}`),s=>{state.requests=s.exists()?s.val():{};renderFriendRequests()}));
+  if($('discordGeneratedCode')){$('discordGeneratedCode').hidden=true;$('discordGeneratedCode').textContent='';$('copyDiscordLinkCodeBtn').hidden=true;}
+  state.userUnsubs.push(onValue(ref(db,`discordLinksByUid/${uid}`),sn=>{if(state.user?.uid!==uid)return;const link=sn.val();if(link?.discordId&&!link.reservation){$('discordLinkStatus').textContent=`✅ Discord vinculado: ${link.discordId}.`;if($('discordGeneratedCode'))$('discordGeneratedCode').hidden=true;$('copyDiscordLinkCodeBtn').hidden=true;}},error=>{if(state.user?.uid===uid)$('discordLinkStatus').textContent=profileDataError(error)}));
   state.userUnsubs.push(onValue(ref(db,`charlottePublic/${uid}`),s=>{state.charlottePublic=s.exists()?s.val():null;renderCharlotteStatus()}));
   state.userUnsubs.push(onValue(ref(db,`charlotteSync/${uid}`),s=>{state.charlotteSync=s.exists()?s.val():null;renderCharlotteSync();renderAccount();loadPokemonSources();renderCollection();renderStore();renderPokemonInventory()}));
   state.userUnsubs.push(onValue(ref(db,`siteProgress/${uid}`),snapshot=>{state.siteProgress=snapshot.val()||null;renderSiteProgress()},error=>console.warn('[SITE XP]',error?.code||error?.message||error)));
@@ -1259,6 +1263,22 @@ function renderCharlotteStatus(){
 async function loadPendingLinkCode(){if(!state.user)return;try{const s=await get(ref(db,`charlotteLinkRequests/${state.user.uid}`));if(s.exists()){const v=s.val();$('linkCodeValue').textContent=v.code||'------';$('linkCodeBox').hidden=false;$('openCharlotteLinkBtn').hidden=false}}catch{}}
 $('createLinkCodeBtn').addEventListener('click',async()=>{if(!state.user)return;const code=randomCode(6);try{await set(ref(db,`charlotteLinkRequests/${state.user.uid}`),{uid:state.user.uid,code,createdAt:nowIso(),expiresAt:Date.now()+10*60*1000});$('linkCodeValue').textContent=code;$('linkCodeBox').hidden=false;$('openCharlotteLinkBtn').hidden=false;toast('Código criado. Ele dura 10 minutos.')}catch(e){toast(permissionMessage(e))}});
 $('openCharlotteLinkBtn').addEventListener('click',()=>{const code=$('linkCodeValue').textContent.trim();if(code&&code!=='------')wa(`/vincular ${code}`)});
+
+// O navegador cria apenas um desafio privado de vínculo. O bot confirma com Admin SDK;
+// nenhum token Discord, saldo ou credencial administrativa passa pelo navegador.
+$('createDiscordLinkCodeBtn')?.addEventListener('click',async()=>{
+  if(!state.user)return;const uid=state.user.uid,button=$('createDiscordLinkCodeBtn'),status=$('discordLinkStatus');
+  button.disabled=true;status.textContent='Gerando código de vínculo…';
+  try{
+    const bytes=crypto.getRandomValues(new Uint8Array(12)),code=Array.from(bytes,x=>x.toString(16).padStart(2,'0')).join('').toUpperCase();
+    const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(code))),x=>x.toString(16).padStart(2,'0')).join('');
+    const createdAt=Date.now();await withTimeout(set(ref(db,`discordLinkRequests/${uid}`),{uid,codeHash:hash,createdAt,expiresAt:createdAt+600000}),10000,'DB_TIMEOUT');
+    if(state.user?.uid!==uid)return;
+    const output=$('discordGeneratedCode');output.textContent=`/vincular codigo:${code}`;output.hidden=false;$('copyDiscordLinkCodeBtn').hidden=false;
+    status.textContent='No Discord, use o comando acima. Válido por 10 minutos. Não compartilhe seu código.';
+  }catch(error){if(state.user?.uid===uid)status.textContent=profileDataError(error)}finally{button.disabled=false}
+});
+$('copyDiscordLinkCodeBtn')?.addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('discordGeneratedCode').textContent);toast('Comando copiado. Cole no bot do Discord.')}catch{toast('Selecione e copie o comando exibido.')}});
 
 // Vínculo entre Discord, conta Firebase do site e carteira espelhada da Charlotte.
 $('discordLinkForm')?.addEventListener('submit', async ev => {
@@ -3505,7 +3525,7 @@ await withTimeout(initialAuthPolicy(),7000,'PERSISTENCE_TIMEOUT').catch(e=>conso
 onAuthStateChanged(auth,user=>{
   document.body.classList.remove('auth-loading');
   state.user=user||null;
-  if(state.profile?.uid!==user?.uid){state.profile=null;state.privateData={};}
+  if(state.profile?.uid!==user?.uid){state.profileRevision=(state.profileRevision||0)+1;state.profile=null;state.privateData={};profileFormDirty=false;}
 
   if(!user){
     document.body.classList.remove('authenticated');
