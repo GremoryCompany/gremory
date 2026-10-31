@@ -1,11 +1,13 @@
 import { deadline } from './upload-flow.js';
 import { saveDatabaseImage, mediaPath, mediaError } from './database-media.js';
+import { initPublications } from './publications.js';
 import { profileDetails } from './profile-details.js';
 import {getAuth,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js';
 import {ref,get,set,push,remove,onValue,query,orderByChild,limitToLast,serverTimestamp} from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js';
 
 export function initCommunity({app,db,getUser,isAdmin,toast,getSelectedUid,bridgeRequest}){
  const $=id=>document.getElementById(id);
+ const publications=initPublications({app,db,getUser,isAdmin,toast});
  const deleteImage=async url=>{const path=mediaPath(url);if(path)await remove(ref(db,`siteMedia/${path}`));};
  let posts={},stories={},following={},saved={},directory={},communityTab='home',searchTerm='',onlyFollowing=false,limit=20,subscriptions=[],postSub=null,rowSubs=[],busy=false,upload=null,storyUpload=null,epoch=0;
  const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n};
@@ -74,7 +76,7 @@ export function initCommunity({app,db,getUser,isAdmin,toast,getSelectedUid,bridg
    const comments=node('div',null,'feed-comments');comments.hidden=true;let commentSub=null;
    actions.append(like,save,share,button('Comentários',()=>{comments.hidden=!comments.hidden;if(comments.hidden){commentSub?.();commentSub=null;return}const list=node('div'),form=node('form',null,'feed-comment-form'),input=node('input');input.required=true;input.maxLength=500;input.placeholder='Escreva um comentário';input.setAttribute('aria-label','Comentário');const send=node('button','Enviar','btn');form.append(input,send);comments.replaceChildren(list,form);commentSub=onValue(query(ref(db,`communityComments/${id}`),orderByChild('createdAt'),limitToLast(30)),sn=>{list.replaceChildren();for(const [cid,c] of Object.entries(sn.val()||{})){const row=node('div',null,'feed-comment');row.append(node('strong',name(c.uid)),node('p',c.text));if(c.uid===getUser()?.uid||isAdmin())row.append(button('Apagar',()=>remove(ref(db,`communityComments/${id}/${cid}`))));list.append(row)}});rowSubs.push(()=>commentSub?.());form.onsubmit=async e=>{e.preventDefault();if(!input.value.trim())return;send.disabled=true;try{const comment=await push(ref(db,`communityComments/${id}`),{uid:getUser().uid,text:input.value.trim(),createdAt:serverTimestamp()});window.dispatchEvent(new CustomEvent('gremory:social',{detail:{action:'comment',itemId:`${id}_comment_${comment.key}`}}));input.value=''}catch(e){toast(e.message)}finally{send.disabled=false}}}));
    if(p.uid===getUser()?.uid||isAdmin())actions.append(button('Excluir',async()=>{if(!confirm('Excluir esta publicação?'))return;await remove(ref(db,`communityPosts/${id}`));await deleteImage(p.mediaUrl)}));
-   if(isAdmin())actions.append(button('Avisar grupos',async()=>{if(!confirm('Enviar esta publicação aos grupos configurados no bot?'))return;const r=await bridgeRequest('admin_feed_announce',{postId:id},60000,false);toast(`Aviso enviado a ${r.sent} grupo(s).`)}));
+   if(isAdmin())actions.append(button('Compartilhar nos canais',()=>publications.choose(id)));
    card.append(actions,comments);box.append(card);
   }
   if(!rows.length)box.append(node('p',communityTab==='saved'?'Você ainda não salvou publicações.':onlyFollowing?'Nenhuma publicação das pessoas seguidas nesta página. Carregue mais ou explore Todos.':'Nenhuma publicação encontrada.','empty-state'));
@@ -104,7 +106,7 @@ export function initCommunity({app,db,getUser,isAdmin,toast,getSelectedUid,bridg
  $('feedForm').onsubmit=async e=>{
   e.preventDefault();if(busy||!getUser())return;const text=$('feedText').value.trim(),file=$('feedFile').files[0];let mediaUrl=safeUrl($('feedUrl').value.trim()),mediaKind=$('feedKind').value,storagePath='';
   if($('feedUrl').value.trim()&&!mediaUrl)return toast('Use um link HTTPS válido.');if(!text&&!file&&!mediaUrl)return toast('Escreva algo ou selecione uma mídia.');
-  const uid=getUser().uid,version=epoch,post=push(ref(db,'communityPosts'));let publicationStarted=false;busy=true;const submit=e.target.querySelector('button[type="submit"]');submit.disabled=true;
+  const destinations=publications.selected();const uid=getUser().uid,version=epoch,post=push(ref(db,'communityPosts'));let publicationStarted=false;busy=true;const submit=e.target.querySelector('button[type="submit"]');submit.disabled=true;
   try{
    if(file){
     mediaKind='image';storagePath=`community/${uid}/${post.key}`;
@@ -113,7 +115,7 @@ export function initCommunity({app,db,getUser,isAdmin,toast,getSelectedUid,bridg
     mediaUrl=result.reference;
 
    }
-   if(version!==epoch)throw new Error('Sessão alterada. Entre novamente.');publicationStarted=true;$('feedProgress').textContent='Arquivo enviado. Confirmando publicação…';await deadline(set(post,{uid,text,mediaUrl,mediaKind,storagePath,createdAt:serverTimestamp()}),15000,'upload/publish-timeout');window.dispatchEvent(new CustomEvent('gremory:social',{detail:{action:'post',itemId:post.key}}));e.target.reset();$('feedProgress').textContent='Publicado!';setCommunityTab('home');toast('Sua publicação já está no Grémorium.');
+   if(version!==epoch)throw new Error('Sessão alterada. Entre novamente.');publicationStarted=true;$('feedProgress').textContent='Arquivo enviado. Confirmando publicação…';await deadline(set(post,{uid,text,mediaUrl,mediaKind,storagePath,createdAt:serverTimestamp()}),15000,'upload/publish-timeout');window.dispatchEvent(new CustomEvent('gremory:social',{detail:{action:'post',itemId:post.key}}));let deliveryWarning='';if(destinations.length){try{await publications.enqueue(post.key,destinations)}catch{deliveryWarning=' A publicação foi salva, mas o envio externo não foi confirmado. Confira o histórico na Administração.';}}e.target.reset();$('feedProgress').textContent='Publicado!'+deliveryWarning;setCommunityTab('home');toast(deliveryWarning||'Sua publicação já está no Grémorium.');
   }catch(err){if(storagePath&&!publicationStarted)await deadline(remove(ref(db,`siteMedia/${storagePath}`)),5000,'upload/cleanup-timeout').catch(()=>{});if(version===epoch){$('feedProgress').textContent=err.code?mediaError(err):err.message;toast(err.code?mediaError(err):err.message)}}finally{busy=false;submit.disabled=false;upload=null}
  };
  $('feedAll').onclick=()=>{onlyFollowing=false;$('feedAll').classList.add('active');$('feedFollowing').classList.remove('active');render()};$('feedFollowing').onclick=()=>{onlyFollowing=true;$('feedFollowing').classList.add('active');$('feedAll').classList.remove('active');render()};$('feedMyProfile').onclick=()=>showProfile(getUser().uid).catch(e=>toast(e.message));$('feedRefresh').onclick=subscribePosts;$('feedMore').onclick=()=>{limit+=20;subscribePosts()};

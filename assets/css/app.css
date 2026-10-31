@@ -1485,3 +1485,11 @@ body.watch-pseudo-fullscreen #watchScreenStage.watch-fullscreen-ui-hidden{cursor
 .drawer{overflow:hidden}.profile-extra-fields select,.watch-device-settings select{border:1px solid #2a2f39;background:#0d1016;color:#fff;border-radius:12px;padding:12px;font:inherit}.watch-side-stack,.watch-side-stack>.panel{min-width:0}.watch-side-stack>.panel{width:100%;box-sizing:border-box}.watch-chat-panel .support-chat-form{grid-template-columns:minmax(0,1fr) auto}.watch-chat-panel input{min-width:0}
 
 .admin-workspace-nav{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 10px;padding:8px;background:#ffffff04;border:1px solid #ffffff0b;border-radius:16px}.admin-workspace-nav .btn{min-height:44px;border-radius:11px;background:transparent;border-color:transparent}.admin-workspace-nav .btn.active{background:#a78bfa22;color:#dccbff;border-color:#a78bfa44}.admin-panel[data-admin-category][hidden]{display:none!important}.admin-summary-grid .admin-stat{background:linear-gradient(140deg,#22192f,#15121d);border-color:#ffffff0c}.admin-panel[data-admin-category]{border-color:#ffffff0e;border-radius:20px}.admin-panel h3{letter-spacing:-.02em}.admin-workspace-nav+#adminAreaStatus{line-height:1.6;margin-bottom:18px}@media(max-width:640px){.admin-workspace-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}.admin-workspace-nav .btn{white-space:normal;padding:10px;font-size:.8rem}}
+
+/* Official publication destinations */
+#feedPublicationOptions{border:1px solid var(--line);border-radius:14px;padding:14px;min-width:0}
+#feedPublicationTargets label,#publicationChooseList label{display:flex;align-items:center;gap:10px;padding:8px 0;overflow-wrap:anywhere}
+#feedPublicationTargets input[type=checkbox],#publicationChooseList input[type=checkbox]{width:20px;height:20px;min-height:20px;flex:0 0 20px;margin:0;accent-color:#a78bfa}
+#publicationChooseDialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:20px;padding:24px;width:min(520px,calc(100vw - 28px));max-height:85vh;overflow:auto;box-shadow:var(--shadow)}
+#publicationChooseDialog::backdrop{background:rgba(0,0,0,.72)}
+#publicationChooseDialog .btn{margin-top:16px}#publicationDeliveryList p{overflow-wrap:anywhere;border-top:1px solid var(--line);padding-top:12px}

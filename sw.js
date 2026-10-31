@@ -1,16 +1,17 @@
-const CACHE='gremory-v16-20261031-mobile-v6';
+const CACHE='gremory-v18-20261031-community-v8';
 const CORE=[
   '/',
   '/index.html',
-  '/assets/css/app.css?v=20261031-mobile-v6',
-  '/assets/js/app.js?v=20261031-mobile-v6',
-  '/assets/js/community.js?v=20261031-mobile-v6',
+  '/assets/css/app.css?v=20261031-community-v8',
+  '/assets/js/app.js?v=20261031-community-v8',
+  '/assets/js/community.js?v=20261031-community-v8',
   '/assets/css/gremory-tools.css?v=20261028-gifts-catalog-02',
   '/assets/js/gremory-tools.js?v=20261028-gifts-catalog-02',
   '/assets/js/watch-device.js',
   '/assets/js/profile-details.js',
   '/assets/js/upload-flow.js',
   '/assets/js/database-media.js',
+  '/assets/js/publications.js',
   '/assets/img/gremory-logo.png',
   '/assets/img/profile.jpg',
   '/manifest.webmanifest'

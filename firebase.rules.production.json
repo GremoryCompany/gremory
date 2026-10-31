@@ -868,6 +868,31 @@
           }
         }
       }
+    },
+    "publicationDestinations": {
+      ".read": "(auth != null && auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true)",
+      "$destinationId": {
+        ".write": "(auth != null && auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true)",
+        ".validate": "newData.hasChildren(['label','platform','address','guildId','enabled']) && $destinationId.matches(/^[a-z0-9_-]{3,40}$/) && newData.child('label').isString() && newData.child('label').val().length > 0 && newData.child('label').val().length <= 60 && newData.child('enabled').isBoolean() && ((newData.child('platform').val() === 'discord' && newData.child('address').isString() && newData.child('address').val().matches(/^[0-9]{17,22}$/) && newData.child('guildId').isString() && newData.child('guildId').val().matches(/^[0-9]{17,22}$/)) || (newData.child('platform').val() === 'whatsapp' && newData.child('address').isString() && newData.child('address').val().matches(/^([0-9-]{5,40}@g\\.us|[0-9]{5,40}@newsletter)$/) && newData.child('guildId').val() === ''))",
+        "$other": {
+          ".validate": "$other === 'label' || $other === 'platform' || $other === 'address' || $other === 'guildId' || $other === 'enabled'"
+        }
+      }
+    },
+    "publicationOutbox": {
+      ".read": "(auth != null && auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true)",
+      "$platform": {
+        ".indexOn": [
+          "status"
+        ],
+        "$jobId": {
+          ".write": "(auth != null && auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true) && (($platform === 'discord' || $platform === 'whatsapp') && ((!data.exists() && newData.exists()) || (data.child('status').val() === 'failed' && newData.child('postId').val() === data.child('postId').val() && newData.child('destinationId').val() === data.child('destinationId').val() && newData.child('createdAt').val() === data.child('createdAt').val() && newData.child('requestedBy').val() === data.child('requestedBy').val())))",
+          ".validate": "newData.hasChildren(['postId','destinationId','requestedBy','createdAt','status']) && newData.child('status').val() === 'pending' && newData.child('requestedBy').val() === auth.uid && newData.child('postId').isString() && newData.child('destinationId').isString() && $jobId === newData.child('postId').val() + '_' + newData.child('destinationId').val() && root.child('communityPosts').child(newData.child('postId').val()).exists() && root.child('publicationDestinations').child(newData.child('destinationId').val()).child('enabled').val() === true && root.child('publicationDestinations').child(newData.child('destinationId').val()).child('platform').val() === $platform && newData.child('createdAt').isNumber() && (data.exists() || (newData.child('createdAt').val() >= now - 60000 && newData.child('createdAt').val() <= now + 5000)) && newData.child('destinationAddress').val() === root.child('publicationDestinations').child(newData.child('destinationId').val()).child('address').val() && newData.child('destinationGuildId').val() === root.child('publicationDestinations').child(newData.child('destinationId').val()).child('guildId').val()",
+          "$other": {
+            ".validate": "$other === 'postId' || $other === 'destinationId' || $other === 'requestedBy' || $other === 'createdAt' || $other === 'status' || $other === 'destinationAddress' || $other === 'destinationGuildId'"
+          }
+        }
+      }
     }
   }
 }
