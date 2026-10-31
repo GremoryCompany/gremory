@@ -1,4 +1,5 @@
-import { deadline, waitForUpload, uploadMessage } from './upload-flow.js';
+import { deadline } from './upload-flow.js';
+import { saveDatabaseImage, mediaError, installImageResolver } from './database-media.js';
 import { createScreenAwake, setAudioMode, replaceMicrophone } from './watch-device.js';
 import { profileDetails, safeProfileUrl } from './profile-details.js';
 import { initCommunity } from './community.js';
@@ -11,7 +12,6 @@ import {
 import {
   getDatabase, ref, get, set, update, push, onValue, remove, onDisconnect, query, orderByChild, limitToLast, runTransaction
 } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js';
-import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-storage.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyAs0NwqCy8sDpzICUasrRGyh--PNq-RO84',
@@ -27,7 +27,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
-const storage = getStorage(app);
 const $ = (id) => document.getElementById(id);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 const DEFAULT_AVATAR = '/assets/img/profile.jpg';
@@ -62,6 +61,8 @@ const state = {
   rtc:{joined:false,localStream:null,screenStream:null,peers:new Map(),remoteStreams:new Map(),processed:new Set(),presenceUnsub:null,inboxUnsub:null,disconnectRef:null,micEnabled:true},premiumPoll:null,
   gameRealtimePoll:null,gameRealtimeSyncing:false
 };
+
+const imageResolver=installImageResolver({read:async path=>(await get(ref(db,path))).val(),isSignedIn:()=>!!state.user});
 
 function toast(message, ms=3300){
   const root=$('toastRoot'); if(!root) return;
@@ -406,16 +407,14 @@ $('profileAvatarFile')?.addEventListener('change',async ev=>{
   const uploadUid=state.user.uid;
   if(status)status.textContent='Enviando foto...';ev.target.disabled=true;
   try{
-    const ext=({ 'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif'})[file.type];
-    const target=storageRef(storage,`avatars/${state.user.uid}/profile_${Date.now()}_${crypto.randomUUID().replace(/-/g,'').slice(0,12)}.${ext}`);
-    const job=uploadBytesResumable(target,file,{contentType:file.type});profileAvatarUpload=job;
-    await waitForUpload(job,{onProgress:sn=>{if(status&&state.user?.uid===uploadUid)status.textContent=`Enviando foto: ${Math.round(100*sn.bytesTransferred/sn.totalBytes)}%`}});
-    const url=await deadline(getDownloadURL(job.snapshot.ref),15000,'upload/url-timeout');
+    const controller=new AbortController();profileAvatarUpload={cancel:()=>controller.abort()};
+    const result=await saveDatabaseImage(file,{kind:'avatars',uid:uploadUid,id:`profile_${Date.now()}_${crypto.randomUUID().replace(/-/g,'')}`,signal:controller.signal,write:(path,value)=>set(ref(db,path),value),onStage:message=>{if(status&&state.user?.uid===uploadUid)status.textContent=message}});
+    const url=result.reference;
     if(state.user?.uid!==uploadUid)return;
     profileFormDirty=true;$('profileAvatar').value=url;$('profileAvatarPreview').src=url;
     if(status)status.textContent='Foto enviada. Clique em Salvar perfil para confirmar.';
     toast('Foto enviada! Salve o perfil para aplicar.');
-  }catch(error){if(state.user?.uid===uploadUid){if(status)status.textContent=uploadMessage(error);toast(uploadMessage(error));}}
+  }catch(error){if(state.user?.uid===uploadUid){if(status)status.textContent=mediaError(error);toast(mediaError(error));}}
   finally{profileAvatarUpload=null;ev.target.disabled=false;ev.target.value='';}
 });
 $('profileForm').addEventListener('submit',async ev=>{
@@ -3525,6 +3524,7 @@ await withTimeout(initialAuthPolicy(),7000,'PERSISTENCE_TIMEOUT').catch(e=>conso
 onAuthStateChanged(auth,user=>{
   document.body.classList.remove('auth-loading');
   state.user=user||null;
+  imageResolver.reset();
   if(state.profile?.uid!==user?.uid){state.profileRevision=(state.profileRevision||0)+1;state.profile=null;state.privateData={};profileFormDirty=false;}
 
   if(!user){

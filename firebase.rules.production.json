@@ -394,7 +394,7 @@
       ],
       "$post": {
         ".write": "auth != null && (root.child('siteBans').child(auth.uid).child('active').val() !== true || (root.child('siteBans').child(auth.uid).child('expiresAt').isNumber() && root.child('siteBans').child(auth.uid).child('expiresAt').val() > 0 && root.child('siteBans').child(auth.uid).child('expiresAt').val() <= now)) && ((!data.exists() && newData.child('uid').val() === auth.uid) || (!newData.exists() && (data.child('uid').val() === auth.uid || (auth != null && auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true))))",
-        ".validate": "newData.hasChildren(['uid','text','createdAt','mediaUrl','mediaKind']) && newData.child('uid').isString() && newData.child('text').isString() && newData.child('text').val().length <= 1800 && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 5000 && newData.child('createdAt').val() >= now - 60000 && newData.child('mediaUrl').isString() && newData.child('mediaUrl').val().length <= 2000 && (newData.child('mediaUrl').val() === '' || newData.child('mediaUrl').val().matches(/^https:\\/\\/.+/)) && (newData.child('mediaKind').val() === 'image' || newData.child('mediaKind').val() === 'video')",
+        ".validate": "newData.hasChildren(['uid','text','createdAt','mediaUrl','mediaKind']) && newData.child('uid').isString() && newData.child('text').isString() && newData.child('text').val().length <= 1800 && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 5000 && newData.child('createdAt').val() >= now - 60000 && newData.child('mediaUrl').isString() && newData.child('mediaUrl').val().length <= 2000 && (newData.child('mediaUrl').val() === '' || (newData.child('mediaKind').val() === 'image' && newData.child('mediaUrl').val() === 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7#gremory-image=community/' + auth.uid + '/' + $post) || newData.child('mediaUrl').val().matches(/^https:\\/\\/.+/)) && (newData.child('mediaKind').val() === 'image' || newData.child('mediaKind').val() === 'video')",
         "$other": {
           ".validate": "$other === 'uid' || $other === 'text' || $other === 'createdAt' || $other === 'mediaUrl' || $other === 'mediaKind' || $other === 'storagePath'"
         }
@@ -755,7 +755,7 @@
       "$uid": {
         "$storyId": {
           ".write": "auth != null && ((auth.uid === $uid && ((!data.exists() && newData.exists() && newData.child('uid').val() === auth.uid) || (!newData.exists() && data.child('uid').val() === auth.uid))) || (auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true && !newData.exists()))",
-          ".validate": "!newData.exists() || (newData.hasChildren(['uid','mediaUrl','storagePath','createdAt','expiresAt']) && newData.child('uid').val() === $uid && newData.child('mediaUrl').isString() && newData.child('mediaUrl').val().matches(/^https:\\/\\/.+/) && newData.child('mediaUrl').val().length <= 2000 && newData.child('storagePath').val() === 'stories/' + $uid + '/' + $storyId && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 5000 && newData.child('createdAt').val() >= now - 60000 && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > now && newData.child('expiresAt').val() <= now + 86405000)"
+          ".validate": "!newData.exists() || (newData.hasChildren(['uid','mediaUrl','storagePath','createdAt','expiresAt']) && newData.child('uid').val() === $uid && newData.child('mediaUrl').isString() && ((newData.child('mediaUrl').val().matches(/^https:\\/\\/.+/) && newData.child('mediaUrl').val().length <= 2000 && newData.child('storagePath').val() === 'stories/' + $uid + '/' + $storyId) || (newData.child('mediaUrl').val() === 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7#gremory-image=stories/' + $uid + '/' + $storyId && newData.child('storagePath').val() === 'rtdb:stories/' + $uid + '/' + $storyId)) && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 5000 && newData.child('createdAt').val() >= now - 60000 && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > now && newData.child('expiresAt').val() <= now + 86405000)"
         }
       }
     },
@@ -852,6 +852,20 @@
         },
         "$other": {
           ".validate": false
+        }
+      }
+    },
+    "siteMedia": {
+      "$kind": {
+        "$uid": {
+          "$mediaId": {
+            ".read": "auth != null && ($kind === 'avatars' || $kind === 'community' || ($kind === 'stories' && data.child('expiresAt').val() > now))",
+            ".write": "auth != null && (($kind === 'avatars' || $kind === 'community' || $kind === 'stories') && ((!data.exists() && newData.exists() && auth.uid === $uid && root.child('siteBans').child(auth.uid).child('active').val() !== true) || (!newData.exists() && (auth.uid === $uid || (auth.token.email === 'losermodder@gmail.com' && auth.token.email_verified === true)))))",
+            ".validate": "newData.hasChildren(['uid','data','createdAt']) && newData.child('uid').val() === $uid && newData.child('data').isString() && newData.child('data').val().matches(/^data:image\\/jpeg;base64,[A-Za-z0-9+\\/=]+$/) && newData.child('data').val().length <= ($kind === 'avatars' ? 24576 : 98304) && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 5000 && newData.child('createdAt').val() >= now - 60000 && ($kind !== 'stories' || (newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > now && newData.child('expiresAt').val() <= now + 86405000))",
+            "$other": {
+              ".validate": "$other === 'uid' || $other === 'data' || $other === 'createdAt' || ($kind === 'stories' && $other === 'expiresAt')"
+            }
+          }
         }
       }
     }

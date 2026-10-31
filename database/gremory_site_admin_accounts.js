@@ -2,6 +2,7 @@
 // Operações administrativas de identidade, executadas APENAS pelo Firebase Admin
 // do bot/worker confiável. Nenhuma credencial é exposta ao navegador.
 const USER_PATHS = Object.freeze([
+  'siteMedia/avatars','siteMedia/community','siteMedia/stories',
   'profiles','directory','users','friends','friendRequests','pokemonWeb',
   'charlotteLinkRequests','charlottePublic','charlotteSync','charlottePrivate',
   'siteBridgeJobs','siteBridgeResults','pokemonSiteChallenges','pokemonSiteDuelIndex',

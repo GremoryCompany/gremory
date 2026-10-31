@@ -19,7 +19,7 @@ test('Profile names are reserved transactionally, profile+directory written atom
  assert.match(ui,/usernameOk=false;\s*if\(String\(e\?\.code/);
 });
 test('Avatar paths are unique and restricted to owner with content-type and size guard',()=>{
- assert.match(ui,/avatars\/\$\{state\.user\.uid\}\/profile_\$\{Date\.now\(\)\}/);
+ assert.match(ui,/kind:'avatars',uid:uploadUid,id:`profile_\$\{Date\.now\(\)\}/);
  assert.match(storage,/file\.matches\('profile_\[0-9\]\{13\}/);
  assert.match(storage,/request\.auth\.uid == uid/);
  assert.match(storage,/request\.resource\.size <= 5 \* 1024 \* 1024/);
