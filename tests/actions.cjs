@@ -3,7 +3,7 @@ const root=require('node:path').resolve(__dirname,'..')+'/',app=fs.readFileSync(
 const between=(a,b)=>app.slice(app.indexOf(a),app.indexOf(b,app.indexOf(a)));
 test('Room creation opens the room even when its discovery index is denied',async()=>{
  const opened=[],messages=[],button={disabled:false},nodes={watchCreateForm:{querySelector:()=>button,reset(){}},watchNameInput:{value:'Sala'},watchPrivacyInput:{value:'public'}};
- const ctx={state:{user:{uid:'a'}},$:id=>nodes[id],prewarmWatchMicrophone:async()=>{},uniqueWatchCode:async()=> 'ABCDEF',nowIso:()=> 'now',displayName:()=> 'Alice',avatarFor:()=>'',ref:(_,p)=>p,db:{},set:async p=>{if(p.startsWith('watchPublicRooms'))throw Error('denied')},closeModal(){},openWatchRoom:async c=>opened.push(c),toast:m=>messages.push(m),permissionMessage:()=> 'denied',console};
+ const ctx={state:{user:{uid:'a'}},$:id=>nodes[id],prewarmWatchMicrophone:async()=>{},withTimeout:p=>p,profileDataError:()=> 'denied',uniqueWatchCode:async()=> 'ABCDEF',nowIso:()=> 'now',displayName:()=> 'Alice',avatarFor:()=>'',ref:(_,p)=>p,db:{},set:async p=>{if(p.startsWith('watchPublicRooms'))throw Error('denied')},closeModal(){},openWatchRoom:async c=>opened.push(c),toast:m=>messages.push(m),permissionMessage:()=> 'denied',console};
  vm.createContext(ctx);vm.runInContext(between('async function createWatchRoom(ev)','async function loadWatchRooms()'),ctx);
  await ctx.createWatchRoom({preventDefault(){}});await new Promise(r=>setImmediate(r));
  assert.deepEqual(opened,['ABCDEF']);assert.equal(button.disabled,false);assert.ok(messages.some(m=>m.includes('listagem')));

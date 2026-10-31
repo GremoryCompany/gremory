@@ -1,3 +1,4 @@
+import { deadline, waitForUpload, uploadMessage } from './upload-flow.js';
 import { profileDetails } from './profile-details.js';
 import {getAuth,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js';
 import {ref,get,set,push,remove,onValue,query,orderByChild,limitToLast,serverTimestamp} from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js';
@@ -5,7 +6,7 @@ import {getStorage,ref as storageRef,uploadBytesResumable,getDownloadURL,deleteO
 
 export function initCommunity({app,db,getUser,isAdmin,toast,getSelectedUid,bridgeRequest}){
  const $=id=>document.getElementById(id),storage=getStorage(app);
- let posts={},stories={},following={},saved={},directory={},communityTab='home',searchTerm='',onlyFollowing=false,limit=20,subscriptions=[],postSub=null,rowSubs=[],busy=false,upload=null,epoch=0;
+ let posts={},stories={},following={},saved={},directory={},communityTab='home',searchTerm='',onlyFollowing=false,limit=20,subscriptions=[],postSub=null,rowSubs=[],busy=false,upload=null,storyUpload=null,epoch=0;
  const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n};
  const button=(text,action)=>{const b=node('button',text,'btn');b.type='button';b.onclick=()=>Promise.resolve().then(action).catch(e=>toast(e.message));return b};
  const name=uid=>uid==='charlotte'?'Charlotte':directory[uid]?.nome||directory[uid]?.name||'Participante';
@@ -24,13 +25,13 @@ export function initCommunity({app,db,getUser,isAdmin,toast,getSelectedUid,bridg
  $('feedStoryClose')?.addEventListener('click',()=>{$('feedStoryViewer').hidden=true});
  $('feedStoryViewer')?.addEventListener('click',event=>{if(event.target.id==='feedStoryViewer')event.target.hidden=true});
  $('feedStoryFile')?.addEventListener('change',async event=>{
-  const user=getUser(),file=event.target.files?.[0],status=$('feedStoryStatus');if(!user||!file)return;
+  const user=getUser(),file=event.target.files?.[0],status=$('feedStoryStatus'),version=epoch;if(!user||!file)return;
   if(!/^image\/(jpeg|png|webp|gif)$/.test(file.type)||file.size>5*1024*1024){status.textContent='Story aceita JPG, PNG, GIF ou WebP até 5 MB.';event.target.value='';return}
-  const id=push(ref(db,`communityStories/${user.uid}`)).key,storagePath=`stories/${user.uid}/${id}`,key=storageRef(storage,storagePath);
+  const id=push(ref(db,`communityStories/${user.uid}`)).key,storagePath=`stories/${user.uid}/${id}`,key=storageRef(storage,storagePath);let storyPublicationStarted=false;
   try{
-    status.textContent='Enviando story…';await new Promise((resolve,reject)=>uploadBytesResumable(key,file,{contentType:file.type}).on('state_changed',null,reject,resolve));
-    const mediaUrl=await getDownloadURL(key);await set(ref(db,`communityStories/${user.uid}/${id}`),{uid:user.uid,mediaUrl,storagePath,createdAt:Date.now(),expiresAt:Date.now()+86400000});status.textContent='Story publicado! Visível por 24 horas.';
-  }catch(e){await deleteObject(key).catch(()=>{});status.textContent='Erro ao publicar story.';toast(e.message)}finally{event.target.value=''}
+    event.target.disabled=true;storyUpload=uploadBytesResumable(key,file,{contentType:file.type});await waitForUpload(storyUpload,{onProgress:sn=>{if(version===epoch)status.textContent=`Enviando story: ${Math.round(100*sn.bytesTransferred/sn.totalBytes)}%`}});
+    const mediaUrl=await deadline(getDownloadURL(key),15000,'upload/url-timeout');if(version!==epoch)throw Object.assign(new Error('Sessão alterada'),{code:'storage/canceled'});storyPublicationStarted=true;await deadline(set(ref(db,`communityStories/${user.uid}/${id}`),{uid:user.uid,mediaUrl,storagePath,createdAt:Date.now(),expiresAt:Date.now()+86400000}),15000,'upload/publish-timeout');status.textContent='Story publicado! Visível por 24 horas.';
+  }catch(e){if(!storyPublicationStarted)await deadline(deleteObject(key),5000,'upload/cleanup-timeout').catch(()=>{});if(version===epoch){status.textContent=uploadMessage(e);toast(uploadMessage(e))}}finally{storyUpload=null;event.target.disabled=false;event.target.value=''}
  });
  function subscribePosts(){postSub?.();postSub=onValue(query(ref(db,'communityPosts'),orderByChild('createdAt'),limitToLast(limit)),sn=>{posts=sn.val()||{};render()},e=>{$('feedList').textContent='Não foi possível carregar o feed. Verifique as regras do Firebase.';toast(e.message)})}
  function setCommunityTab(tab){
@@ -99,14 +100,20 @@ export function initCommunity({app,db,getUser,isAdmin,toast,getSelectedUid,bridg
  $('feedForm').onsubmit=async e=>{
   e.preventDefault();if(busy||!getUser())return;const text=$('feedText').value.trim(),file=$('feedFile').files[0];let mediaUrl=safeUrl($('feedUrl').value.trim()),mediaKind=$('feedKind').value,storagePath='';
   if($('feedUrl').value.trim()&&!mediaUrl)return toast('Use um link HTTPS válido.');if(!text&&!file&&!mediaUrl)return toast('Escreva algo ou selecione uma mídia.');
-  const uid=getUser().uid,version=epoch,post=push(ref(db,'communityPosts'));busy=true;const submit=e.target.querySelector('button[type="submit"]');submit.disabled=true;
+  const uid=getUser().uid,version=epoch,post=push(ref(db,'communityPosts'));let publicationStarted=false;busy=true;const submit=e.target.querySelector('button[type="submit"]');submit.disabled=true;
   try{
-   if(file){if(!/^(image\/(jpeg|png|webp|gif)|video\/(mp4|webm))$/.test(file.type))throw new Error('Formato não suportado. Use JPG, PNG, GIF, WebP, MP4 ou WebM.');mediaKind=file.type.startsWith('video/')?'video':'image';if(file.size>(mediaKind==='video'?50:10)*1024*1024)throw new Error('O arquivo excede o limite.');storagePath=`community/${uid}/${post.key}`;upload=uploadBytesResumable(storageRef(storage,storagePath),file,{contentType:file.type});await new Promise((resolve,reject)=>upload.on('state_changed',sn=>{$('feedProgress').textContent=`Enviando: ${Math.round(100*sn.bytesTransferred/sn.totalBytes)}%`},reject,resolve));mediaUrl=await getDownloadURL(upload.snapshot.ref);upload=null}
-   if(version!==epoch)throw new Error('Sessão alterada. Entre novamente.');await set(post,{uid,text,mediaUrl,mediaKind,storagePath,createdAt:serverTimestamp()});window.dispatchEvent(new CustomEvent('gremory:social',{detail:{action:'post',itemId:post.key}}));e.target.reset();$('feedProgress').textContent='Publicado!';setCommunityTab('home');toast('Sua publicação já está no Grémorium.');
-  }catch(err){if(storagePath)await deleteObject(storageRef(storage,storagePath)).catch(()=>{});$('feedProgress').textContent='Falha ao publicar. Verifique a configuração e as regras do Firebase Storage.';toast(err.message)}finally{busy=false;submit.disabled=false;upload=null}
+   if(file){
+    if(!/^(image\/(jpeg|png|webp|gif)|video\/(mp4|webm))$/.test(file.type))throw new Error('Formato não suportado. Use JPG, PNG, GIF, WebP, MP4 ou WebM.');
+    mediaKind=file.type.startsWith('video/')?'video':'image';if(file.size>(mediaKind==='video'?50:10)*1024*1024)throw new Error('O arquivo excede o limite.');
+    storagePath=`community/${uid}/${post.key}`;upload=uploadBytesResumable(storageRef(storage,storagePath),file,{contentType:file.type});
+    await waitForUpload(upload,{onProgress:sn=>{if(version===epoch)$('feedProgress').textContent=`Enviando: ${Math.round(100*sn.bytesTransferred/sn.totalBytes)}%`}});
+    mediaUrl=await deadline(getDownloadURL(upload.snapshot.ref),15000,'upload/url-timeout');upload=null;
+   }
+   if(version!==epoch)throw new Error('Sessão alterada. Entre novamente.');publicationStarted=true;$('feedProgress').textContent='Arquivo enviado. Confirmando publicação…';await deadline(set(post,{uid,text,mediaUrl,mediaKind,storagePath,createdAt:serverTimestamp()}),15000,'upload/publish-timeout');window.dispatchEvent(new CustomEvent('gremory:social',{detail:{action:'post',itemId:post.key}}));e.target.reset();$('feedProgress').textContent='Publicado!';setCommunityTab('home');toast('Sua publicação já está no Grémorium.');
+  }catch(err){if(storagePath&&!publicationStarted)await deadline(deleteObject(storageRef(storage,storagePath)),5000,'upload/cleanup-timeout').catch(()=>{});if(version===epoch){$('feedProgress').textContent=err.code?uploadMessage(err):err.message;toast(err.code?uploadMessage(err):err.message)}}finally{busy=false;submit.disabled=false;upload=null}
  };
  $('feedAll').onclick=()=>{onlyFollowing=false;$('feedAll').classList.add('active');$('feedFollowing').classList.remove('active');render()};$('feedFollowing').onclick=()=>{onlyFollowing=true;$('feedFollowing').classList.add('active');$('feedAll').classList.remove('active');render()};$('feedMyProfile').onclick=()=>showProfile(getUser().uid).catch(e=>toast(e.message));$('feedRefresh').onclick=subscribePosts;$('feedMore').onclick=()=>{limit+=20;subscribePosts()};
  $('adminBadgeForm').onsubmit=async e=>{e.preventDefault();if(!isAdmin())return;const uid=getSelectedUid(),id=$('adminBadgeId').value.trim();if(!uid)return toast('Localize o usuário primeiro.');try{await set(ref(db,`profileBadges/${uid}/${id}`),{name:$('adminBadgeName').value.trim(),icon:$('adminBadgeIcon').value.trim()});toast('Emblema concedido.')}catch(e){toast(e.message)}};
  $('adminBadgeRevoke').onclick=async()=>{if(!isAdmin()||!getSelectedUid())return;const id=$('adminBadgeId').value.trim();if(!/^[a-z0-9_-]{3,40}$/.test(id))return toast('Informe um ID válido.');try{await remove(ref(db,`profileBadges/${getSelectedUid()}/${id}`));toast('Emblema revogado.')}catch(e){toast(e.message)}};
- onAuthStateChanged(getAuth(app),user=>{epoch++;upload?.cancel();postSub?.();subscriptions.splice(0).forEach(fn=>fn());cleanupRows();posts={};stories={};directory={};following={};saved={};communityTab='home';searchTerm='';limit=20;if($('feedComposer'))$('feedComposer').hidden=true;document.querySelectorAll('[data-community-tab]').forEach(b=>b.classList.toggle('active',b.dataset.communityTab==='home'));$('feedProfile').hidden=true;$('feedList').replaceChildren();if(!user)return;subscriptions.push(onValue(ref(db,'directory'),sn=>{directory=sn.val()||{};render();renderStories()}));subscriptions.push(onValue(ref(db,'communityStories'),sn=>{stories=sn.val()||{};renderStories()},e=>{console.warn('[STORIES]',e?.message);$('feedStories').textContent='Stories indisponíveis. Verifique as regras Firebase.'}));subscriptions.push(onValue(ref(db,`communityFollowing/${user.uid}`),sn=>{following=sn.val()||{};render()}));subscriptions.push(onValue(ref(db,`communitySaved/${user.uid}`),sn=>{saved=sn.val()||{};render()},e=>console.warn('[GRÉMORIUM SALVOS]',e.message)));subscribePosts()});
+ onAuthStateChanged(getAuth(app),user=>{epoch++;upload?.cancel();storyUpload?.cancel();postSub?.();subscriptions.splice(0).forEach(fn=>fn());cleanupRows();posts={};stories={};directory={};following={};saved={};communityTab='home';searchTerm='';limit=20;if($('feedComposer'))$('feedComposer').hidden=true;document.querySelectorAll('[data-community-tab]').forEach(b=>b.classList.toggle('active',b.dataset.communityTab==='home'));$('feedProfile').hidden=true;$('feedList').replaceChildren();if(!user)return;subscriptions.push(onValue(ref(db,'directory'),sn=>{directory=sn.val()||{};render();renderStories()}));subscriptions.push(onValue(ref(db,'communityStories'),sn=>{stories=sn.val()||{};renderStories()},e=>{console.warn('[STORIES]',e?.message);$('feedStories').textContent='Stories indisponíveis. Verifique as regras Firebase.'}));subscriptions.push(onValue(ref(db,`communityFollowing/${user.uid}`),sn=>{following=sn.val()||{};render()}));subscriptions.push(onValue(ref(db,`communitySaved/${user.uid}`),sn=>{saved=sn.val()||{};render()},e=>console.warn('[GRÉMORIUM SALVOS]',e.message)));subscribePosts()});
 }

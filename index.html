@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://gremory-e4313-default-rtdb.firebaseio.com" crossorigin>
   <title>Gremory</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261030-studios-v3">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261030-sync-upload-v4">
   <link rel="stylesheet" href="/assets/css/gremory-tools.css?v=20261028-gifts-catalog-02">
 </head>
 <body class="auth-loading">
@@ -1156,7 +1156,7 @@
       <div class="profile-own-cover" id="profileOwnCover"><div class="profile-own-media" id="profileOwnMedia" aria-hidden="true"></div><img src="/assets/img/gremory-logo.png" alt=""></div>
       <div class="profile-intro"><span class="tag">SEU ESPAÇO NA GREMORY</span><h3>Conecte-se. Jogue. Faça parte.</h3></div><div class="profile-summary"><img id="profileAvatarPreview" src="/assets/img/profile.jpg" alt=""><div><strong id="profileNameView">Usuário</strong><span id="profileUsernameView">@usuario</span><span id="profilePlanView">Padrão</span></div></div>
       <div class="profile-personal-preview"><p id="profileBioPreview">Seu próximo grupo de amigos começa aqui.</p><span id="profileGamePreview">Escolha seu jogo favorito</span></div><section class="account-security-mini" aria-label="Segurança do e-mail"><div><strong>Segurança da conta</strong><small id="accountEmailVerificationStatus">Conferindo e-mail…</small></div><button class="btn" id="accountVerifyEmailBtn" type="button">Verificar e-mail</button></section>
-      <form id="profileForm" class="profile-form">
+      <section class="account-security-mini"><div><strong>Dados da conta</strong><small id="accountDataStatus" role="status" aria-live="polite">Aguardando leitura do perfil.</small></div><button class="btn" id="retryProfileLoadBtn" type="button" hidden>Tentar novamente</button></section><form id="profileForm" class="profile-form">
         <label>Nome<input id="profileName" maxlength="40"></label><label>Nome de usuário<input id="profileUsername" maxlength="20" autocomplete="username" placeholder="usuario"><small class="field-hint" id="profileUsernameHint">Pode ser alterado uma vez a cada 7 dias.</small></label>
         <label>Foto (URL)<input id="profileAvatar" type="url" placeholder="https://..."></label><label>Ou escolha do dispositivo<input id="profileAvatarFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><small class="field-hint" id="profileAvatarUploadStatus">Fotos de até 5 MB. Após enviar, salve o perfil.</small></label>
         <label>Bio<textarea id="profileBio" maxlength="500" rows="3" placeholder="Seu recado"></textarea></label>
@@ -1227,7 +1227,7 @@
   <div class="modal" id="reportModal" aria-hidden="true"><button class="modal-backdrop" data-close-modal="reportModal"></button><div class="modal-card"><button class="modal-close" data-close-modal="reportModal">×</button><span class="tag">SEGURANÇA</span><h2>Denunciar usuário</h2><form id="reportForm" class="stack-form"><label>Motivo<select id="reportCategory" required><option value="harassment">Assédio</option><option value="minor_sexual_content">Conteúdo sexual envolvendo menores</option><option value="threats">Ameaças</option><option value="gore">Gore / violência extrema</option><option value="spam_fraud">Spam ou fraude</option><option value="other">Outro</option></select></label><label>Detalhes<textarea id="reportDetails" rows="4" maxlength="500" placeholder="Explique o que aconteceu"></textarea></label><button class="btn danger-ghost full" type="submit">Enviar denúncia</button></form></div></div>
 
   <div class="toast-root" id="toastRoot" aria-live="polite"></div>
-  <script type="module" src="/assets/js/app.js?v=20261030-studios-v3"></script>
+  <script type="module" src="/assets/js/app.js?v=20261030-sync-upload-v4"></script>
   <script type="module" src="/assets/js/gremory-tools.js?v=20261028-gifts-catalog-02"></script>
 </body>
 </html>

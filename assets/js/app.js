@@ -1,3 +1,4 @@
+import { deadline, waitForUpload, uploadMessage } from './upload-flow.js';
 import { createScreenAwake, setAudioMode, replaceMicrophone } from './watch-device.js';
 import { profileDetails, safeProfileUrl } from './profile-details.js';
 import { initCommunity } from './community.js';
@@ -320,21 +321,60 @@ function publicCustomizationIds(){
 }
 function publicProfile(p,styleOverride=null){
   const style=Array.isArray(styleOverride)?styleOverride:publicCustomizationIds();
-  return{uid:p.uid,nome:p.nome||'Usuário',username:normalizeUsername(p.username||''),avatar:p.avatar||'',bio:p.bio||'',favoriteAnime:p.favoriteAnime||'',details:profileDetails(p.details),profileSongTitle:p.profileSongTitle||'',profileSongUrl:p.profileSongUrl||'',profilePlaylistUrl:p.profilePlaylistUrl||'',style:style.map(String).filter(id=>/^[a-z0-9_-]{2,64}$/i.test(id)).slice(0,8),createdAt:p.createdAt||nowIso(),updatedAt:p.updatedAt||nowIso()}
+  return{uid:p.uid,nome:p.nome||'Usuário',...(validUsername(p.username)?{username:normalizeUsername(p.username)}:{}),avatar:p.avatar||'',bio:p.bio||'',favoriteAnime:p.favoriteAnime||'',details:profileDetails(p.details),profileSongTitle:p.profileSongTitle||'',profileSongUrl:p.profileSongUrl||'',profilePlaylistUrl:p.profilePlaylistUrl||'',style:style.map(String).filter(id=>/^[a-z0-9_-]{2,64}$/i.test(id)).slice(0,8),createdAt:p.createdAt||nowIso(),updatedAt:p.updatedAt||nowIso()}
 }
 async function syncPublicCustomization(){
   if(!state.user)return;
   try{await update(ref(db,`directory/${state.user.uid}`),{style:publicCustomizationIds(),updatedAt:nowIso()})}catch{}
 }
-async function readUserData(user){
-  const [ps,old,dirSnap]=await Promise.all([get(ref(db,`profiles/${user.uid}`)).catch(()=>null),get(ref(db,`users/${user.uid}`)).catch(()=>null),get(ref(db,`directory/${user.uid}`)).catch(()=>null)]);
-  const p=ps?.exists()?ps.val():{};const o=old?.exists()?old.val():{};const oldDirectory=dirSnap?.exists()?dirSnap.val():{};
-  const merged={details:profileDetails(p.details),uid:user.uid,nome:p.nome||o.nome||user.displayName||'Usuário',username:normalizeUsername(p.username||o.username||''),usernameChangedAt:Number(p.usernameChangedAt||o.usernameChangedAt||0),avatar:p.avatar||o.avatar||user.photoURL||'',bio:p.bio||o.bio||'',favoriteAnime:p.favoriteAnime||o.favoriteAnime||o.animeFavorito||'',email:p.email||user.email||'',whatsappSiteNotify:p.whatsappSiteNotify!==false,raidWhatsappNotify:p.raidWhatsappNotify!==false,profileSongTitle:String(p.profileSongTitle||''),profileSongUrl:String(p.profileSongUrl||''),profilePlaylistUrl:String(p.profilePlaylistUrl||''),createdAt:p.createdAt||o.createdAt||user.metadata?.creationTime||nowIso()};
-  if(!ps?.exists()) await set(ref(db,`profiles/${user.uid}`),{...merged,updatedAt:nowIso()}).catch(()=>{});
-  else if((!p.email&&user.email)||p.raidWhatsappNotify==null||p.whatsappSiteNotify==null) await update(ref(db,`profiles/${user.uid}`),{email:user.email||p.email||'',whatsappSiteNotify:p.whatsappSiteNotify!==false,raidWhatsappNotify:p.raidWhatsappNotify!==false,updatedAt:nowIso()}).catch(()=>{});
-  await set(ref(db,`directory/${user.uid}`),publicProfile(merged,publicCustomizationIds().length?publicCustomizationIds():(Array.isArray(oldDirectory?.style)?oldDirectory.style:[]))).catch(()=>{});
-  state.profile=merged;state.privateData=o;renderAccount();
+function profileDataError(error){
+  const code=String(error?.code||error?.message||'').toLowerCase();
+  if(/permission[-_ ]denied/.test(code))return 'O Firebase negou acesso aos dados desta conta. Confira as regras do Realtime Database.';
+  if(code==='db_timeout')return 'O banco demorou para responder. Confira a conexão e use Tentar novamente.';
+  return 'O login funcionou, mas os dados da conta não carregaram. Confira a conexão e use Tentar novamente.';
 }
+function profileLoadStatus(text,retry=false){
+  if($('accountDataStatus'))$('accountDataStatus').textContent=text;
+  if($('retryProfileLoadBtn'))$('retryProfileLoadBtn').hidden=!retry;
+}
+async function readUserData(user){
+  const uid=user.uid;
+  profileLoadStatus('Carregando os dados da conta…');
+  // A failed read is not evidence that a profile is missing. Never overwrite
+  // an existing account with Auth defaults after a permission/network failure.
+  const ps=await withTimeout(get(ref(db,`profiles/${uid}`)),10000,'DB_TIMEOUT');
+  if(state.user?.uid!==uid)return;
+  const p=ps.exists()?ps.val():{};
+  const old=ps.exists()?null:await withTimeout(get(ref(db,`users/${uid}`)),3000,'DB_TIMEOUT').catch(()=>null);
+  if(state.user?.uid!==uid)return;
+  const o=old?.exists()?old.val():{};
+  const merged={details:profileDetails(p.details),uid,nome:p.nome||o.nome||user.displayName||'Usuário',username:normalizeUsername(p.username||o.username||''),usernameChangedAt:Number(p.usernameChangedAt||o.usernameChangedAt||0),avatar:p.avatar||o.avatar||user.photoURL||'',bio:p.bio||o.bio||'',favoriteAnime:p.favoriteAnime||o.favoriteAnime||o.animeFavorito||'',email:p.email||user.email||'',whatsappSiteNotify:p.whatsappSiteNotify!==false,raidWhatsappNotify:p.raidWhatsappNotify!==false,profileSongTitle:String(p.profileSongTitle||''),profileSongUrl:String(p.profileSongUrl||''),profilePlaylistUrl:String(p.profilePlaylistUrl||''),createdAt:p.createdAt||o.createdAt||user.metadata?.creationTime||nowIso()};
+  state.profile=merged;state.privateData=o;renderAccount();
+  profileLoadStatus('Dados da conta carregados.');
+  if(ps.exists())withTimeout(get(ref(db,`users/${uid}`)),3000,'DB_TIMEOUT').then(legacy=>{if(state.user?.uid===uid&&legacy.exists()){state.privateData=legacy.val();renderAccount()}}).catch(()=>{});
+  // Mirror only safe public fields, without waiting on optional writes to open
+  // the account. Keep an existing public style until its source is available.
+  const writes=[];
+  if(!ps.exists()){
+    const payload={...merged,updatedAt:nowIso()};
+    if(!validUsername(payload.username)){delete payload.username;delete payload.usernameChangedAt;}
+    writes.push(withTimeout(runTransaction(ref(db,`profiles/${uid}`),current=>current==null?payload:undefined,{applyLocally:false}),10000,'DB_TIMEOUT'));
+  }else if((!p.email&&user.email)||p.raidWhatsappNotify==null||p.whatsappSiteNotify==null){
+    writes.push(withTimeout(update(ref(db,`profiles/${uid}`),{email:user.email||p.email||'',whatsappSiteNotify:p.whatsappSiteNotify!==false,raidWhatsappNotify:p.raidWhatsappNotify!==false,updatedAt:nowIso()}),10000,'DB_TIMEOUT'));
+  }
+  const publicData=publicProfile(merged);
+  if(!publicCustomizationIds().length)delete publicData.style;
+  writes.push(withTimeout(update(ref(db,`directory/${uid}`),publicData),10000,'DB_TIMEOUT'));
+  Promise.allSettled(writes).then(results=>{
+    if(state.user?.uid!==uid)return;
+    if(results.some(r=>r.status==='rejected'))profileLoadStatus('Seu perfil foi lido, mas há atualizações pendentes no banco. Confira a conexão e as regras.',true);
+  });
+}
+$('retryProfileLoadBtn')?.addEventListener('click',async()=>{
+  const user=state.user;if(!user)return;
+  try{await readUserData(user)}catch(e){if(state.user?.uid===user.uid)profileLoadStatus(profileDataError(e),true)}
+});
+
 function accountSnapshot(){
   const synced=state.charlotteSync?.account||{};
   const legacy=state.privateData||{};
@@ -357,21 +397,24 @@ function renderAccount(){
   renderProfileDetails(p);applyOwnProfileCustomization();renderPokemonInventory();
 }
 $('profileAvatar').addEventListener('input',()=>{$('profileAvatarPreview').src=$('profileAvatar').value.trim()||DEFAULT_AVATAR});
+let profileAvatarUpload=null;
 $('profileAvatarFile')?.addEventListener('change',async ev=>{
   const file=ev.target.files?.[0],status=$('profileAvatarUploadStatus');if(!file||!state.user)return;
   if(!/^image\/(jpeg|png|webp|gif)$/.test(file.type)||file.size>5*1024*1024){toast('Foto deve ser JPG, PNG, WebP ou GIF com até 5 MB.');ev.target.value='';return;}
+  const uploadUid=state.user.uid;
   if(status)status.textContent='Enviando foto...';ev.target.disabled=true;
   try{
     const ext=({ 'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif'})[file.type];
     const target=storageRef(storage,`avatars/${state.user.uid}/profile_${Date.now()}_${crypto.randomUUID().replace(/-/g,'').slice(0,12)}.${ext}`);
-    const job=uploadBytesResumable(target,file,{contentType:file.type});
-    await new Promise((resolve,reject)=>job.on('state_changed',null,reject,resolve));
-    const url=await getDownloadURL(job.snapshot.ref);
+    const job=uploadBytesResumable(target,file,{contentType:file.type});profileAvatarUpload=job;
+    await waitForUpload(job,{onProgress:sn=>{if(status&&state.user?.uid===uploadUid)status.textContent=`Enviando foto: ${Math.round(100*sn.bytesTransferred/sn.totalBytes)}%`}});
+    const url=await deadline(getDownloadURL(job.snapshot.ref),15000,'upload/url-timeout');
+    if(state.user?.uid!==uploadUid)return;
     $('profileAvatar').value=url;$('profileAvatarPreview').src=url;
     if(status)status.textContent='Foto enviada. Clique em Salvar perfil para confirmar.';
     toast('Foto enviada! Salve o perfil para aplicar.');
-  }catch(error){if(status)status.textContent='Falha ao enviar foto.';toast(permissionMessage(error,'Não foi possível enviar sua foto.'));}
-  finally{ev.target.disabled=false;ev.target.value='';}
+  }catch(error){if(state.user?.uid===uploadUid){if(status)status.textContent=uploadMessage(error);toast(uploadMessage(error));}}
+  finally{profileAvatarUpload=null;ev.target.disabled=false;ev.target.value='';}
 });
 $('profileForm').addEventListener('submit',async ev=>{
   ev.preventDefault();if(!state.user)return;
@@ -410,7 +453,7 @@ $('profileForm').addEventListener('submit',async ev=>{
   }
 });
 
-function clearUserSubscriptions(){if(slotSettlementTimer)clearTimeout(slotSettlementTimer);try{slotSettlementUnsub?.()}catch{}slotSettlementUnsub=null;activeSlotJob='';slotBusy=false;try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}if(state.gameRealtimePoll){clearInterval(state.gameRealtimePoll);state.gameRealtimePoll=null}state.gameRealtimeSyncing=false;clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.blackjack.privateUnsub){try{state.blackjack.privateUnsub()}catch{}state.blackjack.privateUnsub=null}if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.siteWallet=null;state.siteProgress=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonAudio={encounterId:'',resultId:''};state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.private=null;state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.notificationDismissed={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null;state.watchRtc.peerVolumes.clear()}
+function clearUserSubscriptions(){profileAvatarUpload?.cancel();if(slotSettlementTimer)clearTimeout(slotSettlementTimer);try{slotSettlementUnsub?.()}catch{}slotSettlementUnsub=null;activeSlotJob='';slotBusy=false;try{state.admin.supportUnsub?.()}catch{}state.admin.supportUnsub=null;if(state.premiumPoll){clearInterval(state.premiumPoll);state.premiumPoll=null}if(state.gameRealtimePoll){clearInterval(state.gameRealtimePoll);state.gameRealtimePoll=null}state.gameRealtimeSyncing=false;clearUnsubs(state.userUnsubs);if(state.duelUnsub){try{state.duelUnsub()}catch{}state.duelUnsub=null}if(state.ttt.unsub){try{state.ttt.unsub()}catch{}state.ttt.unsub=null}if(state.blackjack.unsub){try{state.blackjack.unsub()}catch{}state.blackjack.unsub=null}if(state.blackjack.privateUnsub){try{state.blackjack.privateUnsub()}catch{}state.blackjack.privateUnsub=null}if(state.hangman.unsub){try{state.hangman.unsub()}catch{}state.hangman.unsub=null}leaveVoice(true).catch(()=>{});leaveWatchVoice(true).catch(()=>{});clearRoomSubscriptions();clearUnsubs(state.watchUnsubs);state.friends={};state.requests={};state.directory={};state.charlottePublic=null;state.charlotteSync=null;state.siteWallet=null;state.siteProgress=null;state.bridgeResults={};state.siteInventory={};state.siteCustomization={};state.storeCatalog={};state.duel=null;state.teamDraft=[];state.pokemonEncounter=null;state.pokemonAudio={encounterId:'',resultId:''};state.pokemonHealing={};state.siteRaid=null;state.siteRaidConfig={};state.ttt.game=null;state.ttt.index={};state.ttt.lastResultId='';state.ttt.seenActiveIds=new Set();state.blackjack.game=null;state.blackjack.private=null;state.blackjack.index={};state.blackjack.seenActiveIds=new Set();state.hangman.game=null;state.hangman.index={};state.hangman.seenActiveIds=new Set();state.siteGameChallenges={};state.siteGameChallengeSeen=new Set();state.duelSeenActiveIds=new Set();state.tinder={current:null,seen:[]};state.updates={};state.notifications={};state.notificationDismissed={};state.ban=null;state.supportChat={messages:{}};state.watchCode=null;state.watchRoom=null;state.watchRtc.peerVolumes.clear()}
 async function syncSiteGameRealtimeState(){
   if(!state.user||state.gameRealtimeSyncing)return;
   const uid=state.user.uid;
@@ -444,6 +487,7 @@ function gameRealtimeListenerError(label,e){
 }
 function startUserSubscriptions(){
   clearUserSubscriptions();const uid=state.user.uid;
+  state.userUnsubs.push(onValue(ref(db,'directory'),snapshot=>{if(state.user?.uid!==uid)return;state.directory=snapshot.val()||{};renderPeople($('friendSearchInput')?.value||'')},error=>{if(state.user?.uid!==uid)return;const box=$('peopleSearchResults');if(box)box.textContent=profileDataError(error)}));
   state.userUnsubs.push(onValue(ref(db,`friends/${uid}`),s=>{state.friends=s.exists()?s.val():{};renderFriends();renderDuelFriendSelect();$('homeFriendsText').textContent=`${Object.keys(state.friends).length} amigo${Object.keys(state.friends).length===1?'':'s'}`}));
   state.userUnsubs.push(onValue(ref(db,`friendRequests/${uid}`),s=>{state.requests=s.exists()?s.val():{};renderFriendRequests()}));
   state.userUnsubs.push(onValue(ref(db,`charlottePublic/${uid}`),s=>{state.charlottePublic=s.exists()?s.val():null;renderCharlotteStatus()}));
@@ -1124,7 +1168,7 @@ $('adminBackupNowBtn')?.addEventListener('click',async()=>{
   const btn=$('adminBackupNowBtn');try{btn.disabled=true;let confirmReplace=false;if(state.admin.backupStatus?.recoveryRequired){confirmReplace=confirm(`ATENÇÃO: esta instalação está diferente do backup remoto.
 
 Cancelar = manter o backup remoto protegido.
-OK = SUBSTITUIR o backup remoto pelos JSONs atuais desta Railway.
+OK = SUBSTITUIR o backup remoto pelos JSONs atuais desta Charlotte na Wispbyte.
 
 Só confirme se você tiver certeza de que os dados locais atuais são os corretos.`);if(!confirmReplace){btn.disabled=false;return}}
     const r=await bridgeRequest('admin_backup_now',{confirmReplace},90000,false);toast(`Backup concluído: ${r.files||0} arquivo(s).`);await loadAdminDashboard();btn.disabled=false
@@ -1133,7 +1177,7 @@ Só confirme se você tiver certeza de que os dados locais atuais são os corret
 $('adminRestoreBackupBtn')?.addEventListener('click',async()=>{
   const btn=$('adminRestoreBackupBtn');try{if(!confirm(`Restaurar TODOS os JSONs salvos no Firebase para esta Charlotte?
 
-Use isso em um deploy novo da Railway. Os arquivos locais correspondentes serão substituídos pelo backup. Depois será necessário reiniciar a Charlotte.`))return;btn.disabled=true;const r=await bridgeRequest('admin_restore_backup',{},120000,false);toast(`Backup restaurado: ${r.restoredFiles||0} arquivo(s). REINICIE a Charlotte agora.`,9000);await loadAdminDashboard();btn.disabled=false}catch(e){if(btn)btn.disabled=false;toast(e.message||'Não foi possível restaurar o backup.',8000)}
+Use isso em um deploy novo da Charlotte na Wispbyte. Os arquivos locais correspondentes serão substituídos pelo backup. Depois será necessário reiniciar a Charlotte.`))return;btn.disabled=true;const r=await bridgeRequest('admin_restore_backup',{},120000,false);toast(`Backup restaurado: ${r.restoredFiles||0} arquivo(s). REINICIE a Charlotte agora.`,9000);await loadAdminDashboard();btn.disabled=false}catch(e){if(btn)btn.disabled=false;toast(e.message||'Não foi possível restaurar o backup.',8000)}
 });
 
 function renderAdminSupportConversations(){const box=$('adminSupportConversations');if(!box)return;const rows=Object.entries(state.admin.supportChats||{}).map(([uid,v])=>({uid,meta:v?.meta||{},messages:v?.messages||{}})).sort((a,b)=>Number(b.meta.updatedAt||0)-Number(a.meta.updatedAt||0));box.innerHTML='';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma conversa.</div>';return}rows.slice(0,80).forEach(r=>{const b=document.createElement('button');b.type='button';b.className='admin-support-conversation'+(state.admin.supportSelectedUid===r.uid?' active':'');b.innerHTML=`<strong>${escText(r.meta.name||state.admin.directory?.[r.uid]?.nome||'Usuário')}</strong><span>${escText(r.meta.lastText||'Abrir conversa')}</span>`;b.onclick=()=>openAdminSupportChat(r.uid);box.appendChild(b)})}
@@ -1177,7 +1221,7 @@ $('tinderRefreshBtn')?.addEventListener('click',loadTinderProfile);$('tinderSkip
 $('tinderLikeBtn')?.addEventListener('click',async()=>{const p=state.tinder.current;if(!p)return;try{const r=await bridgeRequest('tinder_like',{targetUid:p.uid},25000);if(r.match){toast(r.contact?`Deu match! Contato: ${r.contact}`:'Deu match! Confira suas notificações.',5500);playNotificationTone()}else toast('Curtida enviada.');await loadTinderProfile()}catch(e){toast(e.message)}});
 
 // Amigos
-async function loadDirectory(){if(!state.user)return;const box=$('peopleSearchResults');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const s=await get(ref(db,'directory'));state.directory=s.exists()?s.val():{};renderPeople('')}catch(e){box.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
+async function loadDirectory(){if(!state.user)return;const box=$('peopleSearchResults');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const s=await withTimeout(get(ref(db,'directory')),10000,'DB_TIMEOUT');state.directory=s.exists()?s.val():{};renderPeople('')}catch(e){box.innerHTML=`<div class="empty-state small">${escText(profileDataError(e))}</div>`}}
 function renderPeople(q=''){
   const box=$('peopleSearchResults');box.innerHTML='';const term=String(q||'').trim().toLowerCase();const rows=Object.values(state.directory||{}).filter(p=>p.uid!==state.user?.uid&&(!term||String(p.nome||'').toLowerCase().includes(term)||normalizeUsername(p.username||'').includes(normalizeUsername(term)))).slice(0,40);
   if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma pessoa encontrada.</div>';return}
@@ -1763,11 +1807,11 @@ $('watchSyncBtn')?.addEventListener('click',syncWatchPlayer);
 $('watchLocalFileBtn')?.addEventListener('click',()=>{if(!isWatchHost())return toast('Somente o host pode transmitir um arquivo.');$('watchLocalFileInput')?.click()});
 $('watchLocalFileInput')?.addEventListener('change',async ev=>{const file=ev.target.files?.[0];ev.target.value='';if(file)await startWatchLocalFile(file)});
 async function prewarmWatchMicrophone(){try{const live=state.watchRtc.localStream?.getAudioTracks?.().some(t=>t.readyState==='live');if(live)return true;const existing=state.watchRtc.localStream;const stream=existing?.getAudioTracks?.().some(t=>t.readyState==='live')?existing:await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});state.watchRtc.localStream=stream;return true}catch{return false}}
-async function uniqueWatchCode(){for(let i=0;i<8;i++){const c=randomCode();const sn=await get(ref(db,`watchRooms/${c}`));if(!sn.exists())return c}throw new Error('Não foi possível gerar código.')}
-async function createWatchRoom(ev){ev.preventDefault();if(!state.user)return;try{const code=await uniqueWatchCode(),createdAt=nowIso(),name=$('watchNameInput').value.trim()||'Watch Party',privacy=['public','private','invite'].includes($('watchPrivacyInput')?.value)?$('watchPrivacyInput').value:'private';const room={meta:{code,name,privacy,ownerUid:state.user.uid,createdAt},members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Host',joinedAt:createdAt}},media:{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}};await set(ref(db,`watchRooms/${code}`),room);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name,privacy,role:'Host',joinedAt:createdAt});if(privacy==='public')await set(ref(db,`watchPublicRooms/${code}`),{code,name,ownerUid:state.user.uid,createdAt}).catch(e=>{console.warn('[WATCH] Índice público indisponível:',e?.message||e);toast('Sala criada, mas ainda não aparece na listagem pública.')});closeModal('watchCreateModal');$('watchCreateForm').reset();await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível criar a sala.'),6000)}}
-async function loadWatchRooms(){if(!state.user)return;loadPublicWatchRooms().catch(()=>{});const box=$('watchRoomsList');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await get(ref(db,`watchUserRooms/${state.user.uid}`));box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];$('homeWatchRecent').textContent=rows.length?`${rows.length} sala${rows.length===1?'':'s'}`:'Assistir e conversar';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala.</div>';return}rows.forEach(r=>{const item=document.createElement('div');item.className='room-item';const c=document.createElement('div');c.innerHTML=`<strong>${escText(r.name||r.code)}</strong><small>${escText(r.code)} • ${escText(r.role||'Participante')}</small>`;const acts=document.createElement('div');acts.className='room-item-actions';const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=()=>openWatchRoom(r.code);acts.appendChild(b);if(r.role==='Host'){const del=document.createElement('button');del.className='btn danger-ghost';del.textContent='Apagar';del.onclick=()=>deleteWatchRoom(r.code,r.name);acts.appendChild(del)}item.append(c,acts);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
-async function loadPublicWatchRooms(){if(!state.user)return;const box=$('watchPublicRoomsList');if(!box)return;box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await get(ref(db,'watchPublicRooms'));box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala pública.</div>';return}rows.sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).slice(0,40).forEach(r=>{const item=document.createElement('div');item.className='room-item';item.innerHTML=`<div><strong>${escText(r.name||'Watch Party')}</strong><small>${escText(r.code||'')}</small></div>`;const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=async()=>{await joinWatchRoom(r.code)};item.appendChild(b);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${escText(permissionMessage(e))}</div>`}}
-async function joinWatchRoom(code){if(!state.user)return;try{const sn=await get(ref(db,`watchRooms/${code}`));if(!sn.exists())throw new Error('Sala não encontrada.');const room=sn.val();if(room.meta?.privacy==='invite'&&room.meta?.ownerUid!==state.user.uid){const inv=await get(ref(db,`watchInvites/${code}/${state.user.uid}`));if(!inv.exists())throw new Error('Essa sala aceita somente pessoas convidadas pelo host.')}const member={uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:room.meta?.ownerUid===state.user.uid?'Host':'Participante',joinedAt:nowIso()};await set(ref(db,`watchRooms/${code}/members/${state.user.uid}`),member);await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name:room.meta?.name||code,role:member.role,joinedAt:nowIso()});$('watchJoinCode').value='';await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível entrar.'))}}
+async function uniqueWatchCode(){for(let i=0;i<8;i++){const c=randomCode();const sn=await withTimeout(get(ref(db,`watchRooms/${c}`)),8000,'DB_TIMEOUT');if(!sn.exists())return c}throw new Error('Não foi possível gerar código.')}
+async function createWatchRoom(ev){ev.preventDefault();if(!state.user)return;try{const code=await uniqueWatchCode(),createdAt=nowIso(),name=$('watchNameInput').value.trim()||'Watch Party',privacy=['public','private','invite'].includes($('watchPrivacyInput')?.value)?$('watchPrivacyInput').value:'private';const room={meta:{code,name,privacy,ownerUid:state.user.uid,createdAt},members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Host',joinedAt:createdAt}},media:{url:'',type:'',playing:false,position:0,updatedAt:Date.now()}};await withTimeout(set(ref(db,`watchRooms/${code}`),room),15000,'DB_TIMEOUT');await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name,privacy,role:'Host',joinedAt:createdAt});if(privacy==='public')await set(ref(db,`watchPublicRooms/${code}`),{code,name,ownerUid:state.user.uid,createdAt}).catch(e=>{console.warn('[WATCH] Índice público indisponível:',e?.message||e);toast('Sala criada, mas ainda não aparece na listagem pública.')});closeModal('watchCreateModal');$('watchCreateForm').reset();await openWatchRoom(code)}catch(e){toast(profileDataError(e),6000)}}
+async function loadWatchRooms(){if(!state.user)return;loadPublicWatchRooms().catch(()=>{});const box=$('watchRoomsList');box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await withTimeout(get(ref(db,`watchUserRooms/${state.user.uid}`)),10000,'DB_TIMEOUT');box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];$('homeWatchRecent').textContent=rows.length?`${rows.length} sala${rows.length===1?'':'s'}`:'Assistir e conversar';if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala.</div>';return}rows.forEach(r=>{const item=document.createElement('div');item.className='room-item';const c=document.createElement('div');c.innerHTML=`<strong>${escText(r.name||r.code)}</strong><small>${escText(r.code)} • ${escText(r.role||'Participante')}</small>`;const acts=document.createElement('div');acts.className='room-item-actions';const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=()=>openWatchRoom(r.code);acts.appendChild(b);if(r.role==='Host'){const del=document.createElement('button');del.className='btn danger-ghost';del.textContent='Apagar';del.onclick=()=>deleteWatchRoom(r.code,r.name);acts.appendChild(del)}item.append(c,acts);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${escText(profileDataError(e))}</div>`}}
+async function loadPublicWatchRooms(){if(!state.user)return;const box=$('watchPublicRoomsList');if(!box)return;box.innerHTML='<div class="loading-line">Carregando...</div>';try{const sn=await withTimeout(get(ref(db,'watchPublicRooms')),10000,'DB_TIMEOUT');box.innerHTML='';const rows=sn.exists()?Object.values(sn.val()):[];if(!rows.length){box.innerHTML='<div class="empty-state small">Nenhuma sala pública.</div>';return}rows.sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).slice(0,40).forEach(r=>{const item=document.createElement('div');item.className='room-item';item.innerHTML=`<div><strong>${escText(r.name||'Watch Party')}</strong><small>${escText(r.code||'')}</small></div>`;const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=async()=>{await joinWatchRoom(r.code)};item.appendChild(b);box.appendChild(item)})}catch(e){box.innerHTML=`<div class="empty-state small">${escText(profileDataError(e))}</div>`}}
+async function joinWatchRoom(code){if(!state.user)return;try{const sn=await withTimeout(get(ref(db,`watchRooms/${code}`)),10000,'DB_TIMEOUT');if(!sn.exists())throw new Error('Sala não encontrada.');const room=sn.val();if(room.meta?.privacy==='invite'&&room.meta?.ownerUid!==state.user.uid){const inv=await withTimeout(get(ref(db,`watchInvites/${code}/${state.user.uid}`)),10000,'DB_TIMEOUT');if(!inv.exists())throw new Error('Essa sala aceita somente pessoas convidadas pelo host.')}const member={uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:room.meta?.ownerUid===state.user.uid?'Host':'Participante',joinedAt:nowIso()};await withTimeout(set(ref(db,`watchRooms/${code}/members/${state.user.uid}`),member),15000,'DB_TIMEOUT');await set(ref(db,`watchUserRooms/${state.user.uid}/${code}`),{code,name:room.meta?.name||code,role:member.role,joinedAt:nowIso()});$('watchJoinCode').value='';await openWatchRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível entrar.'))}}
 async function openWatchRoom(code){if(state.watchCode&&state.watchCode!==code)await leaveWatchVoice(true);if(state.watchCode!==code){state.watchRtc.autoVoiceCode='';state.watchRtc.mutedPeers.clear();state.watchRtc.peerVolumes.clear()}clearUnsubs(state.watchUnsubs);state.watchCode=code;$('watchLobby').hidden=true;$('watchRoom').hidden=false;if($('watchCreateBtn'))$('watchCreateBtn').hidden=true;state.watchUnsubs.push(onValue(ref(db,`watchRooms/${code}`),sn=>{if(!sn.exists()){toast('Essa sala não existe mais.');closeWatchRoom(false);return}state.watchRoom=sn.val();renderWatchRoom()}));navigate('watch')}
 function isWatchHost(){return !!state.user&&state.watchRoom?.meta?.ownerUid===state.user.uid}
 function ensureWatchAutoVoice(){
@@ -2949,14 +2993,14 @@ watchVoiceUi();
 
 // RPG
 $('createRoomOpen').addEventListener('click',()=>openModal('createRoomModal'));$('refreshRoomsBtn').addEventListener('click',loadMyRooms);$('joinRoomForm').addEventListener('submit',async ev=>{ev.preventDefault();const code=$('joinRoomCode').value.trim().toUpperCase();if(code)await joinRoom(code)});$('createRoomForm').addEventListener('submit',createRoom);$('leaveTableView').addEventListener('click',closeTableView);$('exitRoomBtn').addEventListener('click',exitRoom);$('copyInviteBtn').addEventListener('click',copyInvite);$('characterBtn').addEventListener('click',openCharacter);$('characterForm').addEventListener('submit',saveCharacter);$('editSceneBtn').addEventListener('click',()=>{if(!isRoomOwner())return toast('Só o mestre pode editar a cena.');const s=state.room?.scene||{};$('sceneTitleInput').value=s.title||'';$('sceneDescriptionInput').value=s.description||'';$('sceneImageInput').value=s.image||'';openModal('sceneModal')});$('sceneForm').addEventListener('submit',saveScene);$('saveRulesBtn').addEventListener('click',saveRules);$('rollInitiativeBtn').addEventListener('click',rollInitiative);$('clearInitiativeBtn')?.addEventListener('click',clearInitiative);$('chatForm').addEventListener('submit',sendChat);$('customRollForm').addEventListener('submit',ev=>{ev.preventDefault();rollDice($('customRollInput').value.trim())});$$('[data-die]').forEach(btn=>btn.addEventListener('click',()=>rollDice(`1d${btn.dataset.die}`)));$$('[data-table-tab]').forEach(btn=>btn.addEventListener('click',()=>{const tab=btn.dataset.tableTab;$$('[data-table-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tableTab===tab));$$('[data-table-pane]').forEach(p=>p.classList.toggle('active',p.dataset.tablePane===tab))}));
-async function uniqueRoomCode(){for(let i=0;i<8;i++){const c=randomCode();const s=await get(ref(db,`rpgRooms/${c}`));if(!s.exists())return c}throw new Error('Não foi possível gerar o código.')}
-async function createRoom(ev){ev.preventDefault();if(!state.user)return;try{const code=await uniqueRoomCode();const now=nowIso();const name=$('roomNameInput').value.trim();const room={meta:{code,name,system:$('roomSystemInput').value,privacy:'invite',ownerUid:state.user.uid,createdAt:now},scene:{title:'A aventura começa aqui',description:'',image:''},rules:'',members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Mestre',joinedAt:now}}};await set(ref(db,`rpgRooms/${code}`),room);await set(ref(db,`rpgUserRooms/${state.user.uid}/${code}`),{code,name,system:room.meta.system,role:'Mestre',joinedAt:now});closeModal('createRoomModal');$('createRoomForm').reset();await openRoom(code)}catch(e){toast(permissionMessage(e,e.message||'Não foi possível criar a mesa.'),6000)}}
-async function loadMyRooms(){if(!state.user)return;const wrap=$('myRooms');wrap.innerHTML='<div class="loading-line">Carregando...</div>';try{const s=await get(ref(db,`rpgUserRooms/${state.user.uid}`));wrap.innerHTML='';const rooms=s.exists()?Object.values(s.val()):[];$('homeRpgRecent').textContent=rooms.length?`${rooms.length} mesa${rooms.length===1?'':'s'}`:'Suas mesas';if(!rooms.length){wrap.innerHTML='<div class="empty-state small">Nenhuma mesa.</div>';return}rooms.sort((a,b)=>String(b.joinedAt||'').localeCompare(String(a.joinedAt||''))).forEach(r=>{const item=document.createElement('div');item.className='room-item';const c=document.createElement('div');const st=document.createElement('strong');st.textContent=r.name||r.code;const sm=document.createElement('small');sm.textContent=`${r.system||'Livre'} • ${r.code}`;c.append(st,sm);const acts=document.createElement('div');acts.className='room-item-actions';const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=()=>openRoom(r.code);acts.appendChild(b);if(r.role==='Mestre'){const del=document.createElement('button');del.className='btn danger-ghost';del.textContent='Apagar';del.onclick=()=>deleteRoomFromLobby(r.code,r.name);acts.appendChild(del)}item.append(c,acts);wrap.appendChild(item)})}catch(e){wrap.innerHTML=`<div class="empty-state small">${permissionMessage(e)}</div>`}}
+async function uniqueRoomCode(){for(let i=0;i<8;i++){const c=randomCode();const s=await withTimeout(get(ref(db,`rpgRooms/${c}`)),8000,'DB_TIMEOUT');if(!s.exists())return c}throw new Error('Não foi possível gerar o código.')}
+async function createRoom(ev){ev.preventDefault();if(!state.user)return;try{const code=await uniqueRoomCode();const now=nowIso();const name=$('roomNameInput').value.trim();const room={meta:{code,name,system:$('roomSystemInput').value,privacy:'invite',ownerUid:state.user.uid,createdAt:now},scene:{title:'A aventura começa aqui',description:'',image:''},rules:'',members:{[state.user.uid]:{uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:'Mestre',joinedAt:now}}};await withTimeout(set(ref(db,`rpgRooms/${code}`),room),15000,'DB_TIMEOUT');await set(ref(db,`rpgUserRooms/${state.user.uid}/${code}`),{code,name,system:room.meta.system,role:'Mestre',joinedAt:now});closeModal('createRoomModal');$('createRoomForm').reset();await openRoom(code)}catch(e){toast(profileDataError(e),6000)}}
+async function loadMyRooms(){if(!state.user)return;const wrap=$('myRooms');wrap.innerHTML='<div class="loading-line">Carregando...</div>';try{const s=await withTimeout(get(ref(db,`rpgUserRooms/${state.user.uid}`)),10000,'DB_TIMEOUT');wrap.innerHTML='';const rooms=s.exists()?Object.values(s.val()):[];$('homeRpgRecent').textContent=rooms.length?`${rooms.length} mesa${rooms.length===1?'':'s'}`:'Suas mesas';if(!rooms.length){wrap.innerHTML='<div class="empty-state small">Nenhuma mesa.</div>';return}rooms.sort((a,b)=>String(b.joinedAt||'').localeCompare(String(a.joinedAt||''))).forEach(r=>{const item=document.createElement('div');item.className='room-item';const c=document.createElement('div');const st=document.createElement('strong');st.textContent=r.name||r.code;const sm=document.createElement('small');sm.textContent=`${r.system||'Livre'} • ${r.code}`;c.append(st,sm);const acts=document.createElement('div');acts.className='room-item-actions';const b=document.createElement('button');b.className='btn';b.textContent='Entrar';b.onclick=()=>openRoom(r.code);acts.appendChild(b);if(r.role==='Mestre'){const del=document.createElement('button');del.className='btn danger-ghost';del.textContent='Apagar';del.onclick=()=>deleteRoomFromLobby(r.code,r.name);acts.appendChild(del)}item.append(c,acts);wrap.appendChild(item)})}catch(e){wrap.innerHTML=`<div class="empty-state small">${escText(profileDataError(e))}</div>`}}
 async function deleteRoomFromLobby(code,name='Mesa'){
   if(!state.user||!code)return;if(!confirm(`Apagar "${name||code}" para todos?`))return;
   try{const snap=await get(ref(db,`rpgRooms/${code}`));if(!snap.exists()){await remove(ref(db,`rpgUserRooms/${state.user.uid}/${code}`));return loadMyRooms()}const room=snap.val();if(room.meta?.ownerUid!==state.user.uid)throw new Error('Só o mestre pode apagar esta mesa.');const members=room.members||{};await Promise.all(Object.keys(members).map(uid=>remove(ref(db,`rpgUserRooms/${uid}/${code}`)).catch(()=>{})));await remove(ref(db,`rpgRooms/${code}`));await remove(ref(db,`rpgVoice/${code}`)).catch(()=>{});await remove(ref(db,`rpgRtc/${code}`)).catch(()=>{});toast('Mesa apagada.');loadMyRooms()}catch(e){toast(permissionMessage(e,e.message||'Não foi possível apagar a mesa.'),6000)}
 }
-async function joinRoom(code){if(!state.user)return;code=String(code||'').toUpperCase();try{const s=await get(ref(db,`rpgRooms/${code}`));if(!s.exists())return toast('Mesa não encontrada.');const room=s.val();const member={uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:room.meta?.ownerUid===state.user.uid?'Mestre':'Jogador',joinedAt:nowIso()};await set(ref(db,`rpgRooms/${code}/members/${state.user.uid}`),member);await set(ref(db,`rpgUserRooms/${state.user.uid}/${code}`),{code,name:room.meta?.name||code,system:room.meta?.system||'Livre',role:member.role,joinedAt:nowIso()});$('joinRoomCode').value='';await openRoom(code)}catch(e){toast(permissionMessage(e,'Não foi possível entrar na mesa.'),6000)}}
+async function joinRoom(code){if(!state.user)return;code=String(code||'').toUpperCase();try{const s=await withTimeout(get(ref(db,`rpgRooms/${code}`)),10000,'DB_TIMEOUT');if(!s.exists())return toast('Mesa não encontrada.');const room=s.val();const member={uid:state.user.uid,name:displayName(),avatar:avatarFor(),role:room.meta?.ownerUid===state.user.uid?'Mestre':'Jogador',joinedAt:nowIso()};await withTimeout(set(ref(db,`rpgRooms/${code}/members/${state.user.uid}`),member),15000,'DB_TIMEOUT');await set(ref(db,`rpgUserRooms/${state.user.uid}/${code}`),{code,name:room.meta?.name||code,system:room.meta?.system||'Livre',role:member.role,joinedAt:nowIso()});$('joinRoomCode').value='';await openRoom(code)}catch(e){toast(permissionMessage(e,'Não foi possível entrar na mesa.'),6000)}}
 function clearRoomSubscriptions(){clearUnsubs(state.roomUnsubs)}
 async function openRoom(code){clearRoomSubscriptions();state.roomCode=code;$('rpgLobby').hidden=true;$('rpgTable').hidden=false;const unsub=onValue(ref(db,`rpgRooms/${code}`),s=>{if(!s.exists()){toast('Essa mesa não existe mais.');closeTableView();return}state.room=s.val();renderRoom()},e=>toast(permissionMessage(e),6000));state.roomUnsubs.push(unsub);navigate('rpg')}
 function closeTableView(){leaveVoice(true).catch(()=>{});clearRoomSubscriptions();state.roomCode=null;state.room=null;$('rpgTable').hidden=true;$('rpgLobby').hidden=false;loadMyRooms()}
@@ -3461,6 +3505,7 @@ await withTimeout(initialAuthPolicy(),7000,'PERSISTENCE_TIMEOUT').catch(e=>conso
 onAuthStateChanged(auth,user=>{
   document.body.classList.remove('auth-loading');
   state.user=user||null;
+  if(state.profile?.uid!==user?.uid){state.profile=null;state.privateData={};}
 
   if(!user){
     document.body.classList.remove('authenticated');
@@ -3488,12 +3533,15 @@ onAuthStateChanged(auth,user=>{
   renderAdminAccess();
   startUserSubscriptions();
 
-  withTimeout(readUserData(user),12000,'DB_TIMEOUT').then(()=>{
+  readUserData(user).then(()=>{
+    if(state.user?.uid!==user.uid)return;
     renderAccount();
     if(!state.profile?.username)setTimeout(()=>{toast('Escolha seu nome de usuário para completar a conta.',5000);setDrawer(true)},700);
   }).catch(e=>{
-    console.warn('[GREMORY AUTH] Perfil ainda não sincronizado:',e);
-    toast('Conta conectada. Algumas informações ainda estão sincronizando.',4000);
+    if(state.user?.uid!==user.uid)return;
+    console.warn('[GREMORY AUTH] Falha ao carregar perfil:',e?.code||'unknown');
+    profileLoadStatus(profileDataError(e),true);
+    toast('O login funcionou, mas houve falha ao carregar o perfil. Abra Conta para tentar novamente.',6000);
   });
 
   state.ttt.lastResultId=localStorage.getItem(`gremory:tttSeen:${user.uid}`)||'';
